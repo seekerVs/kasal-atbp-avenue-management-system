@@ -1,0 +1,13 @@
+.main-header {
+  /* width: 1440px; */
+  background-color: #1a6abb;
+}
+
+.custom-container {
+  max-width: 1420px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+  
