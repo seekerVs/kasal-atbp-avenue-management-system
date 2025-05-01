@@ -1,3 +1,7 @@
+@font-face {
+  font-family: 'MyFont';
+  src: url("../../assets/fonts/impact.ttf") format('truetype');
+}
 .main-header {
   /* width: 1440px; */
   background-color: #1a6abb;
@@ -7,7 +11,24 @@
   max-width: 1420px;
   margin-left: auto;
   margin-right: auto;
-  padding-left: 1rem;
-  padding-right: 1rem;
 }
-  
+
+/* header.css */
+.brand-text {
+  font-size: 1.25rem;
+  font-family: 'MyFont', sans-serif;
+  color: #AE0C00;
+
+  @media (min-width: 992px) {
+    font-size: 2rem; /* override on large screens */
+  }
+}
+
+
+.custom-margin-left {
+  margin-left: 50px;
+
+  @media (min-width: 1081px) {
+    margin-left: 180px;
+  }
+}
