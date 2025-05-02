@@ -1,0 +1,11 @@
+.store1-style {
+    height: 300px;
+
+    @media (min-width: 992px) {
+        height: 850px;
+    }
+}
+
+.search-style {
+    width: 500px;
+}

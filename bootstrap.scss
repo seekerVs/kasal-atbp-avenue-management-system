@@ -2,6 +2,20 @@ $primary: #AE0C00;
 $secondary: #ca6b2b;
 $danger: #7e020e;
 
-
+  
+$font-family-base: "Inter", sans-serif;
+  
 
 @import "node_modules/bootstrap/scss/bootstrap";
+
+.nav-link {
+    color: #AE0C00; // default color
+
+    &.default {
+        color: #333 !important; // active color
+    }
+
+    &:hover {
+        color: #ca6b2b; // hover effect (optional)
+    }
+}

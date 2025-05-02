@@ -2,5 +2,18 @@
   max-width: auto;
   margin: 0 auto;
   padding: 0;
+  padding-top: 70px;
   text-align: center;
+
+  @media (min-width: 992px) {
+    padding-top: 100px;
+  }
+}
+
+/* Fixes the navbar to the top of the page */
+.custom-navbar-wrapper {
+  position: fixed;
+  top: 0;
+  width: 100%;
+  z-index: 1050;
 }

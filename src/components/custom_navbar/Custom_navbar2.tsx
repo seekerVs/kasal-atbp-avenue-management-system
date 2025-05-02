@@ -45,7 +45,7 @@ function Custom_navbar2() {
             {/* Desktop Icons */}
             {/* d-none hides this div on small screens. d-lg-flex shows it as flex on large screens. */}
             {/* Since this is inside Navbar.Collapse (which is display: flex on desktop), it will appear on the right after the mx-auto Nav */}
-            <div className="d-none custom-margin-left d-lg-flex gap-3 align-items-center">
+            <div className="d-none custom-margin-left2 d-lg-flex gap-3 align-items-center">
               <Bell size={20} />
               <PersonCircle size={24} />
             </div>
