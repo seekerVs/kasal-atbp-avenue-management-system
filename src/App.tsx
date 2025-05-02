@@ -1,16 +1,14 @@
-import { useState } from 'react'
 import './App.css'
-import 'bootstrap/dist/css/bootstrap.min.css';
-import Header from './components/header/Header'
+import '../bootstrap.css'
 import Home from './components/home/Home'
 import About from './components/about/About'
+import Custom_navbar1 from './components/custom_navbar/Custom_navbar1';
 
 function App() {
-  const [count, setCount] = useState(0)
 
   return (
     <div>
-      <Header />
+      <Custom_navbar1 />
       <Home />
       <About />
     </div>

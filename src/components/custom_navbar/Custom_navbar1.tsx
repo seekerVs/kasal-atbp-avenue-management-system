@@ -1,10 +1,8 @@
-import Container from 'react-bootstrap/Container';
-import Nav from 'react-bootstrap/Nav';
-import Navbar from 'react-bootstrap/Navbar';
+import { Container, Nav, Navbar, Button } from 'react-bootstrap';
 import { Bell, PersonCircle } from 'react-bootstrap-icons'; // Icons via react-bootstrap-icons
-import './header.css'; // Custom CSS for Header component
+import './custom_navbar.css'; // Custom CSS for Header component
 
-function Header() {
+function Custom_navbar1() {
   return (
     // Container Fluid wraps the entire header, setting background and padding
     <Container fluid className="bg-white shadow px-0 w-100">
@@ -34,7 +32,7 @@ function Header() {
           <Navbar.Collapse id="navbarResponsive">
             {/* Center Nav Links - Use mx-auto to center on desktop within collapse flex */}
             {/* On mobile, flex-column is default inside collapse, gap adds vertical space */}
-            <Nav className="custom-margin-left me-auto gap-4 text-center">
+            <Nav className="mx-auto gap-4 text-center">
               <Nav.Link href="#dashboard">Dashboard</Nav.Link>
               <Nav.Link href="#services">Services</Nav.Link>
               <Nav.Link href="#products">Products</Nav.Link>
@@ -45,9 +43,10 @@ function Header() {
             {/* Desktop Icons */}
             {/* d-none hides this div on small screens. d-lg-flex shows it as flex on large screens. */}
             {/* Since this is inside Navbar.Collapse (which is display: flex on desktop), it will appear on the right after the mx-auto Nav */}
-            <div className="d-none ms-5 d-lg-flex gap-3 align-items-center">
-              <Bell size={20} />
-              <PersonCircle size={24} />
+            <div className="d-none custom-margin-left d-lg-flex gap-3 align-items-center">
+              <Button variant="primary">Primary</Button>
+              {/* <Bell size={20} />
+              <PersonCircle size={24} /> */}
             </div>
           </Navbar.Collapse>
 
@@ -63,4 +62,4 @@ function Header() {
   );
 }
 
-export default Header;
+export default Custom_navbar1;

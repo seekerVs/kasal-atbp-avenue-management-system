@@ -1,5 +1,5 @@
 @font-face {
-  font-family: 'MyFont';
+  font-family: 'impact_font';
   src: url("../../assets/fonts/impact.ttf") format('truetype');
 }
 .main-header {
@@ -16,7 +16,7 @@
 /* header.css */
 .brand-text {
   font-size: 1.25rem;
-  font-family: 'MyFont', sans-serif;
+  font-family: 'impact_font';
   color: #AE0C00;
 
   @media (min-width: 992px) {
@@ -26,9 +26,9 @@
 
 
 .custom-margin-left {
-  margin-left: 50px;
+  margin-left: 80px;
 
-  @media (min-width: 1081px) {
-    margin-left: 180px;
+  @media (min-width: 1190px) {
+    margin-left: 200px;
   }
 }
