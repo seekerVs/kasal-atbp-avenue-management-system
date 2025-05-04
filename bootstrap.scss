@@ -1,21 +1,41 @@
 $primary: #AE0C00;
-$secondary: #ca6b2b;
+$secondary: #6C757D;
 $danger: #7e020e;
 
-  
+$success: #198754;
+$info: #0dcaf0;
+$warning: #ffc107;
+$light: #f8f9fa;
+$dark: #212529;
+
 $font-family-base: "Inter", sans-serif;
-  
+
+$theme-colors: (
+  "primary": $primary,
+  "secondary": $secondary,
+  "danger": $danger,
+  "success": $success,
+  "info": $info,
+  "warning": $warning,
+  "light": $light,
+  "dark": $dark
+);
+
+// Optional: Body and heading color overrides using tokens
+$body-color: #212529;
+$body-bg: #ffffff;
+
 
 @import "node_modules/bootstrap/scss/bootstrap";
 
 .nav-link {
-    color: #AE0C00; // default color
-
+    color: $primary;
+  
     &.default {
-        color: #333 !important; // active color
+      color: #333 !important;
     }
-
+  
     &:hover {
-        color: #ca6b2b; // hover effect (optional)
+      color: $secondary;
     }
-}
+  }
