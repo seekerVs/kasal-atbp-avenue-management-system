@@ -13,10 +13,11 @@
   margin-right: auto;
 }
 
-/* header.css */
 .brand-text {
+  width: auto;
   font-size: 1.25rem;
   font-family: 'impact_font';
+  font-weight: bold;
   color: #AE0C00;
 
   @media (min-width: 992px) {
