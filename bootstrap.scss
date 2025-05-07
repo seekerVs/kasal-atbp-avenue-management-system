@@ -32,7 +32,7 @@ $body-bg: #ffffff;
     color: $primary;
   
     &.default {
-      color: #333 !important;
+      color: $secondary !important;
     }
   
     &:hover {

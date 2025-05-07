@@ -1,8 +1,11 @@
 import React from 'react'
+import { Button } from 'react-bootstrap'
+import './custom_button1.css'
+import { Stars } from 'react-bootstrap-icons';
 
 function Custom_button1() {
   return (
-    <div>Custom_button1</div>
+    <Button className="custom-button1-style btn-secondary"> <Stars size={20} /> Outfit Recomendation </Button>
   )
 }
 

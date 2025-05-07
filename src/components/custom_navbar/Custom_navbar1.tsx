@@ -12,7 +12,7 @@ function Custom_navbar1() {
 
   return (
     <Container fluid className="bg-white shadow px-0 w-100">
-      <Navbar expand="lg" className="bg-white py-3 custom-container">
+      <Navbar expand="lg" className="bg-white py-0 custom-container">
         <Container fluid>
           <Navbar.Brand className="brand-text fw-bold impact-font w-auto" href="#">
             KASAL atbp AVENUE

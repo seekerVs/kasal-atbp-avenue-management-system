@@ -5,30 +5,36 @@
     justify-content: center;
     align-items: center;
     background-color: white;
+    margin-top: 50px;
   }
-  .btn {
-    padding: 20px 60px;
+
+  .custom-button1-style {
+    width: auto;
     border: none;
+    padding: 10px;
     outline: none;
+    font-weight: bold;
     position: relative;
     z-index: 1;
     border-radius: 5px;
-    background: linear-gradient(to right, #00FFA3, #DC1FFF);
+    background: linear-gradient(30deg, #FFFFFF, var(--bs-primary));
     cursor: pointer;
   }
-  .btn::before {
+
+  .custom-button1-style::before {
     content: "";
     position: absolute;
-    left: 1px;
-    right: 1px;
-    top: 1px;
-    bottom: 1px;
+    left: 2px;
+    right: 2px;
+    top: 2px;
+    bottom: 2px;
     border-radius: 4px;
-    background-color: white;
+    background-color: var(--bs-secondary);
     z-index: -1;
     transition: 200ms
   }
-  .btn::after {
+
+  /* .custom-button1-style::after {
     content: attr(data);
     font-size: 16px;
     background: linear-gradient(to left, #00FFA3, #DC1FFF);
@@ -36,14 +42,14 @@
     background-clip: text;
     color: transparent;
     transition: 200ms
-  }
-  .btn:hover::before {
+  } */
+  /* .custom-button1-style:hover::before {
     opacity: 50%;
     top: 0px;
     right: 0px;
     bottom: 0px;
     left: 0px;
-  }
-  .btn:hover::after{
+  } */
+  .custom-button1-style:hover::after{
     color: white;
   }
