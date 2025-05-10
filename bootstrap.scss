@@ -5,8 +5,10 @@ $danger: #7e020e;
 $success: #198754;
 $info: #0dcaf0;
 $warning: #ffc107;
-$light: #f8f9fa;
+$light: #DEE2E6; // f8f9fa
 $dark: #212529;
+
+// $gray-300: #DEE2E6;
 
 $font-family-base: "Inter", sans-serif;
 
@@ -20,6 +22,10 @@ $theme-colors: (
   "light": $light,
   "dark": $dark
 );
+
+// $colors: (
+//   "gray-300": $gray-300,
+// );
 
 // Optional: Body and heading color overrides using tokens
 $body-color: #212529;
