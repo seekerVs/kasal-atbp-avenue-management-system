@@ -12,8 +12,8 @@ function Sign_in() {
       fluid
       className="d-flex align-items-center justify-content-center vh-100 bg-light"
     >
-      <Card className="py-5 px-4 shadow-sm" style={{ width: "100%", maxWidth: "400px" }}>
-        <h3 className="text-start fw-semibold mb-4">Sign In</h3>
+      <Card className="py-5 px-4 shadow-sm" style={{ width: "100%", maxWidth: "400px"}}>
+        <h3 className="text-start fw-medium mb-4">Sign In</h3>
 
         <Form>
           <Form.Group className="mb-3" controlId="formEmail">

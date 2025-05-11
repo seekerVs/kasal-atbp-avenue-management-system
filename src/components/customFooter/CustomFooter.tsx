@@ -1,7 +1,7 @@
 import React from 'react'
 import { Container, Row, Col } from 'react-bootstrap';
 import { CCircle, Facebook, Instagram, Tiktok } from 'react-bootstrap-icons';
-import './custom_footer.css';
+import './customFooter.css';
 
 function Custom_footer() {
   return (

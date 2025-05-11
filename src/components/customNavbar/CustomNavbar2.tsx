@@ -2,7 +2,7 @@ import Container from 'react-bootstrap/Container';
 import Nav from 'react-bootstrap/Nav';
 import Navbar from 'react-bootstrap/Navbar';
 import { Bell, PersonCircle } from 'react-bootstrap-icons'; // Icons via react-bootstrap-icons
-import './custom_navbar.css'; // Custom CSS for Header component
+import './customNavbar.css'; // Custom CSS for Header component
 
 function Custom_navbar2() {
   return (

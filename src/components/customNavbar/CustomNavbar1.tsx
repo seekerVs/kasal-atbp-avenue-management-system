@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Container, Nav, Navbar, Button } from "react-bootstrap";
 import { Link, useNavigate } from "react-router-dom";
-import "./custom_navbar.css";
+import "./customNavbar.css";
 
 function Custom_navbar1() {
   const navigate = useNavigate();

@@ -21,8 +21,8 @@ import {
   Award,
   CheckCircleFill,
 } from "react-bootstrap-icons";
-import Custom_button1 from "../../components/custom_button1/Custom_button1";
-import Custom_footer from "../../components/custom_footer/Custom_footer";
+import Custom_button1 from "../../components/customButton1/CustomButton1";
+import Custom_footer from "../../components/customFooter/CustomFooter";
 import "./home.css";
 
 function Home() {
@@ -181,7 +181,7 @@ function Home() {
             </div>
 
             <div className="d-flex align-items-center mt-3">
-              <Button className="bg-light text-primary">Order Now</Button>
+              <Button className="bg-white text-primary">Order Now</Button>
             </div>
           </div>
 
@@ -189,9 +189,9 @@ function Home() {
         </div>
       </div>
 
-      <hr className="mx-auto" style={{ width: '900px' }} />
+      <hr className="mx-auto" style={{ width: "900px" }} />
 
-      <footer className="bg-light text-dark py-3">
+      <footer className="bg-white text-dark py-3">
         <Custom_footer />
       </footer>
     </Container>

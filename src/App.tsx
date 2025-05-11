@@ -4,7 +4,7 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 
 import About from "./layouts/about/About";
 import Home from "./layouts/home/Home";
-import Custom_navbar1 from "./components/custom_navbar/Custom_navbar1";
+import Custom_navbar1 from "./components/customNavbar/CustomNavbar1";
 import Sign_in from "./layouts/sign_in/Sign_in";
 import Sign_up from "./layouts/sign_up/Sign_up";
 import Products from "./layouts/products/Products";

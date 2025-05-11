@@ -1,0 +1,36 @@
+.custom-pagination .page-item .page-link {
+  color: #000;
+  border-radius: 8px;
+  border: 1px solid #dee2e6;
+  width: 40px;
+  height: 40px;
+  column-gap: 10px;
+  text-align: center;
+  line-height: 38px;
+  padding: 0;
+  margin: 0;
+  font-weight: 500;
+}
+
+.custom-pagination .page-item.custom-active .page-link {
+  background-color: #b91c1c;
+  color: #fff;
+  border-color: transparent;
+}
+
+.custom-pagination .page-item .page-link:hover {
+  background-color: #f3f3f3;
+}
+
+.custom-pagination .page-item.disabled .page-link {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.custom-pagination .page-item:first-child .page-link, /* Prev */
+.custom-pagination .page-item:last-child .page-link {
+  /* Next */
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none;
+}
