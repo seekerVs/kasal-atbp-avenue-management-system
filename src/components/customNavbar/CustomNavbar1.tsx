@@ -19,7 +19,7 @@ function Custom_navbar1() {
   };
 
   return (
-    <Container fluid className="bg-white shadow px-0 w-100">
+    <Container fluid className="bg-white shadow-sm px-0 w-100">
       <Navbar expand="lg" className="bg-white py-1 custom-container">
         <Container fluid>
           <Navbar.Brand className="brand-text" href="#">
@@ -61,7 +61,7 @@ function Custom_navbar1() {
                   disabled={activeButton === "signin"}
                   onClick={() => {
                     setActiveButton("signin");
-                    navigate("/sign_in");
+                    navigate("/signIn");
                   }}
                 >
                   Sign In
@@ -77,7 +77,7 @@ function Custom_navbar1() {
                 disabled={activeButton === "signin"}
                 onClick={() => {
                   setActiveButton("signin");
-                  navigate("/sign_in");
+                  navigate("/signIn");
                 }}
               >
                 Sign In

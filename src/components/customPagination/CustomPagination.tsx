@@ -39,7 +39,6 @@ const CustomPagination: React.FC<CustomPaginationProps> = ({
       <Pagination.Next
         onClick={() => onPageChange(Math.min(totalPages, active + 1))}
         disabled={active === totalPages}
-        className="bg-light"
       >
         <ArrowRightShort size={24} />
       </Pagination.Next>

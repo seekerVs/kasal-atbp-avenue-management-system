@@ -9,6 +9,10 @@ import Tailoring_252x168 from "./Tailoring_252x168.jpg";
 import Coat_display from "./Coat_display.jpg";
 import Dress_display from "./Dress_display.jpg";
 import Product_sample from "./Product_sample.jpg";
+import Product1 from './product1.webp';
+import Product2 from './product2.webp';
+import Product3 from './product3.webp';
+import Product4 from './product4.webp';
 
 export {
   Store_1,
@@ -21,5 +25,9 @@ export {
   Tailoring_252x168,
   Coat_display,
   Dress_display,
-  Product_sample
+  Product_sample,
+  Product1,
+  Product2,
+  Product3,
+  Product4,
 };

@@ -1,0 +1,54 @@
+import React, { useState } from "react";
+import { Container, Form, Button, Card, InputGroup } from "react-bootstrap";
+import { Link } from "react-router-dom";
+import { Eye, EyeSlash } from "react-bootstrap-icons";
+import CustomFooter from "../../components/customFooter/CustomFooter";
+
+function Sign_in() {
+  const [showPassword, setShowPassword] = useState(false);
+  const [showRepeatPassword, setShowRepeatPassword] = useState(false);
+
+  return (
+    <div className="d-flex flex-column bg-light">
+      <Container className="bg-light align-items-center justify-content-center my-0">
+        <Card
+          className="py-5 px-4 shadow-sm"
+          style={{ width: "100%", maxWidth: "400px" }}
+        >
+          <h3 className="text-start fw-medium mb-4">Sign In</h3>
+          <Form>
+            <Form.Group className="mb-3" controlId="formEmail">
+              <Form.Control type="email" placeholder="Email" />
+            </Form.Group>
+            <Form.Group className="mb-3" controlId="formPassword">
+              <InputGroup>
+                <Form.Control
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Password"
+                />
+                <Button
+                  variant="outline-secondary"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                >
+                  {showPassword ? <EyeSlash /> : <Eye />}
+                </Button>
+              </InputGroup>
+            </Form.Group>
+            <Button
+              type="submit"
+              className="w-100"
+              style={{ backgroundColor: "#b30000", borderColor: "#b30000" }}
+            >
+              Sign In
+            </Button>
+          </Form>
+        </Card>
+      </Container>
+      <footer className="bg-white text-dark pb-3">
+        <CustomFooter />
+      </footer>
+    </div>
+  );
+}
+
+export default Sign_in;

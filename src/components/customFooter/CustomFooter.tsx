@@ -3,7 +3,7 @@ import { Container, Row, Col } from 'react-bootstrap';
 import { CCircle, Facebook, Instagram, Tiktok } from 'react-bootstrap-icons';
 import './customFooter.css';
 
-function Custom_footer() {
+function CustomFooter() {
   return (
     <Container fluid>
         <div className="custom-container">
@@ -26,4 +26,4 @@ function Custom_footer() {
   )
 }
 
-export default Custom_footer
+export default CustomFooter

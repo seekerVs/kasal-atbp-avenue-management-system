@@ -7,7 +7,7 @@ import './customNavbar.css'; // Custom CSS for Header component
 function Custom_navbar2() {
   return (
     // Container Fluid wraps the entire header, setting background and padding
-    <Container fluid className="bg-white shadow px-0 w-100">
+    <Container fluid className="bg-white shadow-sm px-0 w-100">
       {/* Navbar component */}
       <Navbar expand="lg" className="bg-white py-3 custom-container">
         {/* Container fluid inside Navbar for consistent padding/alignment */}

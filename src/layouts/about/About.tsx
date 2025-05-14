@@ -15,7 +15,7 @@ import {
   Collection,
 } from "react-bootstrap-icons";
 import { Coat_display, Dress_display } from "../../assets/images";
-import Custom_footer from "../../components/customFooter/CustomFooter";
+import CustomFooter from "../../components/customFooter/CustomFooter";
 
 function About() {
   return (
@@ -157,7 +157,7 @@ function About() {
       </Container>
 
       {/* Newsletter Section */}
-      <div className="d-flex flex-column align-items-sm-end flex-md-row w-100 h-auto p-auto my-0 text-center gap-5 justify-content-center align-items-center">
+      <div className="d-flex flex-column align-items-sm-end flex-md-row w-100 h-auto p-lg-5 my-0 text-center gap-5 justify-content-between align-items-center">
         <div className="text-start">
           <h2>Stay Updated</h2>
           <p>
@@ -176,7 +176,7 @@ function About() {
       </div>
 
       <footer className="bg-white text-dark pb-3">
-        <Custom_footer />
+        <CustomFooter />
       </footer>
     </Container>
   );

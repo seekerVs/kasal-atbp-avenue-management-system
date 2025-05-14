@@ -5,10 +5,10 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import About from "./layouts/about/About";
 import Home from "./layouts/home/Home";
 import Custom_navbar1 from "./components/customNavbar/CustomNavbar1";
-import Sign_in from "./layouts/sign_in/Sign_in";
-import Sign_up from "./layouts/sign_up/Sign_up";
+import SignIn from "./layouts/signIn/SignIn";
 import Products from "./layouts/products/Products";
 import Services from "./layouts/services/Services";
+import ProductViewer from "./layouts/productViewer/ProductViewer";
 
 function App() {
   return (
@@ -22,7 +22,8 @@ function App() {
         <Route path="/products" element={<Products />} />
         <Route path="/services" element={<Services />} />
         <Route path="/about" element={<About />} />
-        <Route path="/sign_in" element={<Sign_in />} />
+        <Route path="/signIn" element={<SignIn />} />
+        <Route path="/productViewer/:id" element={<ProductViewer />} />
       </Routes>
     </Router>
   );

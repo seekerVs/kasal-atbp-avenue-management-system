@@ -10,18 +10,24 @@ import {
 } from "react-bootstrap";
 import { Funnel, Search } from "react-bootstrap-icons";
 import { Product_sample } from "../../assets/images";
-import ProductCard from "../../components/product_card/ProductCard";
+import ProductCard from "../../components/productCard/ProductCard";
 import CustomPagination from "../../components/customPagination/CustomPagination";
+import { useNavigate } from "react-router-dom";
+import CustomFooter from "../../components/customFooter/CustomFooter";
 
-const products = Array(12).fill({
-  image: Product_sample,
-  title: "Single Breasted Jacket",
-  price: 1200,
-  sizes: "S,M,L,XL",
-  liked: false,
-});
+const products = Array(12)
+  .fill(null)
+  .map((_, index) => ({
+    id: index + 1,
+    image: Product_sample,
+    title: "Single Breasted Jacket",
+    price: 1200,
+    sizes: "S,M,L,XL",
+    liked: false,
+  }));
 
 function Products() {
+  const navigate = useNavigate();
   const [selected, setSelected] = useState("Relevance");
   const [currentPage, setCurrentPage] = useState(1);
   const totalPages = 3;
@@ -39,25 +45,30 @@ function Products() {
 
   return (
     <div className="container-fluid px-4">
-      <div className="row">
+      <div className="row px-0 px-lg-5 bg-white">
         {/* Sidebar */}
-        <div className="col-md-2 bg-white p-3 border-end text-start">
-          <Form className="d-flex mb-4">
+        <div className=" col-md-3 bg-white p-3 pt-4 ps-0 border-end text-start">
+          <Form className="mw-100 d-flex mb-4" style={{ minWidth: "250px" }}>
             <Form.Control
               type="text"
-              placeholder="Search for dress color, type, or name"
+              size="sm"
+              placeholder="Search"
               className="rounded-start-2 rounded-end-0"
             />
-            <Button variant="primary" className="rounded-start-0 rounded-end-2">
+            <Button
+              variant="primary"
+              size="sm"
+              className="rounded-start-0 rounded-end-2"
+            >
               <Search size={20} color="white" />
             </Button>
           </Form>
 
-          <div className="d-flex align-items-center mb-2">
+          <div className="d-flex align-items-center mb-0">
             <Funnel className="me-2" />
             <strong>Search Filter</strong>
           </div>
-          <hr />
+          <hr className="mt-2" />
 
           <strong>Age group</strong>
           <Form.Check type="checkbox" label="Adult" />
@@ -95,7 +106,7 @@ function Products() {
         </div>
 
         {/* Product Grid */}
-        <div className="col-md-10 bg-light py-4 px-3">
+        <div className="col-md-9 py-4 px-3">
           <div className="d-flex justify-content-end align-items-center">
             <DropdownButton
               as={ButtonGroup}
@@ -120,20 +131,26 @@ function Products() {
             />
           </div>
 
-          <Row xs={2} sm={3} md={4} className="g-3">
-            {products.map((product, idx) => (
-              <Col key={idx}>
-                <ProductCard
-                  image={product.image}
-                  title={product.title}
-                  price={product.price}
-                  sizes={product.sizes}
-                  liked={product.liked}
-                />
+          <Row xs={2} sm={3} xxl={5} className="g-3">
+            {products.map((product) => (
+              <Col key={product.id} className="d-flex justify-content-center">
+                <div style={{ maxWidth: "200px", width: "100%" }}>
+                  <ProductCard
+                    image={product.image}
+                    title={product.title}
+                    price={product.price}
+                    sizes={product.sizes}
+                    liked={product.liked}
+                    onClick={() => navigate(`/productViewer/${product.id}`)}
+                  />
+                </div>
               </Col>
             ))}
           </Row>
         </div>
+        <footer className="bg-white text-dark py-3">
+          <CustomFooter />
+        </footer>
       </div>
     </div>
   );
