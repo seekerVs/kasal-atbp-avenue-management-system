@@ -23,7 +23,7 @@ function About() {
       fluid
       className="d-flex flex-column justify-content-center p-0 gap-5"
     >
-      <div className="bg-dark text-white text-center">
+      <div className="bg-dark">
         <Image
           src={Coat_display}
           alt="Hero"
@@ -33,7 +33,7 @@ function About() {
         />
       </div>
       <div className="w-100">
-        <h1 className="fw-bold">Welcome to Kasal atbp Avenue</h1>
+        <h1 className="fw-medium">Welcome to Kasal atbp Avenue</h1>
         <p className="px-3 px-md-5">
           At Kasal atbp Avenue, we believe that everyone deserves to look
           stunning without the high price tag. We offer premium dress rentals
@@ -79,7 +79,7 @@ function About() {
       </Container>
 
       {/* Features Section */}
-      <Container className="h-auto px-0 my-0">
+      <Container className=" bg-transparent h-auto px-0 my-0">
         <Row className="gy-4">
           <Col md={3}>
             <div

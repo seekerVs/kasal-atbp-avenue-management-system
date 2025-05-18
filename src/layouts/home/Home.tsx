@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   Container,
   Image,
@@ -24,10 +24,26 @@ import {
 import CustomButton1 from "../../components/customButton1/CustomButton1";
 import CustomFooter from "../../components/customFooter/CustomFooter";
 import "./home.css";
+import OutfitRecommendationModal from "../../components/modals/outfitRecommendationModal/OutfitRecommendationModal";
 
 function Home() {
+  const [showModal, setShowModal] = useState(false);
+  const [formValues, setFormValues] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
+
   return (
     <Container fluid className="d-flex flex-column justify-content-center p-0">
+      <OutfitRecommendationModal
+        show={showModal}
+        onHide={() => setShowModal(false)}
+        values={formValues}
+        onChange={(field, value) =>
+          setFormValues((prev) => ({ ...prev, [field]: value }))
+        }
+        onRecommend={() => console.log("recommend clicked", formValues)}
+        loading={loading}
+      />
+      
       {/* Hero Section */}
       <div className="d-flex flex-column mb-lg-3 mb-1">
         <div className="store1-style position-relative overflow-hidden">
@@ -58,7 +74,9 @@ function Home() {
                 </Button>
               </Form>
             </div>
-            <CustomButton1 />
+            <div onClick={() => setShowModal(true)}>
+              <CustomButton1 />
+            </div>
           </div>
         </div>
       </div>

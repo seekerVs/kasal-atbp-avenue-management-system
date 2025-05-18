@@ -1,25 +1,22 @@
 import React, { useState } from "react";
-import { Container, Form, Button, Card, InputGroup } from "react-bootstrap";
-import { Link } from "react-router-dom";
+import { Form, Button, Card, InputGroup } from "react-bootstrap";
 import { Eye, EyeSlash } from "react-bootstrap-icons";
 import CustomFooter from "../../components/customFooter/CustomFooter";
 
 function Sign_in() {
   const [showPassword, setShowPassword] = useState(false);
-  const [showRepeatPassword, setShowRepeatPassword] = useState(false);
 
   return (
-    <div className="d-flex flex-column bg-light">
-      <Container className="bg-light align-items-center justify-content-center my-0">
-        <Card
-          className="py-5 px-4 shadow-sm"
-          style={{ width: "100%", maxWidth: "400px" }}
-        >
+    <div className="d-flex flex-column min-vh-100">
+      {/* Centered card container */}
+      <div className="d-flex flex-grow-1 justify-content-center align-items-center">
+        <Card className="py-5 px-4 shadow-sm w-100" style={{ maxWidth: "400px" }}>
           <h3 className="text-start fw-medium mb-4">Sign In</h3>
           <Form>
             <Form.Group className="mb-3" controlId="formEmail">
               <Form.Control type="email" placeholder="Email" />
             </Form.Group>
+
             <Form.Group className="mb-3" controlId="formPassword">
               <InputGroup>
                 <Form.Control
@@ -34,17 +31,16 @@ function Sign_in() {
                 </Button>
               </InputGroup>
             </Form.Group>
-            <Button
-              type="submit"
-              className="w-100"
-              style={{ backgroundColor: "#b30000", borderColor: "#b30000" }}
-            >
+
+            <Button type="submit" className="w-100">
               Sign In
             </Button>
           </Form>
         </Card>
-      </Container>
-      <footer className="bg-white text-dark pb-3">
+      </div>
+
+      {/* Footer stays at the bottom */}
+      <footer className="text-dark mt-auto py-3">
         <CustomFooter />
       </footer>
     </div>

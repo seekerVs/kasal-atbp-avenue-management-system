@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import {
-  Container,
   Row,
   Col,
   Button,
@@ -9,9 +8,16 @@ import {
   Tooltip,
   Spinner,
   Carousel,
+  Modal,
 } from "react-bootstrap";
 import { X } from "react-bootstrap-icons";
-import { Product1, Product2, Product3, Product4 } from "../../assets/images/";
+import {
+  Product1,
+  Product2,
+  Product3,
+  Product4,
+  SizeChart,
+} from "../../assets/images/";
 import { useParams } from "react-router-dom";
 import CustomFooter from "../../components/customFooter/CustomFooter";
 
@@ -40,11 +46,12 @@ interface ColorInfo {
 const ProductViewer: React.FC = () => {
   const { id } = useParams();
   const [product, setProduct] = useState<Product | null>(null);
-  const [size, setSize] = useState("S");
+  const [size, setSize] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [color, setColor] = useState("");
   const [colorMap, setColorMap] = useState<Record<string, ColorInfo>>({});
   const [loadingColors, setLoadingColors] = useState(false);
+  const [showSizeChart, setShowSizeChart] = useState(false);
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -71,7 +78,6 @@ const ProductViewer: React.FC = () => {
         availableColors: ["#78866B", "#FFFF00", "#FFFFFF"],
       };
       setProduct(mockProduct);
-      setColor(mockProduct.availableColors?.[0] || "");
     };
 
     fetchProduct();
@@ -117,9 +123,16 @@ const ProductViewer: React.FC = () => {
   const colors = product.availableColors || [];
 
   return (
-    <div className="position-relative mx-5 pt-4">
+    <div className="position-relative mx-5 mt-3 mt-lg-4">
+      <Button
+        variant="link"
+        className="position-absolute top-0 end-0 m-0 p-2 pe-0"
+        onClick={() => window.history.back()}
+      >
+        <X size={28} color="dark" />
+      </Button>
       <Row>
-        <Col md={6}>
+        <Col md={5}>
           <div
             className="d-inline-block oveflow-hidden shadow-sm"
             style={{ maxWidth: "60%" }}
@@ -154,14 +167,14 @@ const ProductViewer: React.FC = () => {
           </div>
         </Col>
 
-        <Col md={6} className="text-start">
+        <Col md={7} className="text-start text-dark">
           <small className="text-uppercase text-muted">
             {product.category}
           </small>
-          <h3 className="mt-2 mb-0">{product.title}</h3>
+          <h3 className="mt-2 mb-0 semibold">{product.title}</h3>
           <p>{product.description}</p>
 
-          <h4 className="text-dark">₱ {product.price}</h4>
+          <h4 className="fw-semibold">₱ {product.price}</h4>
 
           <div className="d-flex flex-row gap-5 mt-3">
             <div className="mb-3">
@@ -170,7 +183,7 @@ const ProductViewer: React.FC = () => {
                 {sizes.map((s) => (
                   <Button
                     key={s}
-                    variant={s === size ? "danger" : "outline-primary"}
+                    variant={s === size ? "primary" : "outline-primary"}
                     size="sm"
                     onClick={() => setSize(s)}
                   >
@@ -182,6 +195,7 @@ const ProductViewer: React.FC = () => {
                 href="#sizechart"
                 className="d-block mt-1 text-decoration-underline"
                 style={{ fontSize: "0.9rem" }}
+                onClick={() => setShowSizeChart(true)}
               >
                 Size Chart
               </a>
@@ -250,10 +264,10 @@ const ProductViewer: React.FC = () => {
           </div>
 
           <div className="d-flex flex-wrap gap-3 my-3">
-            <Button variant="outline-primary" size="lg" className="flex-fill">
+            <Button variant="secondary" size="lg" className="flex-fill">
               Add to cart
             </Button>
-            <Button variant="primary" size="lg" className="flex-fill">
+            <Button size="lg" className="flex-fill">
               Order now
             </Button>
           </div>
@@ -271,17 +285,23 @@ const ProductViewer: React.FC = () => {
           </div>
         </Col>
       </Row>
-      {/* close button, return to previous */}
-      <Button
-        variant="link"
-        className="position-absolute top-0 end-0 m-3 rounded-circle"
-        onClick={() => window.history.back()}
-      >
-        <X size={20} color="dark"/>
-      </Button>
-      <footer className="bg-white text-dark pb-3">
+      <footer className="text-dark pb-3">
         <CustomFooter />
       </footer>
+
+      <Modal
+        show={showSizeChart}
+        onHide={() => setShowSizeChart(false)}
+        centered
+        size="lg"
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>Size Chart</Modal.Title>
+        </Modal.Header>
+        <Modal.Body className="text-center">
+          <Image src={SizeChart} fluid />
+        </Modal.Body>
+      </Modal>
     </div>
   );
 };

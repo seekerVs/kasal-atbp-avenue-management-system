@@ -9,6 +9,8 @@ import SignIn from "./layouts/signIn/SignIn";
 import Products from "./layouts/products/Products";
 import Services from "./layouts/services/Services";
 import ProductViewer from "./layouts/productViewer/ProductViewer";
+import Package from "./layouts/package/Package";
+import CustomTailoring from "./layouts/customTailoring/CustomTailoring";
 
 function App() {
   return (
@@ -24,6 +26,8 @@ function App() {
         <Route path="/about" element={<About />} />
         <Route path="/signIn" element={<SignIn />} />
         <Route path="/productViewer/:id" element={<ProductViewer />} />
+        <Route path="/package/" element={<Package />} />
+        <Route path="/customTailoring/" element={<CustomTailoring />} />
       </Routes>
     </Router>
   );

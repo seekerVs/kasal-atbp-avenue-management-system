@@ -1,0 +1,5 @@
+.custom-shadow {
+  box-shadow: 0 0rem 1.5rem rgba(220, 53, 69, 0.25); /* Bootstrap "danger" red tint */
+  border-color: var(--bs-primary) !important; /* Optional: match border to the shadow color */
+  
+}

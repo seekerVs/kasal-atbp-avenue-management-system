@@ -29,6 +29,9 @@ const products = Array(12)
 function Products() {
   const navigate = useNavigate();
   const [selected, setSelected] = useState("Relevance");
+  const [selectedAge, setSelectedAge] = useState("");
+  const [selectedGender, setSelectedGender] = useState("");
+  const [attireType, setAttireType] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const totalPages = 3;
 
@@ -45,9 +48,9 @@ function Products() {
 
   return (
     <div className="container-fluid px-4">
-      <div className="row px-0 px-lg-5 bg-white">
+      <div className="row px-0 px-lg-5">
         {/* Sidebar */}
-        <div className=" col-md-3 bg-white p-3 pt-4 ps-0 border-end text-start">
+        <div className=" col-md-3 p-3 pt-4 ps-0 border-end text-start">
           <Form className="mw-100 d-flex mb-4" style={{ minWidth: "250px" }}>
             <Form.Control
               type="text"
@@ -71,16 +74,48 @@ function Products() {
           <hr className="mt-2" />
 
           <strong>Age group</strong>
-          <Form.Check type="checkbox" label="Adult" />
-          <Form.Check type="checkbox" label="Kids" />
+          <Form>
+            <Form.Check
+              type="radio"
+              name="ageGroup"
+              label="Adult"
+              id="adult"
+              checked={selectedAge === "Adult"}
+              onChange={() => setSelectedAge("Adult")}
+            />
+            <Form.Check
+              type="radio"
+              name="ageGroup"
+              label="Kids"
+              id="kids"
+              checked={selectedAge === "Kids"}
+              onChange={() => setSelectedAge("Kids")}
+            />
+          </Form>
           <hr />
 
           <strong>Gender</strong>
-          <Form.Check type="checkbox" label="Male" />
-          <Form.Check type="checkbox" label="Female" />
+          <Form>
+            <Form.Check
+              type="radio"
+              name="gender"
+              label="Male"
+              id="male"
+              checked={selectedGender === "Male"}
+              onChange={() => setSelectedGender("Male")}
+            />
+            <Form.Check
+              type="radio"
+              name="gender"
+              label="Female"
+              id="female"
+              checked={selectedGender === "Female"}
+              onChange={() => setSelectedGender("Female")}
+            />
+          </Form>
           <hr />
 
-          <strong>Attire type</strong>
+          <strong>Attire Type</strong>
           {[
             "Casual Wear",
             "Formal Wear",
@@ -89,19 +124,15 @@ function Products() {
             "Traditional Attire",
             "Themed Costume",
           ].map((item, i) => (
-            <Form.Check key={i} label={item} />
-          ))}
-          <hr />
-
-          <strong>Garment type</strong>
-          {[
-            "Dresses and Gowns",
-            "Suits and Tuxedos",
-            "Jumpsuits and Pantsuits",
-            "Skirts and Blouses",
-            "Blazers and Jackets",
-          ].map((item, i) => (
-            <Form.Check key={i} label={item} />
+            <Form.Check
+              key={i}
+              type="radio"
+              name="attireType" // <-- group name for exclusive selection
+              label={item}
+              value={item}
+              checked={attireType === item}
+              onChange={() => setAttireType(item)}
+            />
           ))}
         </div>
 
@@ -148,10 +179,10 @@ function Products() {
             ))}
           </Row>
         </div>
-        <footer className="bg-white text-dark py-3">
-          <CustomFooter />
-        </footer>
       </div>
+      <footer className="px-0 px-lg-5 text-dark py-3">
+        <CustomFooter />
+      </footer>
     </div>
   );
 }

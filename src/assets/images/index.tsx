@@ -9,10 +9,12 @@ import Tailoring_252x168 from "./Tailoring_252x168.jpg";
 import Coat_display from "./Coat_display.jpg";
 import Dress_display from "./Dress_display.jpg";
 import Product_sample from "./Product_sample.jpg";
-import Product1 from './product1.webp';
-import Product2 from './product2.webp';
-import Product3 from './product3.webp';
-import Product4 from './product4.webp';
+import Product1 from "./product1.webp";
+import Product2 from "./product2.webp";
+import Product3 from "./product3.webp";
+import Product4 from "./product4.webp";
+import SizeChart from "./SizeChart.jpg";
+import Tailoring_424x636 from "./Tailoring_424x636.jpg";
 
 export {
   Store_1,
@@ -30,4 +32,6 @@ export {
   Product2,
   Product3,
   Product4,
+  SizeChart,
+  Tailoring_424x636,
 };
