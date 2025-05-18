@@ -15,6 +15,7 @@ import Product3 from "./product3.webp";
 import Product4 from "./product4.webp";
 import SizeChart from "./SizeChart.jpg";
 import Tailoring_424x636 from "./Tailoring_424x636.jpg";
+import Logo from "./logo.svg";
 
 export {
   Store_1,
@@ -34,4 +35,5 @@ export {
   Product4,
   SizeChart,
   Tailoring_424x636,
+  Logo,
 };

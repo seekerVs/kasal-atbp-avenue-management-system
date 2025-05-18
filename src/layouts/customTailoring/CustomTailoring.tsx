@@ -2,17 +2,33 @@ import React, { useState } from "react";
 import { Col, Row, Image, Stack, Form, Button } from "react-bootstrap";
 import { Tailoring_424x636 } from "../../assets/images";
 import { X } from "react-bootstrap-icons";
+import OutfitRecommendationModal from "../../components/modals/outfitRecommendationModal/OutfitRecommendationModal";
 
 function CustomTailoring() {
   const [motif, setMotif] = useState("");
-  const [garment, setGarment] = useState("");
+  const [attire, setAttire] = useState("");
   const [purchase, setPurchase] = useState(false);
   const [rentBack, setRentBack] = useState(false);
   const [note, setNote] = useState("");
   const [price, setPrice] = useState("");
 
+  const [showModal, setShowModal] = useState(false);
+  const [formValues, setFormValues] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
+
   return (
-    <div className="mx-4 mx-lg-5 mt-3 mt-lg-4 position-relative">
+    <div className="mx-4 mx-lg-5 mt-5 mt-lg-4 position-relative">
+      <OutfitRecommendationModal
+        show={showModal}
+        onHide={() => setShowModal(false)}
+        values={formValues}
+        onChange={(field, value) =>
+          setFormValues((prev) => ({ ...prev, [field]: value }))
+        }
+        onRecommend={() => console.log("recommend clicked", formValues)}
+        loading={loading}
+      />
+
       <Button
         variant="link"
         className="position-absolute top-0 end-0 m-0 p-2 pe-0"
@@ -63,18 +79,23 @@ function CustomTailoring() {
                   <Col md="auto">
                     <Form.Group controlId="garmentType">
                       <Form.Label>
-                        Garment Type <span style={{ color: "red" }}>*</span>
+                        Attire Type <span style={{ color: "red" }}>*</span>
                       </Form.Label>
                       <Form.Select
-                        value={garment}
-                        onChange={(e) => setGarment(e.target.value)}
+                        value={attire}
+                        onChange={(e) => setAttire(e.target.value)}
                       >
                         <option value="" disabled hidden>
-                          Select a garment type
+                          Select a Attire type
                         </option>
-                        <option value="gown">Gown</option>
-                        <option value="barong">Barong</option>
-                        <option value="suit">Suit</option>
+                        <option value="Casual Wear">Casual Wear</option>
+                        <option value="Formal Wear">Formal Wear</option>
+                        <option value="Wedding Attire">Wedding Attire</option>
+                        <option value="Business Wear">Business Wear</option>
+                        <option value="Traditional Attire">
+                          Traditional Attire
+                        </option>
+                        <option value="Themed Costume">Themed Costume</option>
                       </Form.Select>
                     </Form.Group>
                   </Col>
@@ -128,7 +149,9 @@ function CustomTailoring() {
                   />
                 </Form.Group>
 
-                <Button className="mb-3">Get Sizes</Button>
+                <Button className="mb-3" onClick={() => setShowModal(true)}>
+                  Get Sizes
+                </Button>
 
                 <Form.Group controlId="price">
                   <Form.Label>

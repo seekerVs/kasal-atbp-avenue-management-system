@@ -46,7 +46,11 @@ function Services() {
                   <br />
                   Standard fitting options
                 </Card.Text>
-                <Button variant="primary" className="mt-3">
+                <Button
+                  variant="primary"
+                  className="mt-3"
+                  onClick={() => navigate("/products")}
+                >
                   Order now
                 </Button>
               </Card.Body>
@@ -77,7 +81,11 @@ function Services() {
                   <br />
                   Multiple size options
                 </Card.Text>
-                <Button variant="primary" className="mt-3" onClick={() => navigate("/package")}>
+                <Button
+                  variant="primary"
+                  className="mt-3"
+                  onClick={() => navigate("/package")}
+                >
                   Order now
                 </Button>
               </Card.Body>
@@ -108,7 +116,11 @@ function Services() {
                   <br />
                   Consultation included
                 </Card.Text>
-                <Button variant="primary" className="mt-3" onClick={() => navigate("/customTailoring")} >
+                <Button
+                  variant="primary"
+                  className="mt-3"
+                  onClick={() => navigate("/customTailoring")}
+                >
                   Order now
                 </Button>
               </Card.Body>

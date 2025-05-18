@@ -1,11 +1,19 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Container, Nav, Navbar, Button } from "react-bootstrap";
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import "./customNavbar.css";
+import { Logo } from "../../assets/images";
 
 function Custom_navbar1() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [activeButton, setActiveButton] = useState<"signin" | null>(null);
+
+  useEffect(() => {
+    if (location.pathname !== "/signIn") {
+      setActiveButton(null);
+    }
+  }, [location.pathname]);
 
   const getButtonVariant = (buttonName: string) =>
     activeButton === buttonName ? "outline-primary" : "primary";
@@ -14,8 +22,20 @@ function Custom_navbar1() {
     <Container fluid className="bg-white shadow-sm px-0 w-100">
       <Navbar expand="lg" className="bg-white py-1 custom-container">
         <Container fluid>
-          <Navbar.Brand className="brand-text" href="#">
-            KASAL atbp AVENUE
+          <Navbar.Brand
+            className="d-flex justify-content-center align-items-start"
+            style={{ cursor: "pointer" }}
+            onClick={() => navigate("/")}
+          >
+            <img
+              src={Logo}
+              alt="KASAL atbp AVENUE"
+              height="60"
+              className="d-inline-block align-middle"
+            />
+            <span className="ms-2 brand-text d-none d-lg-inline">
+              KASAL atbp AVENUE
+            </span>
           </Navbar.Brand>
 
           <div className="d-flex align-items-center ms-auto gap-1 d-lg-none">

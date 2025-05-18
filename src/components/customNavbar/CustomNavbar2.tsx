@@ -1,65 +1,123 @@
-import Container from 'react-bootstrap/Container';
-import Nav from 'react-bootstrap/Nav';
-import Navbar from 'react-bootstrap/Navbar';
-import { Bell, PersonCircle } from 'react-bootstrap-icons'; // Icons via react-bootstrap-icons
-import './customNavbar.css'; // Custom CSS for Header component
+import { useState, useRef } from "react";
+import { Container, Nav, Navbar, Overlay, Popover } from "react-bootstrap";
+import { Bell, PersonCircle } from "react-bootstrap-icons";
+import { NavLink, useNavigate } from "react-router-dom";
+import "./customNavbar.css";
+import { Logo } from "../../assets/images";
 
-function Custom_navbar2() {
+interface CustomNavbar2Props {
+  setNavbarType: (type: "main" | "alt") => void;
+}
+
+function Custom_navbar2({ setNavbarType }: CustomNavbar2Props) {
+  const [showPopover, setShowPopover] = useState(false);
+  const iconRef = useRef(null);
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    setShowPopover(false);
+    setNavbarType("main");
+    navigate("/");
+  };
+
   return (
-    // Container Fluid wraps the entire header, setting background and padding
     <Container fluid className="bg-white shadow-sm px-0 w-100">
-      {/* Navbar component */}
-      <Navbar expand="lg" className="bg-white py-3 custom-container">
-        {/* Container fluid inside Navbar for consistent padding/alignment */}
+      <Navbar expand="lg" className="bg-white py-1 custom-container">
         <Container fluid>
-          {/* Brand - Always visible */}
-          <Navbar.Brand className="brand-text fw-bold impact-font w-auto" href="#">
-             KASAL atbp AVENUE
-           </Navbar.Brand>
+          <Navbar.Brand
+            href="/"
+            className="d-flex justify-content-center align-items-start"
+            style={{ cursor: "pointer" }}
+            onClick={() => navigate("/dashboard")}
+          >
+            <img
+              src={Logo}
+              alt="KASAL atbp AVENUE"
+              height="60"
+              className="d-inline-block align-middle"
+            />
+            <span className="ms-2 brand-text d-none d-lg-inline">
+              KASAL atbp AVENUE
+            </span>
+          </Navbar.Brand>
 
-          {/* Mobile Icons and Toggle Group */}
-          {/* This div is a flex container. ms-auto pushes it to the right. */}
-          {/* d-lg-none hides this div on large screens and up. */}
-          <div className="d-flex align-items-center ms-auto gap-2 gap-lg-3 d-lg-none">
-            {/* Icons visible on mobile */}
+          {/* Mobile View Icons */}
+          <div className="d-flex align-items-center ms-auto gap-2 d-lg-none">
             <Bell size={20} />
-            <PersonCircle size={24} />
-            {/* Toggle Button visible on mobile */}
+
+            <div
+              ref={iconRef}
+              onClick={() => setShowPopover(!showPopover)}
+              style={{ cursor: "pointer" }}
+            >
+              <PersonCircle size={24} color="black" />
+            </div>
+
             <Navbar.Toggle aria-controls="navbarResponsive" />
           </div>
 
-
-          {/* Collapsible Content: Nav Links + Desktop Icons */}
-          {/* This content is hidden on mobile until toggled, shown on desktop */}
           <Navbar.Collapse id="navbarResponsive">
-            {/* Center Nav Links - Use mx-auto to center on desktop within collapse flex */}
-            {/* On mobile, flex-column is default inside collapse, gap adds vertical space */}
             <Nav className="mx-auto gap-4 text-center">
-              <Nav.Link href="#dashboard">Dashboard</Nav.Link>
-              <Nav.Link href="#services">Services</Nav.Link>
-              <Nav.Link href="#products">Products</Nav.Link>
-              <Nav.Link href="#orders">Orders</Nav.Link>
-              <Nav.Link href="#about">About</Nav.Link>
+              <Nav.Item>
+                <Nav.Link as={NavLink} to="/dashboard">
+                  Dashboard
+                </Nav.Link>
+              </Nav.Item>
+              <Nav.Item>
+                <Nav.Link as={NavLink} to="/services">
+                  Services
+                </Nav.Link>
+              </Nav.Item>
+              <Nav.Item>
+                <Nav.Link as={NavLink} to="/products">
+                  Products
+                </Nav.Link>
+              </Nav.Item>
+              <Nav.Item>
+                <Nav.Link as={NavLink} to="/orders">
+                  Orders
+                </Nav.Link>
+              </Nav.Item>
+              <Nav.Item>
+                <Nav.Link as={NavLink} to="/about">
+                  About
+                </Nav.Link>
+              </Nav.Item>
             </Nav>
 
-            {/* Desktop Icons */}
-            {/* d-none hides this div on small screens. d-lg-flex shows it as flex on large screens. */}
-            {/* Since this is inside Navbar.Collapse (which is display: flex on desktop), it will appear on the right after the mx-auto Nav */}
+            {/* Desktop View Icons */}
             <div className="d-none custom-margin-left2 d-lg-flex gap-3 align-items-center">
               <Bell size={20} />
-              <PersonCircle size={24} />
+              <div
+                ref={iconRef}
+                onClick={() => setShowPopover(!showPopover)}
+                style={{ cursor: "pointer" }}
+              >
+                <PersonCircle size={24} color="black" />
+              </div>
             </div>
           </Navbar.Collapse>
 
-          {/* Important: The Navbar.Toggle element *itself* is automatically hidden by Bootstrap
-              on screens >= `lg` because of the `expand="lg"` prop on the Navbar.
-              We've placed it inside the mobile-only div, so the entire div disappears
-              on desktop, and the toggle inside it also disappears. This is the correct behaviour. */}
-
+          {/* Logout Popover */}
+          <Overlay
+            target={iconRef.current}
+            show={showPopover}
+            placement="bottom-end"
+            rootClose
+            onHide={() => setShowPopover(false)}
+          >
+            <Popover id="popover-logout">
+              <Popover.Body
+                onClick={handleLogout}
+                style={{ cursor: "pointer", padding: "10px 16px" }}
+              >
+                Logout
+              </Popover.Body>
+            </Popover>
+          </Overlay>
         </Container>
       </Navbar>
     </Container>
-
   );
 }
 

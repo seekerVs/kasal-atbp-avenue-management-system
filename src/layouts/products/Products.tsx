@@ -7,6 +7,7 @@ import {
   Row,
   DropdownButton,
   ButtonGroup,
+  Accordion,
 } from "react-bootstrap";
 import { Funnel, Search } from "react-bootstrap-icons";
 import { Product_sample } from "../../assets/images";
@@ -14,6 +15,8 @@ import ProductCard from "../../components/productCard/ProductCard";
 import CustomPagination from "../../components/customPagination/CustomPagination";
 import { useNavigate } from "react-router-dom";
 import CustomFooter from "../../components/customFooter/CustomFooter";
+import OutfitRecommendationModal from "../../components/modals/outfitRecommendationModal/OutfitRecommendationModal";
+import Custom_button1 from "../../components/customButton1/CustomButton1";
 
 const products = Array(12)
   .fill(null)
@@ -26,6 +29,119 @@ const products = Array(12)
     liked: false,
   }));
 
+type FilterFormProps = {
+  selectedAge: string;
+  setSelectedAge: React.Dispatch<React.SetStateAction<string>>;
+  selectedGender: string;
+  setSelectedGender: React.Dispatch<React.SetStateAction<string>>;
+  attireType: string;
+  setAttireType: React.Dispatch<React.SetStateAction<string>>;
+  setShowModal: React.Dispatch<React.SetStateAction<boolean>>;
+};
+
+const FilterForm: React.FC<FilterFormProps> = ({
+  selectedAge,
+  setSelectedAge,
+  selectedGender,
+  setSelectedGender,
+  attireType,
+  setAttireType,
+  setShowModal,
+}) => (
+  <>
+    <Form className="mw-100 d-flex mb-4" style={{ minWidth: "200px" }}>
+      <Form.Control
+        type="text"
+        size="sm"
+        placeholder="Search"
+        className="rounded-start-2 rounded-end-0"
+      />
+      <Button
+        variant="primary"
+        size="sm"
+        className="rounded-start-0 rounded-end-2"
+      >
+        <Search size={20} color="white" />
+      </Button>
+    </Form>
+
+    <div onClick={() => setShowModal(true)}>
+      <Custom_button1 />
+    </div>
+
+    <div className="d-flex mt-3">
+      <Funnel size={24} className="me-2" />
+      <h5 className="fw-semibold">Filters</h5>
+    </div>
+    <hr />
+
+    <strong>Age group</strong>
+    <Form>
+      <Form.Check
+        type="radio"
+        name="ageGroup"
+        label="Adult"
+        id="adult"
+        checked={selectedAge === "Adult"}
+        onChange={() => setSelectedAge("Adult")}
+      />
+      <Form.Check
+        type="radio"
+        name="ageGroup"
+        label="Kids"
+        id="kids"
+        checked={selectedAge === "Kids"}
+        onChange={() => setSelectedAge("Kids")}
+      />
+    </Form>
+    <hr />
+
+    <strong>Gender</strong>
+    <Form>
+      <Form.Check
+        type="radio"
+        name="gender"
+        label="Male"
+        id="male"
+        checked={selectedGender === "Male"}
+        onChange={() => setSelectedGender("Male")}
+      />
+      <Form.Check
+        type="radio"
+        name="gender"
+        label="Female"
+        id="female"
+        checked={selectedGender === "Female"}
+        onChange={() => setSelectedGender("Female")}
+      />
+    </Form>
+    <hr />
+
+    <strong>Attire Type</strong>
+    <Form>
+      {[
+        "Casual Wear",
+        "Formal Wear",
+        "Wedding Attire",
+        "Business Wear",
+        "Traditional Attire",
+        "Themed Costume",
+      ].map((item, i) => (
+        <Form.Check
+          key={i}
+          type="radio"
+          name="attireType"
+          id={`attire-${i}`}
+          label={item}
+          value={item}
+          checked={attireType === item}
+          onChange={(e) => setAttireType(e.currentTarget.value)}
+        />
+      ))}
+    </Form>
+  </>
+);
+
 function Products() {
   const navigate = useNavigate();
   const [selected, setSelected] = useState("Relevance");
@@ -34,6 +150,10 @@ function Products() {
   const [attireType, setAttireType] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const totalPages = 3;
+
+  const [showModal, setShowModal] = useState(false);
+  const [formValues, setFormValues] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
@@ -48,96 +168,58 @@ function Products() {
 
   return (
     <div className="container-fluid px-4">
+      <OutfitRecommendationModal
+        show={showModal}
+        onHide={() => setShowModal(false)}
+        values={formValues}
+        onChange={(field, value) =>
+          setFormValues((prev) => ({ ...prev, [field]: value }))
+        }
+        onRecommend={() => console.log("recommend clicked", formValues)}
+        loading={loading}
+      />
       <div className="row px-0 px-lg-5">
         {/* Sidebar */}
-        <div className=" col-md-3 p-3 pt-4 ps-0 border-end text-start">
-          <Form className="mw-100 d-flex mb-4" style={{ minWidth: "250px" }}>
-            <Form.Control
-              type="text"
-              size="sm"
-              placeholder="Search"
-              className="rounded-start-2 rounded-end-0"
-            />
-            <Button
-              variant="primary"
-              size="sm"
-              className="rounded-start-0 rounded-end-2"
-            >
-              <Search size={20} color="white" />
-            </Button>
-          </Form>
-
-          <div className="d-flex align-items-center mb-0">
-            <Funnel className="me-2" />
-            <strong>Search Filter</strong>
+        <Col md={3} className="px-2 pt-0 border-end text-start">
+          {/* Mobile View Accordion */}
+          <div className="d-md-none mb-3">
+            <Accordion>
+              <Accordion.Item eventKey="0">
+                <Accordion.Header>
+                  <Funnel className="me-2" />
+                  <strong>Filters</strong>
+                </Accordion.Header>
+                <Accordion.Body>
+                  <FilterForm
+                    selectedAge={selectedAge}
+                    setSelectedAge={setSelectedAge}
+                    selectedGender={selectedGender}
+                    setSelectedGender={setSelectedGender}
+                    attireType={attireType}
+                    setAttireType={setAttireType}
+                    setShowModal={setShowModal}
+                  />
+                </Accordion.Body>
+              </Accordion.Item>
+            </Accordion>
           </div>
-          <hr className="mt-2" />
 
-          <strong>Age group</strong>
-          <Form>
-            <Form.Check
-              type="radio"
-              name="ageGroup"
-              label="Adult"
-              id="adult"
-              checked={selectedAge === "Adult"}
-              onChange={() => setSelectedAge("Adult")}
+          {/* Desktop View Filter */}
+          <div className="d-none d-md-block">
+            <FilterForm
+              selectedAge={selectedAge}
+              setSelectedAge={setSelectedAge}
+              selectedGender={selectedGender}
+              setSelectedGender={setSelectedGender}
+              attireType={attireType}
+              setAttireType={setAttireType}
+              setShowModal={setShowModal}
             />
-            <Form.Check
-              type="radio"
-              name="ageGroup"
-              label="Kids"
-              id="kids"
-              checked={selectedAge === "Kids"}
-              onChange={() => setSelectedAge("Kids")}
-            />
-          </Form>
-          <hr />
-
-          <strong>Gender</strong>
-          <Form>
-            <Form.Check
-              type="radio"
-              name="gender"
-              label="Male"
-              id="male"
-              checked={selectedGender === "Male"}
-              onChange={() => setSelectedGender("Male")}
-            />
-            <Form.Check
-              type="radio"
-              name="gender"
-              label="Female"
-              id="female"
-              checked={selectedGender === "Female"}
-              onChange={() => setSelectedGender("Female")}
-            />
-          </Form>
-          <hr />
-
-          <strong>Attire Type</strong>
-          {[
-            "Casual Wear",
-            "Formal Wear",
-            "Wedding Attire",
-            "Business Wear",
-            "Traditional Attire",
-            "Themed Costume",
-          ].map((item, i) => (
-            <Form.Check
-              key={i}
-              type="radio"
-              name="attireType" // <-- group name for exclusive selection
-              label={item}
-              value={item}
-              checked={attireType === item}
-              onChange={() => setAttireType(item)}
-            />
-          ))}
-        </div>
+          </div>
+        </Col>
 
         {/* Product Grid */}
-        <div className="col-md-9 py-4 px-3">
+        <div className="col-md-9 pb-4 px-3">
           <div className="d-flex justify-content-end align-items-center">
             <DropdownButton
               as={ButtonGroup}
