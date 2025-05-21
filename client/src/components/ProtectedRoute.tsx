@@ -1,5 +1,5 @@
 // src/components/ProtectedRoute.tsx
-import React, { useEffect } from 'react';
+import React, { JSX, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 interface ProtectedRouteProps {
