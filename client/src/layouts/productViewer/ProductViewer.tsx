@@ -17,7 +17,7 @@ import {
   Product3,
   Product4,
   SizeChart,
-} from "../../assets/images/";
+} from "../../assets/images";
 import { useParams } from "react-router-dom";
 import CustomFooter from "../../components/customFooter/CustomFooter";
 

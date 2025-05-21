@@ -10,14 +10,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@uploadcare/blocks": "^0.50.4",
+    "axios": "^1.9.0",
     "bootstrap": "^5.3.5",
-    "firebase": "^11.7.3",
     "react": "^19.0.0",
     "react-bootstrap": "^2.10.9",
     "react-bootstrap-icons": "^1.11.5",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.5.3",
+    "recharts": "^2.15.3",
     "sass": "^1.87.0"
   },
   "devDependencies": {

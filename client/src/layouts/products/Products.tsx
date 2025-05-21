@@ -15,8 +15,6 @@ import ProductCard from "../../components/productCard/ProductCard";
 import CustomPagination from "../../components/customPagination/CustomPagination";
 import { useNavigate } from "react-router-dom";
 import CustomFooter from "../../components/customFooter/CustomFooter";
-import OutfitRecommendationModal from "../../components/modals/outfitRecommendationModal/OutfitRecommendationModal";
-import Custom_button1 from "../../components/customButton1/CustomButton1";
 
 const products = Array(12)
   .fill(null)
@@ -36,7 +34,6 @@ type FilterFormProps = {
   setSelectedGender: React.Dispatch<React.SetStateAction<string>>;
   attireType: string;
   setAttireType: React.Dispatch<React.SetStateAction<string>>;
-  setShowModal: React.Dispatch<React.SetStateAction<boolean>>;
 };
 
 const FilterForm: React.FC<FilterFormProps> = ({
@@ -46,7 +43,6 @@ const FilterForm: React.FC<FilterFormProps> = ({
   setSelectedGender,
   attireType,
   setAttireType,
-  setShowModal,
 }) => (
   <>
     <Form className="mw-100 d-flex mb-4" style={{ minWidth: "200px" }}>
@@ -65,11 +61,7 @@ const FilterForm: React.FC<FilterFormProps> = ({
       </Button>
     </Form>
 
-    <div onClick={() => setShowModal(true)}>
-      <Custom_button1 />
-    </div>
-
-    <div className="d-flex mt-3">
+    <div className="d-none d-lg-flex mt-3">
       <Funnel size={24} className="me-2" />
       <h5 className="fw-semibold">Filters</h5>
     </div>
@@ -151,10 +143,6 @@ function Products() {
   const [currentPage, setCurrentPage] = useState(1);
   const totalPages = 3;
 
-  const [showModal, setShowModal] = useState(false);
-  const [formValues, setFormValues] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(true);
-
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
   };
@@ -167,17 +155,7 @@ function Products() {
   };
 
   return (
-    <div className="container-fluid px-4">
-      <OutfitRecommendationModal
-        show={showModal}
-        onHide={() => setShowModal(false)}
-        values={formValues}
-        onChange={(field, value) =>
-          setFormValues((prev) => ({ ...prev, [field]: value }))
-        }
-        onRecommend={() => console.log("recommend clicked", formValues)}
-        loading={loading}
-      />
+    <div className="container-fluid px-4 pt-4">
       <div className="row px-0 px-lg-5">
         {/* Sidebar */}
         <Col md={3} className="px-2 pt-0 border-end text-start">
@@ -197,7 +175,6 @@ function Products() {
                     setSelectedGender={setSelectedGender}
                     attireType={attireType}
                     setAttireType={setAttireType}
-                    setShowModal={setShowModal}
                   />
                 </Accordion.Body>
               </Accordion.Item>
@@ -213,7 +190,6 @@ function Products() {
               setSelectedGender={setSelectedGender}
               attireType={attireType}
               setAttireType={setAttireType}
-              setShowModal={setShowModal}
             />
           </div>
         </Col>

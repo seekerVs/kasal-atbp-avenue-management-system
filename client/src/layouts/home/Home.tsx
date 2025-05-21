@@ -66,7 +66,6 @@ function Home() {
                   <Form.Control
                     type="text"
                     placeholder="Look for dress color, type, or name"
-                    size="sm"
                   />
                 </Form.Group>
                 <Button variant="primary" size="sm" type="submit">

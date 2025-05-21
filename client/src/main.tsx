@@ -6,8 +6,6 @@ import App from './App.tsx'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {/* <FirebaseAuthProvider> */}
       <App />
-    {/* </FirebaseAuthProvider> */}
   </StrictMode>,
 )

@@ -1,0 +1,31 @@
+/* src/layouts/dashboard/dashboard.css */
+
+/* Customizing the Nav.Link for tabs to match the design */
+.card-header .nav-tabs .nav-link {
+  border: none; /* Remove default border */
+  border-bottom: 3px solid transparent; /* Keep space for active indicator */
+  border-radius: 0; /* Remove border radius */
+  padding-left: 1rem;
+  padding-right: 1rem;
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+  transition: all 0.2s ease-in-out;
+}
+
+.card-header .nav-tabs .nav-link.active {
+  border-bottom-color: #dc3545; /* Bootstrap primary red */
+  color: #dc3545; /* Make text red when active */
+  background-color: transparent; /* No background color */
+}
+
+/* Ensure table headers are not bold for the default Bootstrap `th` */
+.table thead th {
+    font-weight: normal; /* Override Bootstrap's default bold */
+}
+
+
+/* Specific styling for the input group icon */
+.input-group-text {
+  background-color: #fff;
+  border-left: none;
+}
