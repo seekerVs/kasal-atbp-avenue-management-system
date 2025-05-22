@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   Container,
   Row,
@@ -8,17 +8,17 @@ import {
   Form,
   Table,
   Nav,
-  InputGroup
-} from 'react-bootstrap';
+  InputGroup,
+} from "react-bootstrap";
 import {
   CalendarFill,
   HourglassSplit,
   ArrowRepeat,
   BagCheckFill,
   BoxArrowUpRight,
-  CalendarDate
-} from 'react-bootstrap-icons';
-import './dashboard.css';
+  CalendarDate,
+} from "react-bootstrap-icons";
+import "./dashboard.css";
 
 // --- Import Recharts Components ---
 import {
@@ -29,8 +29,8 @@ import {
   CartesianGrid,
   Tooltip,
   Legend,
-  ResponsiveContainer
-} from 'recharts';
+  ResponsiveContainer,
+} from "recharts";
 
 // --- Data Interfaces (Optional but Recommended for Type Safety) ---
 interface Order {
@@ -41,14 +41,24 @@ interface Order {
 }
 
 // --- Sample Data (Replace with real data from your backend) ---
-const salesMonthly = '105,575';
+const salesMonthly = "105,575";
 const toProcessCount = 10;
 const toReturnCount = 2;
 const completedOrdersCount = 764;
 
 const toReturnOrders: Order[] = [
-  { customerName: 'Jean A. Doe', orderDate: '04/29/2025', returnDate: '05/03/2025', phoneNumber: '09342769835' },
-  { customerName: 'John A. Doe', orderDate: '04/30/2025', returnDate: '05/04/2025', phoneNumber: '09903426712' },
+  {
+    customerName: "Jean A. Doe",
+    orderDate: "04/29/2025",
+    returnDate: "05/03/2025",
+    phoneNumber: "09342769835",
+  },
+  {
+    customerName: "John A. Doe",
+    orderDate: "04/30/2025",
+    returnDate: "05/04/2025",
+    phoneNumber: "09903426712",
+  },
   // Add more sample data if needed
 ];
 
@@ -63,23 +73,23 @@ interface SalesDataPoint {
 }
 
 const salesChartData: SalesDataPoint[] = [
-  { name: 'Monday', sales: 2700 },
-  { name: 'Tuesday', sales: 2900 },
-  { name: 'Wednesday', sales: 3450 },
-  { name: 'Thursday', sales: 2600 },
-  { name: 'Friday', sales: 1800 },
-  { name: 'Saturday', sales: 0 }, // Assuming 0 if no sales, adjust as needed
-  { name: 'Sunday', sales: 0 },   // Assuming 0 if no sales, adjust as needed
+  { name: "Monday", sales: 2700 },
+  { name: "Tuesday", sales: 2900 },
+  { name: "Wednesday", sales: 3450 },
+  { name: "Thursday", sales: 2600 },
+  { name: "Friday", sales: 1800 },
+  { name: "Saturday", sales: 0 }, // Assuming 0 if no sales, adjust as needed
+  { name: "Sunday", sales: 0 }, // Assuming 0 if no sales, adjust as needed
 ];
 
 // --- Dashboard Component ---
 function Dashboard() {
-  const [activeTab, setActiveTab] = useState<string>('toReturn');
-  const [startDate, setStartDate] = useState<string>('2021-10-30');
-  const [endDate, setEndDate] = useState<string>('2021-12-06');
+  const [activeTab, setActiveTab] = useState<string>("toReturn");
+  const [startDate, setStartDate] = useState<string>("2021-10-30");
+  const [endDate, setEndDate] = useState<string>("2021-12-06");
 
   const handleExport = () => {
-    alert('Export functionality would be implemented here!');
+    alert("Export functionality would be implemented here!");
   };
 
   return (
@@ -96,7 +106,10 @@ function Dashboard() {
                 <p className="text-secondary mb-1 fw-bold">SALES (MONTHLY)</p>
                 <h3 className="fw-bold mb-0">₱{salesMonthly}</h3>
               </div>
-              <CalendarFill size={40} className="ms-auto text-secondary opacity-50" />
+              <CalendarFill
+                size={40}
+                className="ms-auto text-secondary opacity-50"
+              />
             </Card.Body>
           </Card>
         </Col>
@@ -109,7 +122,10 @@ function Dashboard() {
                 <p className="text-secondary mb-1 fw-bold">TO PROCESS</p>
                 <h3 className="fw-bold mb-0">{toProcessCount}</h3>
               </div>
-              <HourglassSplit size={40} className="ms-auto text-secondary opacity-50" />
+              <HourglassSplit
+                size={40}
+                className="ms-auto text-secondary opacity-50"
+              />
             </Card.Body>
           </Card>
         </Col>
@@ -122,7 +138,10 @@ function Dashboard() {
                 <p className="text-secondary mb-1 fw-bold">TO RETURN</p>
                 <h3 className="fw-bold mb-0">{toReturnCount}</h3>
               </div>
-              <ArrowRepeat size={40} className="ms-auto text-secondary opacity-50" />
+              <ArrowRepeat
+                size={40}
+                className="ms-auto text-secondary opacity-50"
+              />
             </Card.Body>
           </Card>
         </Col>
@@ -135,7 +154,10 @@ function Dashboard() {
                 <p className="text-secondary mb-1 fw-bold">COMPLETED ORDERS</p>
                 <h3 className="fw-bold mb-0">{completedOrdersCount}</h3>
               </div>
-              <BagCheckFill size={40} className="ms-auto text-secondary opacity-50" />
+              <BagCheckFill
+                size={40}
+                className="ms-auto text-secondary opacity-50"
+              />
             </Card.Body>
           </Card>
         </Col>
@@ -149,7 +171,11 @@ function Dashboard() {
             <Card.Header className="d-flex justify-content-between align-items-center bg-white py-3">
               <h5 className="mb-0 fw-bold">Sales Visualization</h5>
               <div className="d-flex align-items-center gap-2">
-                <Button variant="outline-secondary" size="sm" onClick={handleExport}>
+                <Button
+                  variant="outline-secondary"
+                  size="sm"
+                  onClick={handleExport}
+                >
                   <BoxArrowUpRight className="me-1" /> Export
                 </Button>
                 <Form.Control
@@ -157,10 +183,14 @@ function Dashboard() {
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
                   className="form-control-sm"
-                  style={{ width: 'auto' }}
+                  style={{ width: "auto" }}
                 />
                 <span className="text-muted">→</span>
-                <InputGroup size="sm" className="flex-nowrap" style={{ width: 'auto' }}>
+                <InputGroup
+                  size="sm"
+                  className="flex-nowrap"
+                  style={{ width: "auto" }}
+                >
                   <Form.Control
                     type="date"
                     value={endDate}
@@ -185,7 +215,12 @@ function Dashboard() {
                   <YAxis />
                   <Tooltip />
                   <Legend />
-                  <Line type="monotone" dataKey="sales" stroke="#dc3545" activeDot={{ r: 8 }} />
+                  <Line
+                    type="monotone"
+                    dataKey="sales"
+                    stroke="#dc3545"
+                    activeDot={{ r: 8 }}
+                  />
                 </LineChart>
               </ResponsiveContainer>
             </Card.Body>
@@ -198,14 +233,18 @@ function Dashboard() {
             <Card.Header className="bg-white p-0 border-bottom-0">
               <Nav variant="tabs" defaultActiveKey="toReturn">
                 <Nav.Item>
-                  <Nav.Link eventKey="toReturn" onClick={() => setActiveTab('toReturn')}
-                    className={activeTab === 'toReturn' ? 'fw-bold text-danger' : 'text-secondary'}>
+                  <Nav.Link
+                    eventKey="toReturn"
+                    onClick={() => setActiveTab("toReturn")}
+                  >
                     To Return
                   </Nav.Link>
                 </Nav.Item>
                 <Nav.Item>
-                  <Nav.Link eventKey="overdue" onClick={() => setActiveTab('overdue')}
-                    className={activeTab === 'overdue' ? 'fw-bold text-danger' : 'text-secondary'}>
+                  <Nav.Link
+                    eventKey="overdue"
+                    onClick={() => setActiveTab("overdue")}
+                  >
                     Overdue
                   </Nav.Link>
                 </Nav.Item>
@@ -223,7 +262,7 @@ function Dashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {activeTab === 'toReturn' ? (
+                    {activeTab === "toReturn" ? (
                       toReturnOrders.length > 0 ? (
                         toReturnOrders.map((order, index) => (
                           <tr key={index}>
@@ -235,24 +274,29 @@ function Dashboard() {
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={4} className="text-center text-muted py-3">No items to return.</td>
+                          <td
+                            colSpan={4}
+                            className="text-center text-muted py-3"
+                          >
+                            No items to return.
+                          </td>
                         </tr>
                       )
+                    ) : overdueOrders.length > 0 ? (
+                      overdueOrders.map((order, index) => (
+                        <tr key={index} className="text-danger">
+                          <td>{order.customerName}</td>
+                          <td>{order.orderDate}</td>
+                          <td>{order.returnDate}</td>
+                          <td>{order.phoneNumber}</td>
+                        </tr>
+                      ))
                     ) : (
-                      overdueOrders.length > 0 ? (
-                        overdueOrders.map((order, index) => (
-                          <tr key={index} className="text-danger">
-                            <td>{order.customerName}</td>
-                            <td>{order.orderDate}</td>
-                            <td>{order.returnDate}</td>
-                            <td>{order.phoneNumber}</td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan={4} className="text-center text-muted py-3">No overdue items.</td>
-                        </tr>
-                      )
+                      <tr>
+                        <td colSpan={4} className="text-center text-muted py-3">
+                          No overdue items.
+                        </td>
+                      </tr>
                     )}
                   </tbody>
                 </Table>
