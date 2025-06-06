@@ -3,12 +3,120 @@ const express = require("express");
 const cors = require("cors");
 const connectDB = require("./db.js");
 const UserModel = require("./models/Users");
+const SensorDataModel = require("./models/SensorData"); // <--- New: Import SensorData model
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
 connectDB();
+
+const CURRENT_SENSOR_DATA_ID = "60c72b2f9f1b2c3d4e5f6a7b"; // Example fixed ObjectId
+
+// Endpoint to receive sensor data and update the "current" state
+app.post("/sensorData", async (req, res) => {
+  try {
+    // Destructure all possible fields
+    const { sensorType, position, direction, centimeters, value } = req.body;
+
+    // Prepare update data object
+    const updateData = { sensorType };
+
+    // Conditional assignment based on sensorType
+    if (sensorType === "LengthMeasurement") {
+      if (
+        typeof centimeters === "undefined" ||
+        typeof centimeters !== "number"
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Centimeters value missing or invalid for LengthMeasurement.",
+        });
+      }
+      updateData.centimeters = centimeters;
+      updateData.position = position; // Optional: keep raw position if desired
+      // You might set direction to 0 or null if it's not sent for LengthMeasurement
+      // updateData.direction = direction; // Only if you still send it for this type
+    } else if (sensorType === "RotaryEncoder") {
+      // Assuming this was your old type
+      if (typeof position === "undefined" || typeof direction === "undefined") {
+        return res.status(400).json({
+          success: false,
+          message: "Position or direction missing for RotaryEncoder.",
+        });
+      }
+      updateData.position = position;
+      updateData.direction = direction;
+    } else if (typeof value !== "undefined") {
+      // Generic sensor
+      updateData.value = value;
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid sensorType or missing data.",
+      });
+    }
+
+    const currentSensorData = await SensorDataModel.findOneAndUpdate(
+      { _id: CURRENT_SENSOR_DATA_ID },
+      updateData,
+      { upsert: true, new: true, runValidators: true }
+    );
+
+    console.log("Updated current sensor data:", currentSensorData);
+    res.status(200).json({
+      success: true,
+      message: "Current sensor data updated",
+      data: currentSensorData,
+    });
+  } catch (error) {
+    console.error("Error receiving sensor data:", error);
+    if (error.name === "ValidationError") {
+      const messages = Object.values(error.errors).map((val) => val.message);
+      return res
+        .status(400)
+        .json({ success: false, message: messages.join(", ") });
+    }
+    res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+      error: error.message,
+    });
+  }
+});
+
+app.get("/sensorData", async (req, res) => {
+  try {
+    const currentSensorData = await SensorDataModel.findById(
+      CURRENT_SENSOR_DATA_ID
+    );
+
+    if (!currentSensorData) {
+      return res
+        .status(404)
+        .json({ success: false, message: "No current sensor data found yet." });
+    }
+    res.status(200).json({ success: true, data: currentSensorData });
+  } catch (error) {
+    console.error("Error fetching current sensor data:", error);
+    if (error.name === "CastError") {
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "Invalid ID format for current sensor data.",
+        });
+    }
+    res
+      .status(500)
+      .json({
+        success: false,
+        message: "Internal Server Error",
+        error: error.message,
+      });
+  }
+});
 
 app.post("/login", async (req, res) => {
   const { email, password } = req.body;
@@ -43,13 +151,11 @@ app.post("/login", async (req, res) => {
       .json({ success: true, message: "Logged in successfully", token });
   } catch (error) {
     console.error("Login error:", error);
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Internal Server Error",
-        error: error.message,
-      });
+    res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+      error: error.message,
+    });
   }
 });
 
