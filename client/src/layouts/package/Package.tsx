@@ -2,22 +2,24 @@ import React, { useEffect, useState } from "react";
 import { Alert, Button, Col, Row } from "react-bootstrap";
 import PackageCard from "../../components/packageCard/PackageCard";
 import CustomFooter from "../../components/customFooter/CustomFooter";
+import { useNavigate } from "react-router-dom";
 
-const packages = [
+interface PackageItem {
+  title: string;
+  price: number;
+  note?: string;
+  items: string[];
+}
+
+const packages: PackageItem[] = [
   {
     title: "Package #1",
     price: 6888,
     note: "(in selected colors only)",
     items: [
-      "Wedding Gown",
-      "Groom (Barong, Tuxedo, B.tie)",
-      "Best man (Barong, Tuxedo, B.tie)",
-      "Maid of Honor",
-      "Abay Girls (4 Cocktail Dress)",
-      "Abay Boys (4 Barong/Chaleco only w/o pants)",
-      "3 Flower Girls with Basket",
-      "Ring Bearer (w/o pants)",
-      "Bible Bearer (w/o pants)",
+      "Wedding Gown", "Groom (Barong, Tuxedo, B.tie)", "Best man (Barong, Tuxedo, B.tie)",
+      "Maid of Honor", "Abay Girls (4 Cocktail Dress)", "Abay Boys (4 Barong/Chaleco only w/o pants)",
+      "3 Flower Girls with Basket", "Ring Bearer (w/o pants)", "Bible Bearer (w/o pants)",
       "FREE Bride's Parents (SET) & FREE ARAS",
     ],
   },
@@ -25,15 +27,9 @@ const packages = [
     title: "Package #2",
     price: 10888,
     items: [
-      "Wedding Gown (RTW)",
-      "Groom (Barong, Tuxedo, etc - RTW)",
-      "Best man (Barong, Tuxedo, 1 set - RTW)",
-      "Maid of Honor (RTW)",
-      "Abay Girls (5)",
-      "Abay Boys (5 Barong/Tuxedo - RTW)",
-      "4 Flower Girls with Basket",
-      "Ring Bearer (set - RTW)",
-      "Bible Bearer (set - RTW)",
+      "Wedding Gown (RTW)", "Groom (Barong, Tuxedo, etc - RTW)", "Best man (Barong, Tuxedo, 1 set - RTW)",
+      "Maid of Honor (RTW)", "Abay Girls (5)", "Abay Boys (5 Barong/Tuxedo - RTW)",
+      "4 Flower Girls with Basket", "Ring Bearer (set - RTW)", "Bible Bearer (set - RTW)",
       "FREE Bride's & Groom's Parents (SET) & FREE ARAS",
     ],
   },
@@ -41,43 +37,46 @@ const packages = [
     title: "Package #3",
     price: 15888,
     items: [
-      "Wedding Gown (Tailored/Bride's own design)",
-      "Groom (Barong, Tuxedo, etc - RTW)",
-      "Best man (Barong, Tuxedo, etc - RTW)",
-      "Maid of Honor",
-      "Abay Girls (5 - RTW)",
-      "Abay Boys (5 w/pants, long sleeve, B.tie - RTW)",
-      "4 Flower Girls with Basket (RTW)",
-      "Ring Bearer (w/pants, long sleeve, B.tie - RTW)",
-      "Bible Bearer (w/pants, long sleeve, B.tie - RTW)",
+      "Wedding Gown (Tailored/Bride's own design)", "Groom (Barong, Tuxedo, etc - RTW)",
+      "Best man (Barong, Tuxedo, etc - RTW)", "Maid of Honor", "Abay Girls (5 - RTW)",
+      "Abay Boys (5 w/pants, long sleeve, B.tie - RTW)", "4 Flower Girls with Basket (RTW)",
+      "Ring Bearer (w/pants, long sleeve, B.tie - RTW)", "Bible Bearer (w/pants, long sleeve, B.tie - RTW)",
       "FREE Bride's & Groom's Parents (SET-RTW) & FREE ARAS",
     ],
   },
 ];
 
 function Package() {
-  const [isSignedIn, setIsSignedIn] = useState(false); // Replace with actual auth state
+  const navigate = useNavigate();
   const [showAlert, setShowAlert] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
-  const handleNext = () => {
-    if (!isSignedIn) {
-      setShowAlert(true);
-    } else {
-      // Proceed to next step if signed in
-    }
-  };
-
-  // Auto-dismiss alert after 1 second
+  // Auto-dismiss alert after 3 seconds
   useEffect(() => {
     if (showAlert) {
       const timer = setTimeout(() => {
         setShowAlert(false);
       }, 3000);
-
       return () => clearTimeout(timer);
     }
   }, [showAlert]);
+
+  const handleNextClick = () => {
+    // console.log("handleNextClick called. selectedIndex:", selectedIndex); // Debugging log
+
+    if (selectedIndex === null) {
+      // If no package is selected, show an alert and STOP navigation
+      setShowAlert(true);
+      return; // IMPORTANT: This stops the function from proceeding to navigate
+    }
+
+    // Get the selected package data
+    const selectedPackageData = packages[selectedIndex];
+    // console.log("Navigating with selected package:", selectedPackageData); // Debugging log
+
+    // Navigate to PackageViewer, passing the selected package data in the state
+    navigate(`/packageViewer`, { state: { packageData: selectedPackageData } });
+  };
 
   return (
     <div className="container-fluid pt-3 pt-lg-4 px-4 justify-content-center">
@@ -87,7 +86,7 @@ function Package() {
           variant="primary"
           size="sm"
           className="px-3"
-          onClick={handleNext}
+          onClick={handleNextClick}
         >
           Next
         </Button>
@@ -100,7 +99,7 @@ function Package() {
           className="position-fixed top-0 start-50 translate-middle-x mt-3 shadow"
           style={{ zIndex: 1050, width: "100%", maxWidth: "500px" }}
         >
-          Please sign in to continue.
+          Please select a package to continue. {/* Clear and concise message */}
         </Alert>
       )}
       <div className="w-100 d-flex align-items-start justify-content-center gap-3">
@@ -109,7 +108,11 @@ function Package() {
             <Col key={idx} md={4} style={{ width: "400px", maxWidth: "400px" }}>
               <div
                 className="h-100"
-                onClick={() => setSelectedIndex(idx)}
+                // Ensure setSelectedIndex is correctly updating the state
+                onClick={() => {
+                    setSelectedIndex(idx);
+                    // console.log("PackageCard clicked. New selectedIndex:", idx); // Debugging log
+                }}
                 style={{ cursor: "pointer" }}
               >
                 <PackageCard
@@ -124,7 +127,7 @@ function Package() {
           ))}
         </Row>
       </div>
-      <footer className="bg-white text-dark pb-3">
+      <footer className="text-dark py-3">
         <CustomFooter />
       </footer>
     </div>
@@ -132,3 +135,4 @@ function Package() {
 }
 
 export default Package;
+

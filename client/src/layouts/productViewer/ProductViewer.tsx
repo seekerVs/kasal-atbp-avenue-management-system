@@ -126,7 +126,7 @@ const ProductViewer: React.FC = () => {
     <div className="position-relative mx-5 mt-3 mt-lg-4">
       <Button
         variant="link"
-        className="position-absolute top-0 end-0 m-0 p-2 pe-0"
+        className="position-absolute top-0 end-0 m-0 p-0"
         onClick={() => window.history.back()}
       >
         <X size={28} color="dark" />

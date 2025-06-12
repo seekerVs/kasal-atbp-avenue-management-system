@@ -9,6 +9,7 @@ import {
   Table,
   Nav,
   InputGroup,
+  Stack,
 } from "react-bootstrap";
 import {
   CalendarFill,
@@ -31,6 +32,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+import CustomFooter from "../../components/customFooter/CustomFooter";
 
 // --- Data Interfaces (Optional but Recommended for Type Safety) ---
 interface Order {
@@ -93,22 +95,22 @@ function Dashboard() {
   };
 
   return (
-    <Container fluid className="p-4 bg-light">
-      <h1 className="mb-4 fw-bold">Dashboard</h1>
+    <div className="d-flex flex-column justify-content-between gap-3 px-4 px-lg-5 pt-3">
+      <p className="m-0 fw-semibold fs-2 text-start">Dashboard</p>
 
       {/* --- Top Row: Summary Cards --- */}
-      <Row className="mb-4">
+      <Row>
         {/* Card 1: Sales (Monthly) */}
         <Col md={3} sm={6} className="mb-3">
-          <Card className="shadow-sm h-100">
-            <Card.Body className="d-flex align-items-center">
-              <div className="border-start border-danger border-5 pe-3 py-2">
+          <Card className="shadow-sm h-100 ">
+            <Card.Body className="d-flex align-items-center border-start border-primary border-5 rounded bg-white">
+              <div className="text-start pe-3 py-2">
                 <p className="text-secondary mb-1 fw-bold">SALES (MONTHLY)</p>
-                <h3 className="fw-bold mb-0">₱{salesMonthly}</h3>
+                <h4 className="fw-bold mb-0">₱{salesMonthly}</h4>
               </div>
               <CalendarFill
                 size={40}
-                className="ms-auto text-secondary opacity-50"
+                className="ms-auto text-light"
               />
             </Card.Body>
           </Card>
@@ -117,14 +119,14 @@ function Dashboard() {
         {/* Card 2: To Process */}
         <Col md={3} sm={6} className="mb-3">
           <Card className="shadow-sm h-100">
-            <Card.Body className="d-flex align-items-center">
-              <div className="border-start border-danger border-5 pe-3 py-2">
+            <Card.Body className="d-flex align-items-center border-start border-primary border-5 rounded bg-white">
+              <div className="text-start pe-3 py-2">
                 <p className="text-secondary mb-1 fw-bold">TO PROCESS</p>
-                <h3 className="fw-bold mb-0">{toProcessCount}</h3>
+                <h4 className="fw-bold mb-0">{toProcessCount}</h4>
               </div>
               <HourglassSplit
                 size={40}
-                className="ms-auto text-secondary opacity-50"
+                className="ms-auto text-light"
               />
             </Card.Body>
           </Card>
@@ -133,14 +135,14 @@ function Dashboard() {
         {/* Card 3: To Return */}
         <Col md={3} sm={6} className="mb-3">
           <Card className="shadow-sm h-100">
-            <Card.Body className="d-flex align-items-center">
-              <div className="border-start border-danger border-5 pe-3 py-2">
+            <Card.Body className="d-flex align-items-center border-start border-primary border-5 rounded bg-white">
+              <div className="text-start pe-3 py-2">
                 <p className="text-secondary mb-1 fw-bold">TO RETURN</p>
-                <h3 className="fw-bold mb-0">{toReturnCount}</h3>
+                <h4 className="fw-bold mb-0">{toReturnCount}</h4>
               </div>
               <ArrowRepeat
                 size={40}
-                className="ms-auto text-secondary opacity-50"
+                className="ms-auto text-light"
               />
             </Card.Body>
           </Card>
@@ -149,14 +151,14 @@ function Dashboard() {
         {/* Card 4: Completed Orders */}
         <Col md={3} sm={6} className="mb-3">
           <Card className="shadow-sm h-100">
-            <Card.Body className="d-flex align-items-center">
-              <div className="border-start border-danger border-5 pe-3 py-2">
+            <Card.Body className="d-flex align-items-center border-start border-primary border-5 rounded bg-white">
+              <div className="text-start pe-3 py-2">
                 <p className="text-secondary mb-1 fw-bold">COMPLETED ORDERS</p>
-                <h3 className="fw-bold mb-0">{completedOrdersCount}</h3>
+                <h4 className="fw-bold mb-0">{completedOrdersCount}</h4>
               </div>
               <BagCheckFill
                 size={40}
-                className="ms-auto text-secondary opacity-50"
+                className="ms-auto text-light"
               />
             </Card.Body>
           </Card>
@@ -166,11 +168,11 @@ function Dashboard() {
       {/* --- Middle Row: Sales Visualization (Chart) & To Return/Overdue (Table) --- */}
       <Row>
         {/* Sales Visualization (Chart) */}
-        <Col md={7} className="mb-4">
+        <Col md={7}>
           <Card className="shadow-sm h-100">
-            <Card.Header className="d-flex justify-content-between align-items-center bg-white py-3">
-              <h5 className="mb-0 fw-bold">Sales Visualization</h5>
-              <div className="d-flex align-items-center gap-2">
+            <Card.Header className="d-flex flex-wrap justify-content-between align-items-center bg-white py-3">
+              <h5 className="mb-0 fw-bold mb-2">Sales Visualization</h5>
+              <div className="d-flex flex-wrap align-items-center gap-2">
                 <Button
                   variant="outline-secondary"
                   size="sm"
@@ -228,29 +230,29 @@ function Dashboard() {
         </Col>
 
         {/* To Return / Overdue Table */}
-        <Col md={5} className="mb-4">
+        <Col md={5}>
           <Card className="shadow-sm h-100">
-            <Card.Header className="bg-white p-0 border-bottom-0">
-              <Nav variant="tabs" defaultActiveKey="toReturn">
-                <Nav.Item>
-                  <Nav.Link
-                    eventKey="toReturn"
-                    onClick={() => setActiveTab("toReturn")}
-                  >
-                    To Return
-                  </Nav.Link>
-                </Nav.Item>
-                <Nav.Item>
-                  <Nav.Link
-                    eventKey="overdue"
-                    onClick={() => setActiveTab("overdue")}
-                  >
-                    Overdue
-                  </Nav.Link>
-                </Nav.Item>
-              </Nav>
-            </Card.Header>
             <Card.Body className="p-0">
+              <div className="bg-white p-0 border-bottom-0 rounded-top">
+                <Nav variant="tabs" defaultActiveKey="toReturn">
+                  <Nav.Item>
+                    <Nav.Link
+                      eventKey="toReturn"
+                      onClick={() => setActiveTab("toReturn")}
+                    >
+                      To Return
+                    </Nav.Link>
+                  </Nav.Item>
+                  <Nav.Item>
+                    <Nav.Link
+                      eventKey="overdue"
+                      onClick={() => setActiveTab("overdue")}
+                    >
+                      Overdue
+                    </Nav.Link>
+                  </Nav.Item>
+                </Nav>
+              </div>
               <div className="table-responsive">
                 <Table hover className="mb-0">
                   <thead>
@@ -305,7 +307,10 @@ function Dashboard() {
           </Card>
         </Col>
       </Row>
-    </Container>
+      <footer className="text-dark py-3">
+        <CustomFooter />
+      </footer>
+    </div>
   );
 }
 

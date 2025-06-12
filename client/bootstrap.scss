@@ -8,8 +8,6 @@ $warning: #ffc107;
 $light: #DEE2E6; // f8f9fa
 $dark: #333333;
 
-// $gray-300: #DEE2E6;
-
 $font-family-base: "Inter", sans-serif;
 
 $theme-colors: (
@@ -22,10 +20,6 @@ $theme-colors: (
   "light": $light,
   "dark": $dark
 );
-
-// $colors: (
-//   "gray-300": $gray-300,
-// );
 
 // Optional: Body and heading color overrides using tokens
 $body-color: #212529;
