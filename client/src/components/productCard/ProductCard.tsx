@@ -23,7 +23,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
 }) => {
   return (
     <div onClick={onClick} style={{ cursor: "pointer" }}>
-      <Card className="h-100 border-1 p-1 shadow-sm rounded-2">
+      <Card className="bg-white h-100 border-1 p-1 shadow-sm rounded-2">
         <div className="position-relative">
           <Card.Img variant="top" src={image} alt={title} />
           <div className="position-absolute top-0 end-0 p-2">

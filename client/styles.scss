@@ -1,0 +1,69 @@
+@import "./node_modules/bootstrap/scss/functions";
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+
+
+$font-family-base: 'Inter';
+
+$h1-font-size:                2rem;
+$h2-font-size:                1.75rem;
+$h3-font-size:                1.5rem;
+$h4-font-size:                1.25rem;
+$h5-font-size:                1rem;
+$h6-font-size:                .75rem;
+
+$font-size-base:              $h5-font-size;
+
+$primary: #AE0C00;
+$secondary: #6C757D;
+$danger: #7e020e;
+
+$success: #198754;
+$info: #0dcaf0;
+$warning: #ffc107;
+$light: #DEE2E6; // f8f9fa
+$dark: #333333;
+
+$font-sizes: (
+  1: $h1-font-size,
+  2: $h2-font-size,
+  3: $h3-font-size,
+  4: $h4-font-size,
+  5: $h5-font-size,
+  6: $h6-font-size
+);
+
+// 2. Override theme colors **before** variables are loaded
+$theme-colors: (
+  "primary": $primary,
+  "secondary": $secondary,
+  "danger": $danger,
+  "success": $success,
+  "info": $info,
+  "warning": $warning,
+  "light": $light,
+  "dark": $dark
+);
+
+// 3. Import Bootstrap required files
+@import "./node_modules/bootstrap/scss/variables";
+@import "./node_modules/bootstrap/scss/variables-dark";
+@import "./node_modules/bootstrap/scss/maps";
+@import "./node_modules/bootstrap/scss/mixins";
+@import "./node_modules/bootstrap/scss/utilities";
+
+$body-color: #212529;
+
+// 5. Finally, import all of Bootstrap
+@import "./node_modules/bootstrap/scss/bootstrap";
+
+.nav-link {
+  color: $primary;
+
+  &.default {
+    color: $secondary !important;
+  }
+
+  &:hover {
+    color: $secondary;
+  }
+}

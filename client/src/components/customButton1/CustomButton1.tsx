@@ -5,7 +5,7 @@ import { Stars } from "react-bootstrap-icons";
 
 function Custom_button1() {
   return (
-    <Button className="custom-button1-style btn-secondary d">
+    <Button className="custom-button1-style fw-semibold">
       <Stars size={20} />
       Outfit Recomendation
     </Button>

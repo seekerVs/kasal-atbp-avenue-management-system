@@ -2,23 +2,21 @@
   font-family: 'impact_font';
   src: url("../../assets/fonts/impact.ttf") format('truetype');
 }
-.main-header {
-  /* width: 1440px; */
-  background-color: #1a6abb;
-}
 
 .custom-container {
+  /* background-color: white; */
   max-width: 1420px;
   margin-left: auto;
   margin-right: auto;
 }
+
 
 .brand-text {
   width: auto;
   font-size: 1.25rem;
   font-family: 'impact_font';
   font-weight: bold;
-  color: #AE0C00;
+  color: var(--bs-primary);
 
   @media (min-width: 992px) {
     font-size: 2.5rem; /* override on large screens */
@@ -39,13 +37,6 @@
   @media (min-width: 1190px) {
     margin-left: 200px;
   }
-}
-
-.no-hover:hover {
-  background-color: inherit !important;
-  color: inherit !important;
-  border-color: inherit !important;
-
 }
 
 

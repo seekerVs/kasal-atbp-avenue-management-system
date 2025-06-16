@@ -29,7 +29,6 @@ import OutfitRecommendationModal from "../../components/modals/outfitRecommendat
 function Home() {
   const [showModal, setShowModal] = useState(false);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(true);
 
   return (
     <Container fluid className="d-flex flex-column justify-content-center p-0">
@@ -41,9 +40,8 @@ function Home() {
           setFormValues((prev) => ({ ...prev, [field]: value }))
         }
         onRecommend={() => console.log("recommend clicked", formValues)}
-        loading={loading}
       />
-      
+
       {/* Hero Section */}
       <div className="d-flex flex-column mb-lg-3 mb-1">
         <div className="store1-style position-relative overflow-hidden">
@@ -54,9 +52,11 @@ function Home() {
           />
           <div className="w-auto h-auto position-absolute top-50 gap-4 start-50 translate-middle d-flex flex-column align-items-center">
             <div className="bg-black bg-opacity-25 p-3 rounded-1 text-center">
-              <h2 className="fw-bold text-white">Find your perfect outfit</h2>
+              <p className="fw-bold text-white fs-2">
+                Find your perfect outfit
+              </p>
               <Form
-                className="search-style d-flex gap-3"
+                className="search-style d-flex gap-2"
                 style={{ width: "400px" }}
               >
                 <Form.Group
@@ -68,7 +68,7 @@ function Home() {
                     placeholder="Look for dress color, type, or name"
                   />
                 </Form.Group>
-                <Button variant="primary" size="sm" type="submit">
+                <Button type="submit" className="fw-medium">
                   Search
                 </Button>
               </Form>
@@ -86,7 +86,7 @@ function Home() {
         style={{ maxWidth: "900px" }}
       >
         <div className="mw-100 mx-auto">
-          <div className="d-flex flex-column flex-md-row justify-content-center gap-4">
+          <div className="d-flex flex-column flex-md-row justify-content-center gap-4 lh-sm">
             <div className="mb-4 mb-md-0">
               <CartCheck className="display-4 text-danger" />
               <h5 className="fw-bold mt-2">All-in-one</h5>
@@ -124,7 +124,7 @@ function Home() {
         <hr />
 
         {/* Vertical Card Layout */}
-        <CardGroup className="d-flex flex-row justify-content-center gap-4">
+        <CardGroup className="d-flex flex-row justify-content-center gap-4 ">
           <Card className="w-100" style={{ maxWidth: "300px", height: "auto" }}>
             <Card.Img variant="top" src={Formal_men} alt="Standalone" />
             <Card.Body className="text-start d-flex flex-column">

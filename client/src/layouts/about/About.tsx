@@ -33,14 +33,14 @@ function About() {
         />
       </div>
       <div className="w-100">
-        <h1 className="fw-medium">Welcome to Kasal atbp Avenue</h1>
+        <h1 className="fw-medium display-5">Welcome to Kasal atbp Avenue</h1>
         <p className="px-3 px-md-5">
           At Kasal atbp Avenue, we believe that everyone deserves to look
           stunning without the high price tag. We offer premium dress rentals
           with tailored options to ensure the perfect fit for any occasion.
           Whether you need a wedding gown, formal suit, or themed attire, we
           provide high-quality outfits that make a statement. Our mission is to
-          make fashion accessible, sustainable, and hassle-free—because great
+          make fashion accessible, sustainable, and hassle-free. A great
           style should be available to everyone!
         </p>
       </div>
@@ -171,7 +171,7 @@ function About() {
             placeholder="Your email"
             style={{ maxWidth: "250px" }}
           />
-          <Button variant="danger">Subscribe</Button>
+          <Button>Subscribe</Button>
         </Form>
       </div>
 

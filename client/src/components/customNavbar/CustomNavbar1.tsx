@@ -20,7 +20,7 @@ function Custom_navbar1() {
 
   return (
     <Container fluid className="bg-white shadow-sm px-0 w-100">
-      <Navbar expand="lg" className="bg-white py-1 custom-container">
+      <Navbar expand="lg" className="py-1 custom-container">
         <Container fluid>
           <Navbar.Brand
             className="d-flex justify-content-center align-items-start"

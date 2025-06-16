@@ -48,11 +48,11 @@ const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({
   onHide,
   values,
   onChange,
-  onRecommend,
 }) => {
   const navigate = useNavigate();
 
-  const [currentSensorData, setCurrentSensorData] = useState<CurrentSensorDataItem | null>(null);
+  const [currentSensorData, setCurrentSensorData] =
+    useState<CurrentSensorDataItem | null>(null);
   const [isSensorLoading, setIsSensorLoading] = useState<boolean>(true);
   const [sensorError, setSensorError] = useState<string | null>(null);
 
@@ -70,15 +70,22 @@ const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({
     try {
       setIsSensorLoading(true);
       setSensorError(null);
-      const response = await axios.get<{ success: true, data: CurrentSensorDataItem }>('http://localhost:3001/sensorData');
+      const response = await axios.get<{
+        success: true;
+        data: CurrentSensorDataItem;
+      }>("http://localhost:3001/sensorData");
       setCurrentSensorData(response.data.data);
     } catch (err: any) {
-      console.error('Error fetching current sensor data in modal:', err);
+      console.error("Error fetching current sensor data in modal:", err);
       if (err.response && err.response.status === 404) {
-          setSensorError('No device data available yet. Please ensure your device is sending data.');
-          setCurrentSensorData(null);
+        setSensorError(
+          "No device data available yet. Please ensure your device is sending data."
+        );
+        setCurrentSensorData(null);
       } else {
-          setSensorError(err.response?.data?.message || 'Failed to fetch device data.');
+        setSensorError(
+          err.response?.data?.message || "Failed to fetch device data."
+        );
       }
     } finally {
       setIsSensorLoading(false);
@@ -111,7 +118,7 @@ const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({
     if (
       focusedField &&
       currentSensorData?.centimeters !== undefined &&
-      currentSensorData.sensorType === 'LengthMeasurement'
+      currentSensorData.sensorType === "LengthMeasurement"
     ) {
       const currentCm = currentSensorData.centimeters;
       const prevCm = prevCentimetersRef.current;
@@ -148,7 +155,7 @@ const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({
     if (
       focusedField &&
       currentSensorData?.centimeters !== undefined &&
-      currentSensorData.sensorType === 'LengthMeasurement'
+      currentSensorData.sensorType === "LengthMeasurement"
     ) {
       onChange(focusedField, currentSensorData.centimeters.toFixed(2));
 
@@ -212,9 +219,11 @@ const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({
                     // --- NEW: Attach ref to the input element ---
                     ref={(el) => {
                       // Store the DOM element in the ref Map, using the label as key
-                      if (el) { // Ensure element exists before setting
+                      if (el) {
+                        // Ensure element exists before setting
                         inputRefs.current.set(label, el as HTMLInputElement);
-                      } else { // Element unmounted, remove from map
+                      } else {
+                        // Element unmounted, remove from map
                         inputRefs.current.delete(label);
                       }
                     }}
@@ -228,7 +237,7 @@ const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({
                       !currentSensorData?.centimeters ||
                       focusedField !== label ||
                       isSensorLoading ||
-                      currentSensorData.sensorType !== 'LengthMeasurement'
+                      currentSensorData.sensorType !== "LengthMeasurement"
                     }
                     title="Get from Device"
                   >
@@ -244,7 +253,11 @@ const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({
         <div className="mt-3">
           {isSensorLoading && (
             <div className="d-flex align-items-center text-muted">
-              <Spinner animation="border" size="sm" className="me-2 text-danger" />
+              <Spinner
+                animation="border"
+                size="sm"
+                className="me-2 text-danger"
+              />
               Retrieving device measurement...
             </div>
           )}
@@ -255,7 +268,9 @@ const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({
           )}
           {!isSensorLoading && !sensorError && currentSensorData && (
             <Alert variant="success" className="mt-2 py-2">
-              Live Reading: {currentSensorData.centimeters?.toFixed(2) || 'N/A'} cm (Last Updated: {new Date(currentSensorData.updatedAt).toLocaleTimeString()})
+              Live Reading: {currentSensorData.centimeters?.toFixed(2) || "N/A"}{" "}
+              cm (Last Updated:{" "}
+              {new Date(currentSensorData.updatedAt).toLocaleTimeString()})
             </Alert>
           )}
         </div>

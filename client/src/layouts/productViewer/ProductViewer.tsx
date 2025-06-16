@@ -18,7 +18,7 @@ import {
   Product4,
   SizeChart,
 } from "../../assets/images";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import CustomFooter from "../../components/customFooter/CustomFooter";
 
 interface Product {
@@ -44,6 +44,7 @@ interface ColorInfo {
 }
 
 const ProductViewer: React.FC = () => {
+  const navigate = useNavigate();
   const { id } = useParams();
   const [product, setProduct] = useState<Product | null>(null);
   const [size, setSize] = useState("");
@@ -126,7 +127,7 @@ const ProductViewer: React.FC = () => {
     <div className="position-relative mx-5 mt-3 mt-lg-4">
       <Button
         variant="link"
-        className="position-absolute top-0 end-0 m-0 p-2 pe-0"
+        className="position-absolute top-0 end-0 m-0 p-0"
         onClick={() => window.history.back()}
       >
         <X size={28} color="dark" />
@@ -265,10 +266,14 @@ const ProductViewer: React.FC = () => {
 
           <div className="d-flex flex-wrap gap-3 my-3">
             <Button variant="secondary" size="lg" className="flex-fill">
-              Add to cart
+              Add to order
             </Button>
-            <Button size="lg" className="flex-fill">
-              Order now
+            <Button
+              size="lg"
+              className="flex-fill"
+              onClick={() => navigate(`/checkout`)}
+            >
+              Checkout
             </Button>
           </div>
 

@@ -11,8 +11,8 @@ function Services() {
   const navigate = useNavigate();
 
   return (
-    <div className="d-block justify-content-center pt-5 mx-4 mx-lg-5">
-      <h1 className="fw-medium">Services</h1>
+    <div className="d-flex flex-column justify-content-center pt-4 mx-4 mx-lg-5">
+      <h1 className="fw-medium display-5 mb-3">Services</h1>
       <p className="text-muted mx-auto mb-3" style={{ maxWidth: "700px" }}>
         Find the perfect outfit at the right price. Choose from flexible rental
         options, whether you need a single piece or a complete package. No
@@ -24,8 +24,8 @@ function Services() {
           {/* Standalone Card */}
           <Col xs={12} md={6} lg={4}>
             <Card className="h-100 border-light shadow-sm">
-              <Card.Header className="fw-bold mb-3">Standalone</Card.Header>
-              <Card.Body className="text-center">
+              <Card.Header className="fw-bold">Standalone</Card.Header>
+              <Card.Body className="d-flex flex-column align-items-center">
                 <Card.Img
                   variant="top"
                   src={Standalone}
@@ -48,7 +48,7 @@ function Services() {
                 </Card.Text>
                 <Button
                   variant="primary"
-                  className="mt-3"
+                  className="mt-auto"
                   onClick={() => navigate("/products")}
                 >
                   Order now
@@ -59,8 +59,8 @@ function Services() {
           {/* Package Card */}
           <Col xs={12} md={6} lg={4}>
             <Card className="h-100 border-light shadow-sm">
-              <Card.Header className="fw-bold mb-3">Package</Card.Header>
-              <Card.Body className="text-center">
+              <Card.Header className="fw-bold">Package</Card.Header>
+              <Card.Body className="d-flex flex-column align-items-center">
                 <Card.Img
                   variant="top"
                   src={Wedding_252x168}
@@ -83,7 +83,7 @@ function Services() {
                 </Card.Text>
                 <Button
                   variant="primary"
-                  className="mt-3"
+                  className="mt-auto"
                   onClick={() => navigate("/package")}
                 >
                   Order now
@@ -94,8 +94,8 @@ function Services() {
           {/* Custom Card */}
           <Col xs={12} md={6} lg={4}>
             <Card className="h-100 border-light shadow-sm">
-              <Card.Header className="fw-bold mb-3">Custom</Card.Header>
-              <Card.Body className="text-center">
+              <Card.Header className="fw-bold">Custom</Card.Header>
+              <Card.Body className="d-flex flex-column align-items-center">
                 <Card.Img
                   variant="top"
                   src={Tailoring_252x168}
@@ -118,7 +118,7 @@ function Services() {
                 </Card.Text>
                 <Button
                   variant="primary"
-                  className="mt-3"
+                  className="mt-auto"
                   onClick={() => navigate("/customTailoring")}
                 >
                   Order now

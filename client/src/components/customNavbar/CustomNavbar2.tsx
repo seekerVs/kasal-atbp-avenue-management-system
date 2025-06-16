@@ -53,8 +53,8 @@ function Custom_navbar2({ setNavbarType }: CustomNavbar2Props) { // Removed onLo
   };
 
   return (
-    <Container fluid className="bg-white shadow-sm px-0 w-100">
-      <Navbar expand="lg" className="bg-white py-1 custom-container">
+    <Container fluid className="shadow-sm px-0 w-100 bg-white">
+      <Navbar expand="lg" className="py-1 custom-container">
         <Container fluid>
           <Navbar.Brand
             href="/"

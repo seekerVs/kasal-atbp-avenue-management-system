@@ -48,13 +48,11 @@ const FilterForm: React.FC<FilterFormProps> = ({
     <Form className="mw-100 d-flex mb-4" style={{ minWidth: "200px" }}>
       <Form.Control
         type="text"
-        size="sm"
         placeholder="Search"
         className="rounded-start-2 rounded-end-0"
       />
       <Button
         variant="primary"
-        size="sm"
         className="rounded-start-0 rounded-end-2"
       >
         <Search size={20} color="white" />
