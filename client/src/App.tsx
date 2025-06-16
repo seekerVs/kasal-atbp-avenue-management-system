@@ -24,10 +24,8 @@ import Orders from "./layouts/orders/Orders";
 import ProtectedRoute from "./components/ProtectedRoute"; // Adjust path if your components folder is different
 import RedirectIfAuthenticated from "./components/RedirectIfAuthenticated"; // Adjust path if your components folder is different
 import PackageViewer from "./layouts/packageViewer/PackageViewer";
-<<<<<<< HEAD
 import Checkout from "./layouts/checkout/Checkout";
-=======
->>>>>>> d613154f3e4e3788a0061f143c415c4b2e95852b
+
 
 function App() {
   // Initialize navbarType based on whether an authToken exists in localStorage.
