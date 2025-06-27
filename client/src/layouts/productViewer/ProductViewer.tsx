@@ -128,7 +128,7 @@ const ProductViewer: React.FC = () => {
       <Button
         variant="link"
         className="position-absolute top-0 end-0 m-0 p-0"
-        onClick={() => window.history.back()}
+        onClick={() => navigate(`/products`)}
       >
         <X size={28} color="dark" />
       </Button>

@@ -95,7 +95,7 @@ function Dashboard() {
   };
 
   return (
-    <div className="d-flex flex-column justify-content-between gap-3 px-4 px-lg-5 pt-3">
+    <div className="d-flex flex-column justify-content-between gap-3">
       <p className="m-0 fw-semibold fs-2 text-start">Dashboard</p>
 
       {/* --- Top Row: Summary Cards --- */}

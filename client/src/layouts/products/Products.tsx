@@ -45,7 +45,7 @@ const FilterForm: React.FC<FilterFormProps> = ({
   setAttireType,
 }) => (
   <>
-    <Form className="mw-100 d-flex mb-4" style={{ minWidth: "200px" }}>
+    <Form className="mw-100 d-flex mb-4" style={{ minWidth: "150px" }}>
       <Form.Control
         type="text"
         placeholder="Search"
@@ -153,8 +153,8 @@ function Products() {
   };
 
   return (
-    <div className="container-fluid px-4 pt-4">
-      <div className="row px-0 px-lg-5">
+    <div className="container-fluid pt-4">
+      <Row>
         {/* Sidebar */}
         <Col md={3} className="px-2 pt-0 border-end text-start">
           {/* Mobile View Accordion */}
@@ -193,7 +193,7 @@ function Products() {
         </Col>
 
         {/* Product Grid */}
-        <div className="col-md-9 pb-4 px-3">
+        <Col md={9} className="pb-4 px-3">
           <div className="d-flex justify-content-end align-items-center">
             <DropdownButton
               as={ButtonGroup}
@@ -234,8 +234,8 @@ function Products() {
               </Col>
             ))}
           </Row>
-        </div>
-      </div>
+        </Col>
+      </Row>
       <footer className="px-0 px-lg-5 text-dark py-3">
         <CustomFooter />
       </footer>

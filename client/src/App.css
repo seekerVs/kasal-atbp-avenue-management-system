@@ -2,13 +2,7 @@
   max-width: auto;
   margin: 0 auto;
   padding: 0;
-  padding-top: 100px;
-  text-align: center;
   background-color: var(--bs-gray-100);
-
-  @media (min-width: 992px) {
-    padding-top: 80px;
-  }
 }
 
 /* Fixes the navbar to the top of the page */

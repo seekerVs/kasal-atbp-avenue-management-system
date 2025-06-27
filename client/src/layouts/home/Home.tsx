@@ -126,9 +126,9 @@ function Home() {
         {/* Vertical Card Layout */}
         <CardGroup className="d-flex flex-row justify-content-center gap-4 ">
           <Card className="w-100" style={{ maxWidth: "300px", height: "auto" }}>
-            <Card.Img variant="top" src={Formal_men} alt="Standalone" />
+            <Card.Img variant="top" src={Formal_men} alt="Single" />
             <Card.Body className="text-start d-flex flex-column">
-              <Card.Title className="fw-bold">Standalone</Card.Title>
+              <Card.Title className="fw-bold">Single</Card.Title>
               <Card.Text>
                 Rent a dress for any occasion. Flexible and hassle-free
               </Card.Text>

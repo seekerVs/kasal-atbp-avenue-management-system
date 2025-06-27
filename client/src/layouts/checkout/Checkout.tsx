@@ -3,6 +3,7 @@ import { Row, Col, Nav, Image, Button, Table, Form } from "react-bootstrap"; // 
 import { ChevronLeft, PersonFill, QuestionCircle } from "react-bootstrap-icons";
 import Package2 from "../../assets/images/Package2.jpg"; // Placeholder, replace with your actual path
 import "./checkout.css";
+import { useNavigate } from "react-router-dom";
 
 // Define an interface for your order item structure
 interface OrderItem {
@@ -17,6 +18,7 @@ interface OrderItem {
 }
 
 function Checkout() {
+  const navigate = useNavigate();
   const [paymentMethod, setPaymentMethod] = useState<string>(""); // State for payment method
   const [shopDiscount, setShopDiscount] = useState<number>(0); // State for shop discount
   const [gcashReferenceNo, setGcashReferenceNo] = useState<string>(""); // State for Gcash Reference No.
@@ -51,12 +53,6 @@ function Checkout() {
     },
   ];
 
-  // Calculate the overall order total
-  const overallOrderTotal = orderItems.reduce(
-    (total, item) => total + item.itemSubtotal,
-    0
-  );
-
   // Calculate the overall order subtotal before discount
   const orderSubtotal = orderItems.reduce(
     (total, item) => total + item.itemSubtotal,
@@ -71,12 +67,15 @@ function Checkout() {
     <div className="d-flex flex-column gap-2 px-4 px-lg-5 pt-4 pb-4">
       <div className="d-flex justify-content-between bg-white rounded shadow-sm p-3">
         <div>
-          <div className="d-flex gap-2">
-            <ChevronLeft size={24} />
-            <p>BACK</p>
+          <div className="d-flex mb-4">
+            <Button variant="link" className="py-0 ps-0" onClick={() => navigate(-1)}>
+              <ChevronLeft size={24} />
+            </Button>
+
+            <p className="my-auto">BACK</p>
           </div>
-          <div className="px-2 mt-2 border-start border-primary text-primary border-2 fs-4">
-            <p>Checkout</p>
+          <div className="px-2 mt-2 border-start border-dark border-2">
+            <p className="fs-4 mb-0">Checkout</p>
           </div>
         </div>
         <p className="text-primary">TO PROCESS</p>
@@ -90,8 +89,9 @@ function Checkout() {
             <p>Customer Information</p>
           </div>
           <p>
-            <b>Juan P. Marquez (+63)9125435674</b> Putok Atis, Brgy. Gubat,
-            Daet, Camarines Norte <b className="text-primary ms-3">Change</b>
+            <span className="fw-semibold">Juan P. Marquez (+63)9125435674</span>{" "}
+            Putok Atis, Brgy. Gubat, Daet, Camarines Norte{" "}
+            <span className="text-primary ms-3 fw-semibold">Change</span>
           </p>
         </div>
       </div>
@@ -226,7 +226,7 @@ function Checkout() {
                   htmlFor="amountTendered"
                   className="mb-0 fw-medium text-muted"
                 >
-                  Amount tendered
+                  Amount Tendered
                 </Form.Label>
               </Col>
               <Col xs={6}>
@@ -350,7 +350,12 @@ function Checkout() {
             </p>
           </Col>
           <Col xs="auto">
-            <Button className="px-4 py-2">Checkout</Button>
+            <Button
+              className="px-4 py-2"
+              onClick={() => navigate(`/toReturnOrder`)}
+            >
+              Checkout
+            </Button>
           </Col>
         </Row>
       </div>

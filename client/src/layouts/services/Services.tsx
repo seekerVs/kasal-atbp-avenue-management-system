@@ -24,12 +24,12 @@ function Services() {
           {/* Standalone Card */}
           <Col xs={12} md={6} lg={4}>
             <Card className="h-100 border-light shadow-sm">
-              <Card.Header className="fw-bold">Standalone</Card.Header>
+              <Card.Header className="fw-bold">Single</Card.Header>
               <Card.Body className="d-flex flex-column align-items-center">
                 <Card.Img
                   variant="top"
                   src={Standalone}
-                  alt="Standalone Service"
+                  alt="Single rental Service"
                   style={{
                     objectFit: "cover",
                     height: "150px",

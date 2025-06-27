@@ -42,7 +42,7 @@ function PackageViewer() {
       <Button
         variant="link"
         className="position-absolute top-0 end-0 m-0 p-0"
-        onClick={() => navigate(-1)}
+        onClick={() => navigate('/package')}
       >
         <X size={28} color="dark" />
       </Button>

@@ -3,8 +3,10 @@ import { Col, Row, Image, Stack, Form, Button } from "react-bootstrap";
 import { Tailoring_424x636 } from "../../assets/images";
 import { X } from "react-bootstrap-icons";
 import OutfitRecommendationModal from "../../components/modals/outfitRecommendationModal/OutfitRecommendationModal";
+import { useNavigate } from "react-router-dom";
 
 function CustomTailoring() {
+  const navigate = useNavigate();
   const [motif, setMotif] = useState("");
   const [attire, setAttire] = useState("");
   const [purchase, setPurchase] = useState(false);
@@ -14,7 +16,6 @@ function CustomTailoring() {
 
   const [showModal, setShowModal] = useState(false);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(true);
 
   return (
     <div className="mx-4 mx-lg-5 mt-5 mt-lg-4 position-relative">
@@ -26,13 +27,12 @@ function CustomTailoring() {
           setFormValues((prev) => ({ ...prev, [field]: value }))
         }
         onRecommend={() => console.log("recommend clicked", formValues)}
-        loading={loading}
       />
 
       <Button
         variant="link"
         className="position-absolute top-0 end-0 m-0 p-0"
-        onClick={() => window.history.back()}
+        onClick={() => navigate(`/services`)}
       >
         <X size={28} color="dark" />
       </Button>

@@ -79,7 +79,7 @@ function Package() {
   };
 
   return (
-    <div className="container-fluid pt-3 pt-lg-4 px-4 justify-content-center">
+    <div className="pt-3 pt-lg-4 px-4 justify-content-center">
       <div className="w-100 d-flex justify-content-between px-0 px-lg-5">
         <h3 className="display-7">Select a package offer </h3>
         <Button
