@@ -27,35 +27,7 @@ import {
   Gem
 } from 'react-bootstrap-icons';
 import axios from 'axios'; // Import axios for API calls
-
-// --- TYPE DEFINITIONS - Aligned with your MongoDB Schema ---
-interface ItemVariation {
-  _id?: string; // Optional for new variations before saving, or if backend generates it
-  dressId?: string; // This is the link to the parent Item's _id
-  color: string;
-  size: string;
-  quantity: number;
-  imageUrl: string; // Each variation has an image
-}
-
-interface InventoryItem {
-  _id: { $oid: string } | string; // Handle MongoDB ObjectId structure and simple string
-  name: string;
-  price: number;
-  category: string;
-  description: string;
-  features: string[];
-  composition: string;
-  variations: ItemVariation[]; // Variations will be populated here
-}
-
-// Helper to get a simple string ID from MongoDB's _id object or a string _id
-const getItemId = (item: InventoryItem): string => {
-  if (typeof item._id === 'string') {
-    return item._id;
-  }
-  return item._id.$oid;
-};
+import { InventoryItem, ItemVariation } from '../../types';
 
 
 // --- MAIN COMPONENT ---
@@ -110,7 +82,7 @@ function InventoryItems() {
 
   const handleSaveItem = async (itemData: Omit<InventoryItem, '_id'> & { _id?: string | { $oid: string } }) => {
     setError(null);
-    const id = currentItem ? getItemId(currentItem) : undefined;
+    const id = currentItem ? currentItem._id : undefined;
     const method = id ? 'put' : 'post';
     const url = id ? `${API_URL}/inventory/${id}` : `${API_URL}/inventory`;
 
@@ -128,7 +100,7 @@ function InventoryItems() {
       const savedItem = response.data;
 
       if (id) {
-        setInventory(inventory.map(item => getItemId(item) === id ? savedItem : item));
+        setInventory(inventory.map(item => item._id === id ? savedItem : item));
       } else {
         setInventory([...inventory, savedItem]);
       }
@@ -142,10 +114,10 @@ function InventoryItems() {
   const handleDeleteItem = async () => {
     if (!currentItem) return;
     setError(null);
-    const id = getItemId(currentItem);
+    const id = currentItem._id;
     try {
       await axios.delete(`${API_URL}/inventory/${id}`);
-      setInventory(inventory.filter(item => getItemId(item) !== id));
+      setInventory(inventory.filter(item => item._id !== id));
       handleCloseDeleteModal();
     } catch (err: any) {
       console.error("Error deleting item:", err);
@@ -195,7 +167,7 @@ function InventoryItems() {
                   </thead>
                   <tbody>
                     {filteredInventory.map(item => (
-                      <tr key={getItemId(item)}>
+                      <tr key={item._id}>
                         <td style={{ width: '80px', textAlign: 'center' }}>
                           <img
                             src={item.variations && item.variations.length > 0 ? item.variations[0].imageUrl : 'https://placehold.co/60x60/e9ecef/adb5bd?text=N/A'}
@@ -241,7 +213,7 @@ function InventoryItems() {
 interface ItemFormModalProps {
   show: boolean;
   onHide: () => void;
-  onSave: (itemData: Omit<InventoryItem, '_id'> & { _id?: string | { $oid: string } }) => void;
+  onSave: (itemData: InventoryItem) => void; // It now just saves the whole item
   item: InventoryItem | null;
 }
 
@@ -283,9 +255,13 @@ function ItemFormModal({ show, onHide, onSave, item }: ItemFormModalProps) {
   };
 
   const handleSave = () => {
-    const itemToSave = item ? { ...formData, _id: item._id } : formData; // Pass original _id if editing
+    // Construct the object to save, including the _id if we are editing.
+    const itemToSave: InventoryItem = {
+      ...formData,
+      _id: item ? item._id : '', // Add original _id if editing, or an empty string for new items
+    };
     onSave(itemToSave);
-  };
+};
   
   const handleVariationChange = (index: number, field: keyof Omit<ItemVariation, '_id' | 'dressId'>, value: string | number) => {
     const newVariations = formData.variations.map((v, i) => {

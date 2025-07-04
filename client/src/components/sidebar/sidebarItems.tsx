@@ -45,7 +45,7 @@ export const sidebarItems: NavItem[] = [
       },
       {
         title: "Custom",
-        path: "/custom",
+        path: "/customRent",
         icon: HouseDoorFill,
       },
     ],
@@ -67,7 +67,7 @@ export const sidebarItems: NavItem[] = [
       },
       {
         title: "Packages",
-        path: "/packages",
+        path: "/packageItems",
         icon: HouseDoorFill,
       },
     ],

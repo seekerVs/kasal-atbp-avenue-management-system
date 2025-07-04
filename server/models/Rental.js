@@ -1,34 +1,86 @@
+// backend/models/Rental.js
 const mongoose = require('mongoose');
 
-// Sub-schema for the nested variation object inside an item
-const ItemVariationSchema = new mongoose.Schema({
-  color: { type: String, required: true },
-  size: { type: String, required: true },
-  imageUrl: { type: String, required: true },
-}, { _id: false }); // Prevents Mongoose from adding an _id to variation sub-documents
-
-// Sub-schema for the items array
-const RentedItemSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  price: { type: Number, required: true },
-  quantity: { type: Number, required: true, min: 1 },
-  variation: { type: ItemVariationSchema, required: true },
-  notes: { type: String, trim: true },
-}, { _id: false }); // Prevents Mongoose from adding an _id to item sub-documents
-
-// Sub-schema for the customerInfo array
+// --- SUB-SCHEMAS ---
 const CustomerInfoSchema = new mongoose.Schema({
   name: { type: String, required: true },
-  email: { type: String, required: true },
+  email: { type: String },
   phoneNumber: { type: String, required: true },
   address: { type: String, required: true },
-}, { _id: false }); // Prevents Mongoose from adding an _id to customer sub-documents
+}, { _id: false });
 
-// Main Rental Schema
+const SingleRentItemSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  price: { type: Number, required: true },
+  quantity: { type: Number, required: true },
+  imageUrl: { type: String },
+  notes: { type: String },
+}, { _id: false });
+
+const AssignedItemSchema = new mongoose.Schema({
+  itemId: { type: String }, // Can be ObjectId string or custom string
+  name: { type: String },
+  variation: { type: String },
+  imageUrl: { type: String },
+  // status is optional as it might not exist on empty objects
+  status: { 
+    type: String, 
+    enum: ['Assigned', 'Pending Fit', 'Pending Name', 'Fitting', 'Included', 'Excluded', 'Not Assigned'],
+  },
+}, { _id: false });
+
+const PackageFulfillmentSchema = new mongoose.Schema({
+  role: { type: String, required: true },
+  wearerName: { type: String },
+  assignedItem: { type: AssignedItemSchema, default: {} },
+  isCustom: { type: Boolean, default: false },
+}, { _id: false });
+
+const PackageRentItemSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  price: { type: Number, required: true },
+  quantity: { type: Number, default: 1 },
+  imageUrl: { type: String },
+  notes: { type: String },
+  packageFulfillment: { type: [PackageFulfillmentSchema] },
+}, { _id: false });
+
+const CustomTailoringItemSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  price: { type: Number, required: true },
+  quantity: { type: Number, default: 1 },
+  notes: { type: String },
+  outfitCategory: { type: String, required: true },
+  outfitType: { type: String, required: true },
+  tailoringType: {
+    type: String,
+    required: true,
+    enum: ['Tailored for Purchase', 'Tailored for Rent-Back'],
+  },
+  measurements: { type: Object },
+  materials: { type: [String] },
+  designSpecifications: { type: String },
+  referenceImages: { type: [String] },
+}, { _id: false });
+
+// NEW: Schema for detailed payment info
+const PaymentDetailSchema = new mongoose.Schema({
+    amount: { type: Number, required: true, default: 0 },
+    date: { type: Date },
+    referenceNumber: { type: String, default: null }
+}, { _id: false });
+
+// UPDATED: Financials schema to use the new payment details
+const FinancialsSchema = new mongoose.Schema({
+  shopDiscount: { type: Number, default: 0 },
+  depositAmount: { type: Number, default: 0 },
+  downPayment: { type: PaymentDetailSchema },
+  finalPayment: { type: PaymentDetailSchema },
+}, { _id: false });
+
+// --- MAIN RENTAL SCHEMA ---
 const RentalSchema = new mongoose.Schema({
-  // We explicitly define _id as a String to handle both custom IDs (e.g., "rental_003")
-  // and newly generated ones (e.g., "rent_j7sYt9a").
-  _id: {
+  _id: { // <-- MAJOR CHANGE #1
     type: String,
     required: true,
   },
@@ -36,49 +88,24 @@ const RentalSchema = new mongoose.Schema({
     type: [CustomerInfoSchema],
     required: true,
   },
-  items: {
-    type: [RentedItemSchema],
-    required: true,
+  singleRents: [SingleRentItemSchema],
+  packageRents: [PackageRentItemSchema],
+  customTailoring: [CustomTailoringItemSchema],
+  financials: { // <-- MAJOR CHANGE #2
+    type: FinancialsSchema, 
+    required: true 
   },
-  // Switched to Number for easier calculations on the backend and frontend.
-  shopDiscount: {
-    type: Number,
-    required: true,
-    default: 0,
-  },
-  paymentMethod: {
-    type: String,
-    enum: ['Cash', 'Gcash'], 
-    default: 'Cash',
-  },
-  gcashRefNum: { 
-    type: String, 
-    default: "" 
-  },
-  cashTendered: { 
-    type: Number, 
-    default: 0 
-  },
-  rentalStartDate: {
-    type: String, // Storing as YYYY-MM-DD string
-    required: true,
-  },
-  rentalEndDate: {
-    type: String, // Storing as YYYY-MM-DD string
-    required: true,
-  },
+  rentalStartDate: { type: String, required: true },
+  rentalEndDate: { type: String, required: true },
   status: {
     type: String,
     required: true,
-    enum: ['To Process', 'To Return', 'Returned', 'Cancelled', 'Completed'], // Enforces valid status values.
+    enum: ['To Process', 'To Pickup', 'To Return', 'Returned', 'Completed', 'Cancelled'],
     default: 'To Process',
   },
 }, {
-  // Adds createdAt and updatedAt fields automatically to each document.
   timestamps: true,
-  // This critical option tells Mongoose not to generate its own default ObjectId,
-  // because we are providing our own string-based _id above.
-  _id: false, 
+  _id: false, // <-- Crucial for using custom string _id
 });
 
 const RentalModel = mongoose.model("rentals", RentalSchema);

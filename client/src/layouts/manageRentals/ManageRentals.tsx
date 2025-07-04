@@ -23,44 +23,10 @@ import {
   XCircleFill,
 } from 'react-bootstrap-icons';
 import axios from 'axios';
+import { RentalOrder, RentalStatus } from '../../types'; 
 
-// ===================================================================================
-// --- TYPE DEFINITIONS ---
-// ===================================================================================
-interface CustomerInfo {
-  name: string;
-  email: string;
-  phoneNumber: string;
-  address: string;
-}
-interface ItemVariation {
-  color: string;
-  size: string;
-  imageUrl: string;
-}
-interface RentedItem {
-  name: string;
-  price: number;
-  quantity: number;
-  variation: ItemVariation;
-}
 
-// Define the precise statuses a rental document can have in the database
-type DocumentStatus = 'To Process' | 'To Return' | 'Returned' | 'Completed' | 'Cancelled';
-
-// Define the possible states for the navigation tabs, which includes the special 'All' case
-type TabStatus = DocumentStatus | 'All';
-
-interface RentalOrder {
-  _id: string;
-  customerInfo: CustomerInfo[];
-  items: RentedItem[];
-  shopDiscount: number;
-  rentalStartDate: string;
-  rentalEndDate: string;
-  status: DocumentStatus; // Use the precise type for the rental object
-  createdAt: string;
-}
+type TabStatus = RentalStatus | 'All';
 
 const API_URL = 'http://localhost:3001/api';
 type BadgeVariant = 'primary' | 'secondary' | 'success' | 'danger' | 'warning' | 'info' | 'light' | 'dark';
@@ -98,37 +64,25 @@ function ManageRentals() {
 
   const filteredRentals = allRentals.filter(rental => {
     if (!rental || !rental._id) return false;
-    
     if (activeTab === 'All') {
       return rental.status !== 'Cancelled';
     }
-    
     if (activeTab === 'Completed') {
-      // This comparison is now type-safe and correct
       return rental.status === 'Returned' || rental.status === 'Completed';
     }
-    
     return rental.status === activeTab;
   });
 
-  const getStatusBadgeVariant = (status: DocumentStatus): BadgeVariant => {
+  const getStatusBadgeVariant = (status: RentalStatus): BadgeVariant => {
     switch (status) {
       case 'To Process': return 'primary';
+      case 'To Pickup': return 'info';
       case 'To Return': return 'warning';
       case 'Returned': return 'success';
       case 'Completed': return 'success';
       case 'Cancelled': return 'danger';
       default: return 'secondary';
     }
-  };
-
-  const calculateOrderTotal = (rental: RentalOrder): number => {
-    let total = rental.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    const discount = rental.shopDiscount || 0;
-    if (!isNaN(discount)) {
-      total -= discount;
-    }
-    return total > 0 ? total : 0;
   };
   
   const handleShowCancelModal = (rental: RentalOrder) => {
@@ -139,11 +93,16 @@ function ManageRentals() {
   const handleConfirmCancel = async () => {
     if (!rentalToCancel) return;
     try {
-      await axios.put(`${API_URL}/rentals/${rentalToCancel._id}/status`, { status: 'Cancelled' });
+      await axios.put(
+            `${API_URL}/rentals/${rentalToCancel._id}/process`, 
+            { status: 'Cancelled' }
+      );
       fetchRentals();
     } catch (err) {
       console.error("Error cancelling rental:", err);
       setError("Failed to cancel the order. Please try again later.");
+      const errorMessage = (err as any).response?.data?.message || "Failed to cancel the order. Please try again later.";
+      setError(errorMessage);
     } finally {
       setShowCancelModal(false);
       setRentalToCancel(null);
@@ -152,8 +111,14 @@ function ManageRentals() {
 
   const renderRentalOrderCard = (rental: RentalOrder) => {
     if (!rental || !rental._id) return null;
-    const displayTotal = calculateOrderTotal(rental);
     const customer = rental.customerInfo[0] || {};
+    
+    // Combine all items into a single list for rendering
+    const allItems = [
+        ...(rental.singleRents || []),
+        ...(rental.packageRents || []),
+        ...(rental.customTailoring || [])
+    ];
 
     return (
       <Card key={rental._id} className="mb-4 shadow-sm">
@@ -172,15 +137,18 @@ function ManageRentals() {
             </Col>
           </Row>
           <hr />
-          {rental.items.map((item, index) => (
+          {allItems.map((item, index) => (
             <Row key={index} className="align-items-center my-3">
-              <Col xs="auto" className="me-3"><Image src={item.variation.imageUrl} fluid rounded style={{ width: "80px", height: "80px", objectFit: "cover" }} /></Col>
+              <Col xs="auto" className="me-3">
+                <Image src={item.imageUrl || 'https://placehold.co/80x80/e9ecef/adb5bd?text=Item'} fluid rounded style={{ width: "80px", height: "80px", objectFit: "cover" }} />
+              </Col>
               <Col>
                 <p className="mb-0 fw-bold">{item.name}</p>
-                <p className="mb-1 text-muted small">Variation: {item.variation.color}, {item.variation.size}</p>
                 <p className="mb-0 text-muted small">Qty: {item.quantity}</p>
               </Col>
-              <Col xs="auto" className="text-end"><p className="mb-0 fw-bold text-danger" style={{ fontSize: "1.05em" }}>₱{item.price.toFixed(2)}</p></Col>
+              <Col xs="auto" className="text-end">
+                <p className="mb-0 fw-bold text-danger" style={{ fontSize: "1.05em" }}>₱{(item.price * item.quantity).toFixed(2)}</p>
+              </Col>
             </Row>
           ))}
           <hr className="my-3" />
@@ -188,7 +156,21 @@ function ManageRentals() {
             <Col>
               <div className="mb-2">
                 <p className="mb-0 text-muted small">Total Amount</p>
-                <p className="fw-bold fs-5 mb-0"><span className="text-danger">₱{displayTotal.toFixed(2)}</span></p>
+                <p className="fw-bold fs-5 mb-0">
+                  <span className="text-danger">
+                    {/* Use the server-calculated value. Provide a fallback of 0. */}
+                    ₱{(rental.financials.grandTotal || 0).toFixed(2)}
+                  </span>
+                </p>
+                {(rental.financials.depositAmount > 0 || rental.financials.shopDiscount > 0) && (
+                  <p className="text-muted fst-italic mb-0" style={{ fontSize: '0.75rem' }}>
+                    (Includes 
+                    {rental.financials.depositAmount > 0 && ` ₱${rental.financials.depositAmount.toFixed(2)} deposit`}
+                    {rental.financials.depositAmount > 0 && rental.financials.shopDiscount > 0 && ' &'}
+                    {rental.financials.shopDiscount > 0 && ` ₱${rental.financials.shopDiscount.toFixed(2)} discount`}
+                    )
+                  </p>
+                )}
               </div>
               <p className="mb-1 text-muted small">
                 Rental Period: {new Date(rental.rentalStartDate).toLocaleDateString()} - {new Date(rental.rentalEndDate).toLocaleDateString()}
@@ -223,6 +205,7 @@ function ManageRentals() {
           <Nav variant="tabs" activeKey={activeTab} onSelect={(k) => setActiveTab(k as TabStatus)} className="px-3 pt-2">
             <Nav.Item><Nav.Link eventKey="All"><BoxSeam className="me-1" />All Rentals</Nav.Link></Nav.Item>
             <Nav.Item><Nav.Link eventKey="To Process"><CalendarCheck className="me-1" />To Process</Nav.Link></Nav.Item>
+            <Nav.Item><Nav.Link eventKey="To Pickup"><CalendarCheck className="me-1" />To Pickup</Nav.Link></Nav.Item>
             <Nav.Item><Nav.Link eventKey="To Return"><ArrowCounterclockwise className="me-1" />To Return</Nav.Link></Nav.Item>
             <Nav.Item><Nav.Link eventKey="Completed"><CheckCircleFill className="me-1" />Completed</Nav.Link></Nav.Item>
             <Nav.Item><Nav.Link eventKey="Cancelled"><XCircleFill className="me-1" />Cancelled</Nav.Link></Nav.Item>
@@ -247,7 +230,7 @@ function ManageRentals() {
         </Modal.Header>
         <Modal.Body>
           Are you sure you want to cancel order <strong>{rentalToCancel?._id}</strong>?
-          This action will restore the rented items to inventory and cannot be undone.
+          This action will restore any applicable stock to inventory and cannot be undone.
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowCancelModal(false)}>Close</Button>

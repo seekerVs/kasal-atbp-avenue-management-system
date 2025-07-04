@@ -1,3 +1,5 @@
+// src/pages/PackageRent.tsx
+
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Container,
@@ -9,87 +11,128 @@ import {
   ListGroup,
   Spinner,
   Alert,
-  Badge,
   Image as BsImage,
   Modal,
+  Toast,
+  ToastContainer,
 } from 'react-bootstrap';
 import {
-  PersonFill,
   BoxSeam,
-  CreditCard,
-  PeopleFill,
-  Search,
-  TelephoneFill,
-  GeoAltFill,
-  PlusCircle,
   ExclamationTriangleFill,
+  Palette,
+  PencilSquare,
+  Search,
+  PlusCircle
 } from 'react-bootstrap-icons';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import CustomerDetailsCard from '../../components/CustomerDetailsCard';
 
-// ===================================================================================
-// --- TYPE DEFINITIONS ---
-// ===================================================================================
-interface Package {
-  _id: string;
-  name: string;
-  descripton?: string | null;
-  inlusions: string[];
-  price: number;
-  imageUrl: string;
-}
-interface CustomerDetails {
-  name: string;
-  phoneNumber: string;
-  email: string;
-  address: string;
-}
-interface RentalOrder {
-  _id: string;
-  customerInfo: CustomerDetails[];
-  status: string;
-  createdAt: string;
-}
+import {
+  PackageDetails,
+  InventoryItem,
+  CustomerInfo,
+  RentalOrder,
+  PackageFulfillment,
+  MeasurementRef,
+  CustomTailoringItem
+} from '../../types';
+import AssignmentSubModal from '../../components/modals/assignmentSubModal/AssignmentSubModal';
+import CreateEditCustomItemModal from '../../components/modals/createEditCustomItemModal/CreateEditCustomItemModal';
+import { useNotification } from '../../contexts/NotificationContext';
 
 const API_URL = 'http://localhost:3001/api';
+const initialCustomerDetails: CustomerInfo = { name: '', phoneNumber: '', email: '', address: '' };
 
 // ===================================================================================
 // --- MAIN COMPONENT ---
 // ===================================================================================
 function PackageRent() {
   const navigate = useNavigate();
+  const { addNotification } = useNotification(); 
 
   // State Management
-  const [allPackages, setAllPackages] = useState<Package[]>([]);
-  const [selectedPackageId, setSelectedPackageId] = useState<string>('');
+  const [allPackages, setAllPackages] = useState<PackageDetails[]>([]);
+  const [allInventory, setAllInventory] = useState<InventoryItem[]>([]);
   const [allRentals, setAllRentals] = useState<RentalOrder[]>([]);
-  const [customerSearchTerm, setCustomerSearchTerm] = useState<string>('');
-  const [customerDetails, setCustomerDetails] = useState<CustomerDetails>({ name: '', phoneNumber: '', email: '', address: '' });
+  const [selectedPackageId, setSelectedPackageId] = useState<string>('');
+  const [selectedMotifId, setSelectedMotifId] = useState<string>('');
+  const [measurementRefs, setMeasurementRefs] = useState<MeasurementRef[]>([]);
+  const [fulfillmentData, setFulfillmentData] = useState<PackageFulfillment[]>([]);
+  const [showCustomItemModal, setShowCustomItemModal] = useState(false);
+  const [customItemContext, setCustomItemContext] = useState<{ 
+    index: number; 
+    item: CustomTailoringItem | null;
+    itemName: string; // <-- ADD THIS LINE
+  } | null>(null);
+
+  const [customerDetails, setCustomerDetails] = useState<CustomerInfo>(initialCustomerDetails);
   const [isNewCustomerMode, setIsNewCustomerMode] = useState(true);
   
   const [existingOpenRental, setExistingOpenRental] = useState<RentalOrder | null>(null);
   const [selectedRentalForDisplay, setSelectedRentalForDisplay] = useState<RentalOrder | null>(null);
+  
+  // UI & Modal State
   const [showReminderModal, setShowReminderModal] = useState(false);
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [modalData, setModalData] = useState({ rentalId: '', itemName: '' });
+  const [showSuccessModal, setShowSuccessModal] = useState(false); // <-- RESTORED
+  const [modalData, setModalData] = useState({ rentalId: '', itemName: '' }); // <-- RESTORED
+  const [assignmentContext, setAssignmentContext] = useState<{ fulfillmentIndex: number } | null>(null);
+  const [showAssignmentModal, setShowAssignmentModal] = useState(false);
+  const [showIncompleteFulfillmentModal, setShowIncompleteFulfillmentModal] = useState(false);
+  const [incompleteAction, setIncompleteAction] = useState<'create' | 'add' | null>(null);
   
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const inventoryMap = useMemo(() => {
+    return allInventory.reduce((map, item) => {
+      map[item._id] = item;
+      return map;
+    }, {} as Record<string, InventoryItem>);
+  }, [allInventory]);
+  
+  useEffect(() => {
+    const pendingItemJSON = sessionStorage.getItem('pendingCustomItem');
+
+    if (pendingItemJSON) {
+        try {
+            const { item, index } = JSON.parse(pendingItemJSON);
+
+            // Update the fulfillment data state
+            setFulfillmentData(prev => {
+                const updated = [...prev];
+                if (updated[index]) {
+                    // We received a full CustomTailoringItem object
+                    updated[index].assignedItem = item;
+                }
+                return updated;
+            });
+
+        } catch (e) {
+            console.error("Failed to parse pending custom item from sessionStorage", e);
+        } finally {
+            // IMPORTANT: Clear the item from storage to prevent re-processing
+            sessionStorage.removeItem('pendingCustomItem');
+        }
+    }
+  }, []);
+  
   useEffect(() => {
     const fetchData = async () => {
-      setLoading(true);
-      setError(null);
       try {
-        const [packagesResponse, rentalsResponse] = await Promise.all([
+        const [packagesRes, inventoryRes, rentalsRes, refsRes] = await Promise.all([
           axios.get(`${API_URL}/packages`),
+          axios.get(`${API_URL}/inventory`),
           axios.get(`${API_URL}/rentals`),
+          axios.get(`${API_URL}/measurementrefs`),
         ]);
-        setAllPackages(packagesResponse.data || []);
-        setAllRentals(rentalsResponse.data || []);
+        setAllPackages(packagesRes.data || []);
+        setAllInventory(inventoryRes.data || []);
+        setAllRentals(rentalsRes.data || []);
+        setMeasurementRefs(refsRes.data || []);
       } catch (err) {
-        console.error("Error fetching initial data:", err);
-        setError("Failed to load data. Please try again.");
+        console
+        addNotification("Failed to load initial data.","danger")
       } finally {
         setLoading(false);
       }
@@ -97,30 +140,124 @@ function PackageRent() {
     fetchData();
   }, []);
 
-  const selectedPackage = useMemo(() => {
-    return allPackages.find(p => p._id === selectedPackageId);
-  }, [selectedPackageId, allPackages]);
+  const selectedPackage = useMemo(() => allPackages.find(p => p._id === selectedPackageId), [selectedPackageId, allPackages]);
+  const selectedMotif = useMemo(() => selectedPackage?.colorMotifs.find(m => m._id === selectedMotifId), [selectedPackage, selectedMotifId]);
 
-  const filteredRentals = useMemo<RentalOrder[]>(() => {
-    if (!customerSearchTerm.trim()) return [];
-    const term = customerSearchTerm.toLowerCase();
-    return allRentals.filter(rental => {
-      const customer = rental.customerInfo?.[0];
-      if (!customer) return false;
-      return (
-        customer.name.toLowerCase().includes(term) || 
-        customer.phoneNumber.includes(term) ||
-        rental._id.toLowerCase().includes(term)
-      );
+  // In PackageRent.tsx...
+
+useEffect(() => {
+    if (!selectedPackage) {
+        setFulfillmentData([]);
+        return;
+    }
+    
+    let initialFulfillment: PackageFulfillment[] = [];
+
+    // --- Path 1: A pre-defined Color Motif is selected ---
+    if (selectedMotif) {
+        initialFulfillment = selectedMotif.assignments.map(assignment => {
+            // Check the template from the database package definition
+            if (assignment.isCustom) {
+                // If the template marks it as custom, create a state object with isCustom: true
+                return {
+                    role: assignment.role,
+                    wearerName: '',
+                    assignedItem: { name: `${selectedPackage.name.split(',')[0]}: ${assignment.role}` },
+                    isCustom: true // Set the flag to true
+                };
+            } else {
+                // This is a standard inventory role defined in the motif
+                return {
+                    role: assignment.role,
+                    wearerName: '',
+                    assignedItem: assignment.itemId 
+                        ? { itemId: assignment.itemId, name: inventoryMap[assignment.itemId]?.name || 'Unknown Item' } 
+                        : {},
+                    isCustom: false // Explicitly set the flag to false
+                };
+            }
+        });
+    } 
+    // --- Path 2: No motif selected (Manual Assignment) ---
+    else {
+        // We assume that roles generated from the generic 'inclusions' list are NEVER custom.
+        initialFulfillment = selectedPackage.inclusions.flatMap(inclusion => {
+            const match = inclusion.match(/^(\d+)\s+(.*)$/);
+            if (match) {
+                const quantity = parseInt(match[1], 10);
+                const roleBase = match[2];
+                // For roles like "2 Bridesmaids", create multiple objects
+                return Array.from({ length: quantity }, (_, i) => ({ 
+                    role: `${roleBase} ${i + 1}`, 
+                    wearerName: '', 
+                    assignedItem: {},
+                    isCustom: false // CRITICAL: Explicitly set the flag to false
+                }));
+            }
+            // For roles like "1 Gown", create a single object
+            return { 
+                role: inclusion, 
+                wearerName: '', 
+                assignedItem: {}, 
+                isCustom: false // CRITICAL: Explicitly set the flag to false
+            };
+        });
+    }
+
+    setFulfillmentData(initialFulfillment);
+  }, [selectedPackage, selectedMotif, inventoryMap]);
+
+
+  const handlePackageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedPackageId(e.target.value);
+    setSelectedMotifId('');
+  };
+
+  const handleCustomerDetailChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setCustomerDetails(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleOpenCustomItemModal = (index: number) => {
+    const fulfillItem = fulfillmentData[index];
+    const assigned = fulfillItem.assignedItem;
+
+    let itemForModal: CustomTailoringItem | null = null;
+    if (fulfillItem.isCustom) {
+        
+        if (assigned && 'outfitCategory' in assigned) {
+            
+            itemForModal = assigned as CustomTailoringItem;
+        }
+    }
+
+    const itemName = `${selectedPackage?.name.split(',')[0]}: ${fulfillItem.role}`;
+    
+    setCustomItemContext({ 
+        index: index, 
+        item: itemForModal,
+        itemName: itemName 
     });
-  }, [customerSearchTerm, allRentals]);
-  
+    
+    setShowCustomItemModal(true);
+  };
+
+  const handleSaveCustomItem = (updatedItem: CustomTailoringItem) => {
+    if (customItemContext === null) return;
+    const { index } = customItemContext;
+
+    const newFulfillmentData = [...fulfillmentData];
+    newFulfillmentData[index].assignedItem = updatedItem;
+    setFulfillmentData(newFulfillmentData);
+    
+    setShowCustomItemModal(false);
+    setCustomItemContext(null);
+  };
+
   const handleSelectCustomer = (selectedRental: RentalOrder) => {
     const customer = selectedRental.customerInfo[0];
     setCustomerDetails(customer);
-    setCustomerSearchTerm(''); // Clear search term to hide the list
-    setSelectedRentalForDisplay(selectedRental); // Set the rental to be displayed
-    
+    setSelectedRentalForDisplay(selectedRental);
     if (selectedRental.status === 'To Process') {
       setExistingOpenRental(selectedRental);
     } else {
@@ -128,182 +265,369 @@ function PackageRent() {
     }
   };
 
-  const handleToggleNewCustomer = () => {
-    setIsNewCustomerMode(!isNewCustomerMode);
-    setCustomerDetails({ name: '', phoneNumber: '', email: '', address: '' });
-    setCustomerSearchTerm('');
-    setExistingOpenRental(null);
-    setSelectedRentalForDisplay(null);
+  const proceedWithAction = (action: 'create' | 'add') => {
+    setIsSubmitting(true);
+    if (action === 'create') {
+      if (!isNewCustomerMode && existingOpenRental) {
+        setShowReminderModal(true);
+        setIsSubmitting(false); // Stop submission until user confirms
+      } else {
+        createNewRental();
+      }
+    } else if (action === 'add') {
+      handleAddItemToExistingRental();
+    }
   };
 
-  const validateForm = () => {
-    if (!selectedPackageId) { setError("Please select a package."); return false; }
-    if (!customerDetails.name.trim() || !customerDetails.phoneNumber.trim()) { setError("Customer Name and Phone Number are required."); return false; }
-    setError(null);
-    return true;
+  const validateAndProceed = (action: 'create' | 'add') => {
+    if (!selectedPackageId) {
+        addNotification("Please select a package.", 'danger');
+        console.error("No package selected.");
+        return;
+    }
+    if (!customerDetails.name.trim() || !customerDetails.phoneNumber.trim()) {
+        addNotification("Customer Name and Phone Number are required.", 'danger');
+        console.error("Customer details are incomplete.");
+        return;
+    }
+
+    // --- REVISED VALIDATION LOGIC ---
+    const isFulfillmentIncomplete = fulfillmentData.some(fulfill => {
+        const assigned = fulfill.assignedItem;
+
+        if (assigned && 'outfitCategory' in assigned) {
+            return false;
+        }
+
+        if (!assigned || !assigned.itemId || !assigned.variation) {
+            return true; // This role IS incomplete.
+        }
+
+        return false;
+    });
+
+    if (isFulfillmentIncomplete) {
+        setIncompleteAction(action);
+        setShowIncompleteFulfillmentModal(true);
+    } else {
+        proceedWithAction(action);
+    }
   };
 
   const createNewRental = async () => {
-    if (!validateForm()) return;
     setShowReminderModal(false);
+    if (!selectedPackage) return;
+    setIsSubmitting(true);
+
+    // 1. Get the processed data
+    const { finalPackageFulfillment, customItemsForRental } = buildFinalPayload();
+
     try {
-      const rentalPayload = { packageId: selectedPackageId, customerInfo: [customerDetails] };
+      // 2. Construct the final API payload
+      const rentalPayload = { 
+        customerInfo: [customerDetails],
+        packageRents: [{ // The payload is now structured exactly like the DB
+            name: `${selectedPackage.name},${selectedMotif?.motifName || 'Manual'}`,
+            price: selectedPackage.price,
+            quantity: 1, // Assuming quantity of 1 for packages for now
+            imageUrl: selectedPackage.imageUrl,
+            packageFulfillment: finalPackageFulfillment
+        }],
+        customTailoring: customItemsForRental
+      };
+
       const response = await axios.post(`${API_URL}/rentals`, rentalPayload);
-      navigate(`/rentals/${response.data._id}`);
+      addNotification("New rental created successfully! Redirecting...", 'success'); // Using global notification
+      console.log("RESPONSE FROM /rentals:", response.data);
+      setTimeout(() => navigate(`/rentals/${response.data._id}`), 1500);
     } catch (apiError: any) {
-      setError(apiError.response?.data?.message || "Failed to create package rental.");
+      addNotification(apiError.response?.data?.message || "Failed to create package rental.", 'danger');
+      console.error("API Error:", apiError);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleFinalizeRental = () => {
-    if (!validateForm()) return;
-    // The reminder modal logic is now simpler: it triggers if you're trying to create a new rental
-    // for a customer who was selected from the list (and might have an open rental).
-    if (!isNewCustomerMode && existingOpenRental) {
-      setShowReminderModal(true);
-    } else {
-      createNewRental();
-    }
+  const buildFinalPayload = () => {
+    // This array will hold the full CustomTailoringItem objects for the top-level DB array.
+    const customItemsForRental: CustomTailoringItem[] = [];
+    const finalPackageFulfillment = fulfillmentData.map(fulfill => {
+        if (fulfill.isCustom) {
+            const assigned = fulfill.assignedItem;
+            if (assigned && 'outfitCategory' in assigned) {
+                customItemsForRental.push(assigned as CustomTailoringItem);
+            }
+            return {
+                role: fulfill.role,
+                wearerName: fulfill.wearerName,
+                assignedItem: {
+                    name: assigned?.name || `${selectedPackage?.name.split(',')[0]}: ${fulfill.role}`
+                },
+                isCustom: true // CRITICAL: Persist this flag to the database.
+            };
+
+        } else {
+            return fulfill;
+        }
+    });
+    return {
+        finalPackageFulfillment,
+        customItemsForRental
+    };
   };
 
   const handleAddItemToExistingRental = async () => {
-    if (!validateForm() || !existingOpenRental) { setError("No package selected or no existing rental found."); return; }
+    if (!existingOpenRental || !selectedPackage) { 
+        addNotification("No package selected or no existing rental found.", 'danger'); 
+        console.error("No package selected or no existing rental found.");
+        return; 
+    }
+    setIsSubmitting(true);
+
+    // 1. Get the processed data
+    const { finalPackageFulfillment, customItemsForRental } = buildFinalPayload();
+
     try {
-      const payload = { packageId: selectedPackageId };
+      // 2. Construct the final API payload for adding items
+      const payload = { 
+        packageRents: [{
+            name: `${selectedPackage.name},${selectedMotif?.motifName || 'Manual'}`,
+            price: selectedPackage.price,
+            quantity: 1,
+            imageUrl: selectedPackage.imageUrl,
+            packageFulfillment: finalPackageFulfillment
+        }],
+        customTailoring: customItemsForRental
+      };
+      console.log("hiii")
+      console.log("SENDING THIS PAYLOAD TO /addItem:", JSON.stringify(payload, null, 2));
+
       await axios.put(`${API_URL}/rentals/${existingOpenRental._id}/addItem`, payload);
-      setModalData({ rentalId: existingOpenRental._id, itemName: selectedPackage?.name || 'Package' });
+      
+      // Reset form and show success
+      setModalData({ rentalId: existingOpenRental._id, itemName: selectedPackage.name });
       setShowSuccessModal(true);
       setSelectedPackageId('');
+      setSelectedMotifId('');
+      setFulfillmentData([]);
     } catch (apiError: any) {
-      setError(apiError.response?.data?.message || "Failed to add item to rental.");
+      addNotification(apiError.response?.data?.message || "Failed to add item to rental.", 'danger');
+      console.error("API Error:", apiError);
+    } finally {
+      setIsSubmitting(false);
     }
   };
+
+  const handleOpenAssignmentModal = (fulfillmentIndex: number) => { setAssignmentContext({ fulfillmentIndex }); setShowAssignmentModal(true); };
+  
+  const handleSaveAssignment = (data: { itemId: string; name: string; variation: string; imageUrl: string }) => {
+    if (assignmentContext === null) return;
+    const { fulfillmentIndex } = assignmentContext;
+    const newFulfillmentData = [...fulfillmentData];
+
+    // The data object from the modal now contains everything we need.
+    newFulfillmentData[fulfillmentIndex].assignedItem = {
+      itemId: data.itemId,
+      name: data.name,
+      variation: data.variation,
+      imageUrl: data.imageUrl
+    };
+
+    setFulfillmentData(newFulfillmentData);
+    setShowAssignmentModal(false);
+};
+  
+  const handleWearerNameChange = (index: number, name: string) => {
+    const newFulfillmentData = [...fulfillmentData];
+    newFulfillmentData[index].wearerName = name;
+    setFulfillmentData(newFulfillmentData);
+  };
+
+  const preselectedAssignment = useMemo(() => {
+    if (assignmentContext === null) {
+        return { itemId: undefined, variation: undefined };
+    }
+    const assigned = fulfillmentData[assignmentContext.fulfillmentIndex]?.assignedItem;
+
+    // Use a type guard to safely access properties
+    if (assigned && 'itemId' in assigned) {
+        return {
+            itemId: assigned.itemId,
+            variation: assigned.variation
+        };
+    }
+    
+    // If it's a custom item or not assigned, return undefined
+    return { itemId: undefined, variation: undefined };
+  }, [assignmentContext, fulfillmentData]);
 
   return (
     <Container fluid>
       <h2 className="mb-4">Create Package Rental</h2>
-      {error && <Alert variant="danger" onClose={() => setError(null)} dismissible>{error}</Alert>}
       {loading ? ( <div className="text-center py-5"><Spinner /></div> ) : (
-      <Row>
-        <Col md={5} lg={4}>
+      <Row className="g-4">
+        {/* --- LEFT COLUMN --- */}
+        <Col lg={7} xl={8}>
           <Card className="mb-4">
             <Card.Header as="h5"><BoxSeam className="me-2" />Select Package</Card.Header>
             <Card.Body>
-              <Form.Group>
-                <Form.Label>Available Packages</Form.Label>
-                <Form.Select value={selectedPackageId} onChange={(e) => setSelectedPackageId(e.target.value)}>
-                  <option value="">-- Choose a Package --</option>
-                  {allPackages.map(pkg => (
-                    <option key={pkg._id} value={pkg._id}>
-                      {pkg.name} - ₱{pkg.price.toLocaleString()}
-                    </option>
-                  ))}
-                </Form.Select>
-              </Form.Group>
-              
-              {selectedPackage && (
-                <div className="mt-4">
-                  <div className="text-center mb-3">
-                    <BsImage src={selectedPackage.imageUrl} alt={selectedPackage.name} fluid thumbnail style={{ maxHeight: '200px', objectFit: 'cover' }} />
-                  </div>
-                  <h4>{selectedPackage.name}</h4>
-                  {selectedPackage.descripton && <p className="text-muted fst-italic">{selectedPackage.descripton}</p>}
-                  <ListGroup variant="flush">
-                    <ListGroup.Item className="d-flex justify-content-between align-items-center fw-bold">
-                        Inclusions:
-                        <Badge bg="success" pill>₱{selectedPackage.price.toLocaleString()}</Badge>
-                    </ListGroup.Item>
-                    {selectedPackage.inlusions.map((item, index) => (<ListGroup.Item key={index}>{item}</ListGroup.Item>))}
-                  </ListGroup>
-                </div>
-              )}
+              <Row>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Available Packages</Form.Label>
+                    <Form.Select value={selectedPackageId} onChange={handlePackageChange}>
+                      <option value="">-- Choose a Package --</option>
+                      {allPackages.map(pkg => (
+                        <option key={pkg._id} value={pkg._id}>
+                          {pkg.name} - ₱{pkg.price.toLocaleString()}
+                        </option>
+                      ))}
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label><Palette className="me-2" />Color Motif</Form.Label>
+                    <Form.Select 
+                      value={selectedMotifId} 
+                      onChange={e => setSelectedMotifId(e.target.value)}
+                      disabled={!selectedPackageId} // <-- KEY CHANGE: Disabled if no package ID
+                    >
+                      <option value="">
+                        {selectedPackageId ? '-- Manual Assignment --' : '-- Select a Package First --'}
+                      </option>
+                      
+                      {/* This part remains conditional to prevent errors */}
+                      {selectedPackage?.colorMotifs.map(motif => (
+                        <option key={motif._id} value={motif._id}>
+                          {motif.motifName}
+                        </option>
+                      ))}
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+              </Row>
             </Card.Body>
+          </Card>
+          <Card>
+            <Card.Header as="h5">Fulfillment Details</Card.Header>
+              <ListGroup variant="flush" style={{ maxHeight: '80vh', overflowY: 'auto' }}>
+                {fulfillmentData.map((fulfill, index) => {
+                  
+                  // --- THIS IS THE FIX (Type-Safe Variable Declarations) ---
+                  const assigned = fulfill.assignedItem || {};
+                  const isCustomSlot = !!fulfill.isCustom;
+
+                  let isInventoryItem = false;
+                  let customItemHasData = false;
+                  let variation = '';
+                  let imageUrl = 'https://placehold.co/80x80/e9ecef/adb5bd?text=N/A';
+
+                  // Type Guard for Inventory Item
+                  if (assigned && 'itemId' in assigned) {
+                      isInventoryItem = true;
+                      variation = assigned.variation || '';
+                      imageUrl = assigned.imageUrl || imageUrl;
+                  }
+                  // Type Guard for Custom Item
+                  else if (assigned && 'outfitCategory' in assigned) {
+                      customItemHasData = true;
+                      // You could use a reference image if available
+                      imageUrl = assigned.referenceImages?.[0] || 'https://placehold.co/80x80/6c757d/white?text=Custom';
+                  }
+                  // -------------------------------------------------------------
+
+                  return (
+                    <ListGroup.Item key={index}>
+                      <Row className="align-items-center g-3">
+                        <Col>
+                          <strong>{fulfill.role}</strong>
+                          <Form.Control size="sm" type="text" placeholder="Enter Wearer's Name" value={fulfill.wearerName || ''} onChange={e => handleWearerNameChange(index, e.target.value)} className="mt-1"/>
+                        </Col>
+                        <Col md="auto" className="text-center">
+                          <BsImage src={imageUrl} rounded style={{width: 80, height: 80, objectFit: 'cover'}}/>
+                        </Col>
+                        <Col>
+                          <div>{assigned.name || 'Not Assigned'}</div>
+                          {isInventoryItem && <div className="text-muted small">{variation}</div>}
+                          {customItemHasData && <div className="text-info small fst-italic">Custom Details Added</div>}
+                          {isCustomSlot && !customItemHasData && <div className="text-info small fst-italic">Custom Tailoring Slot</div>}
+                        </Col>
+                        <Col md="auto" className="text-end">
+                          {fulfill.isCustom ? (
+                              // For a custom role, we call the handler that opens our new CreateEditCustomItemModal
+                              <Button 
+                                  variant={"outfitCategory" in fulfill.assignedItem ? "outline-success" : "outline-info"} 
+                                  size="sm" 
+                                  onClick={() => handleOpenCustomItemModal(index)}
+                              >
+                                  <PlusCircle className="me-1"/> 
+                                  {/* The text changes if the item details have been filled out */}
+                                  {"outfitCategory" in fulfill.assignedItem ? 'Edit Details' : 'Create Item'}
+                              </Button>
+                          ) : (
+                              // For a standard role, we call the handler for the inventory assignment modal
+                              <Button 
+                                  variant="outline-primary" 
+                                  size="sm" 
+                                  onClick={() => handleOpenAssignmentModal(index)}
+                              >
+                                  <PencilSquare className="me-1"/> 
+                                  {"itemId" in fulfill.assignedItem ? 'Change' : 'Assign'}
+                              </Button>
+                          )}
+                        </Col>
+                      </Row>
+                    </ListGroup.Item>
+                  );
+                })}
+              </ListGroup>
           </Card>
         </Col>
 
-        <Col md={7} lg={8}>
-          <Card>
-            <Card.Header as="h5" className="d-flex justify-content-between align-items-center">
-              <div><PersonFill className="me-2" />Customer Details</div>
-              <Button variant="outline-secondary" size="sm" onClick={handleToggleNewCustomer}>
-                {isNewCustomerMode ? 'Select Existing' : 'Enter New'}
-              </Button>
-            </Card.Header>
-            <Card.Body className="p-4">
-              {isNewCustomerMode ? (
-                 <>
-                  <Row>
-                    <Col md={6}><Form.Group className="mb-3"><Form.Label>Customer Name <span className="text-danger">*</span></Form.Label><Form.Control type="text" name="name" value={customerDetails.name} onChange={(e) => setCustomerDetails({...customerDetails, name: e.target.value})} required /></Form.Group></Col>
-                    <Col md={6}><Form.Group className="mb-3"><Form.Label><TelephoneFill className="me-1"/>Contact Number <span className="text-danger">*</span></Form.Label><Form.Control type="text" name="phoneNumber" value={customerDetails.phoneNumber} onChange={(e) => setCustomerDetails({...customerDetails, phoneNumber: e.target.value})} required /></Form.Group></Col>
-                    <Col md={6}><Form.Group className="mb-3"><Form.Label>Email (Optional)</Form.Label><Form.Control type="email" name="email" value={customerDetails.email} onChange={(e) => setCustomerDetails({...customerDetails, email: e.target.value})} /></Form.Group></Col>
-                    <Col md={6}><Form.Group className="mb-3"><Form.Label><GeoAltFill className="me-1"/>Address <span className="text-danger">*</span></Form.Label><Form.Control type="text" name="address" value={customerDetails.address} onChange={(e) => setCustomerDetails({...customerDetails, address: e.target.value})} required /></Form.Group></Col>
-                  </Row>
-                 </>
-              ) : (
-                <>
-                  <Form.Group className="mb-3">
-                    <Form.Label><PeopleFill className="me-2" />Search Existing Rental</Form.Label>
-                    <Form.Control type="text" placeholder="Type name, phone, or rental ID..." value={customerSearchTerm} onChange={(e) => setCustomerSearchTerm(e.target.value)} />
-                  </Form.Group>
-                  {customerSearchTerm && (
-                    <ListGroup className="mb-3" style={{ maxHeight: '150px', overflowY: 'auto' }}>
-                      {filteredRentals.length > 0 ? filteredRentals.map(rental => {
-                        const cust = rental.customerInfo[0];
-                        return (
-                          <ListGroup.Item action key={rental._id} onClick={() => handleSelectCustomer(rental)}>
-                            <div className="d-flex justify-content-between">
-                              <span className="fw-bold">{cust.name}</span>
-                              <small className="text-muted">Rental ID: {rental._id}</small>
-                            </div>
-                            <div className="text-muted small">
-                              {cust.phoneNumber}
-                              <span className="ms-2 fst-italic">
-                                (Created: {new Date(rental.createdAt).toLocaleDateString()})
-                              </span>
-                            </div>
-                          </ListGroup.Item>
-                        );
-                      }) : <ListGroup.Item disabled>No matching rentals found.</ListGroup.Item>}
-                    </ListGroup>
-                  )}
-                  {selectedRentalForDisplay && !customerSearchTerm && (
-                    <Card body className="mb-3 bg-light">
-                       <div className="d-flex justify-content-between">
-                          <span className="fw-bold">{selectedRentalForDisplay.customerInfo[0].name}</span>
-                          <small className="text-muted">Rental ID: {selectedRentalForDisplay._id}</small>
-                        </div>
-                        <div className="text-muted small">
-                          {selectedRentalForDisplay.customerInfo[0].phoneNumber}
-                          <span className="ms-2 fst-italic">
-                            (Created: {new Date(selectedRentalForDisplay.createdAt).toLocaleDateString()})
-                          </span>
-                        </div>
-                    </Card>
-                  )}
-                  {existingOpenRental && <Alert variant="info">This customer has a rental "To Process".</Alert>}
-                </>
-              )}
-              <hr />
-              <div className="d-grid gap-2 mt-4">
-                {!isNewCustomerMode && existingOpenRental && (
-                  <Button variant="info" size="lg" onClick={handleAddItemToExistingRental} disabled={!selectedPackageId}>
-                    <PlusCircle className="me-2" />Add to Existing Rental
-                  </Button>
-                )}
-                <Button variant="primary" size="lg" onClick={handleFinalizeRental} disabled={!selectedPackageId || !customerDetails.name}>
-                    <CreditCard className="me-2" />Finalize as New Rental
-                </Button>
-              </div>
-            </Card.Body>
-          </Card>
+        {/* --- RIGHT COLUMN --- */}
+        <Col lg={5} xl={4}>
+            <CustomerDetailsCard
+                customerDetails={customerDetails}
+                onCustomerDetailChange={handleCustomerDetailChange}
+                isNewCustomerMode={isNewCustomerMode}
+                onSetIsNewCustomerMode={setIsNewCustomerMode}
+                allRentals={allRentals}
+                onSelectExisting={handleSelectCustomer}
+                onSubmit={validateAndProceed}
+                isSubmitting={isSubmitting}
+                canSubmit={!!selectedPackageId && !!customerDetails.name}
+                existingOpenRental={existingOpenRental}
+                selectedRentalForDisplay={selectedRentalForDisplay}
+            />
         </Col>
       </Row>
       )}
 
+      {showCustomItemModal && customItemContext && (
+        <CreateEditCustomItemModal
+          show={showCustomItemModal}
+          onHide={() => setShowCustomItemModal(false)}
+          item={customItemContext.item}
+          itemName={customItemContext.itemName}
+          measurementRefs={measurementRefs}
+          onSave={handleSaveCustomItem}
+        />
+      )}
+
+      {assignmentContext !== null && 
+        <AssignmentSubModal // <-- Change name if you haven't already
+            show={showAssignmentModal}
+            onHide={() => setShowAssignmentModal(false)}
+            onAssign={handleSaveAssignment}
+            inventory={allInventory}
+            preselectedItemId={preselectedAssignment.itemId}
+            preselectedVariation={preselectedAssignment.variation}
+        />
+      }
+
       <Modal show={showReminderModal} onHide={() => setShowReminderModal(false)} centered>
-        <Modal.Header closeButton>
-          <Modal.Title><ExclamationTriangleFill className="me-2 text-warning" />Customer Has Open Rental</Modal.Title>
-        </Modal.Header>
+        <Modal.Header closeButton><Modal.Title><ExclamationTriangleFill className="me-2 text-warning" />Customer Has Open Rental</Modal.Title></Modal.Header>
         <Modal.Body>This customer has a rental "To Process". Are you sure you want to create a separate new rental transaction?</Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowReminderModal(false)}>Cancel</Button>
@@ -311,16 +635,29 @@ function PackageRent() {
         </Modal.Footer>
       </Modal>
 
+      {/* --- RESTORED SUCCESS MODAL --- */}
       <Modal show={showSuccessModal} onHide={() => setShowSuccessModal(false)} centered>
-        <Modal.Header closeButton>
-          <Modal.Title>Package Added Successfully</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <Alert variant="success" className="mb-0">Successfully added <strong>{modalData.itemName}</strong> to rental ID: <strong>{modalData.rentalId}</strong>.</Alert>
-        </Modal.Body>
+        <Modal.Header closeButton><Modal.Title>Package Added Successfully</Modal.Title></Modal.Header>
+        <Modal.Body><Alert variant="success" className="mb-0">Successfully added <strong>{modalData.itemName}</strong> to rental ID: <strong>{modalData.rentalId}</strong>.</Alert></Modal.Body>
         <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowSuccessModal(false)}>OK</Button>
-          <Button variant="primary" onClick={() => navigate(`/rentals/${modalData.rentalId}`)}>View Rental</Button>
+            <Button variant="secondary" onClick={() => setShowSuccessModal(false)}>OK</Button>
+            <Button variant="primary" onClick={() => navigate(`/rentals/${modalData.rentalId}`)}>View Rental</Button>
+        </Modal.Footer>
+      </Modal>
+
+      <Modal show={showIncompleteFulfillmentModal} onHide={() => setShowIncompleteFulfillmentModal(false)} centered>
+        <Modal.Header closeButton>
+            <Modal.Title><ExclamationTriangleFill className="me-2 text-warning" />Incomplete Details</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>Some roles have not been assigned an item and variation. Are you sure you want to proceed?</Modal.Body>
+        <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowIncompleteFulfillmentModal(false)}>Cancel</Button>
+            <Button variant="primary" onClick={() => {
+                setShowIncompleteFulfillmentModal(false);
+                if (incompleteAction) proceedWithAction(incompleteAction);
+            }}>
+                Proceed Anyway
+            </Button>
         </Modal.Footer>
       </Modal>
     </Container>
