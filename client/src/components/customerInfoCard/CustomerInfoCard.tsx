@@ -38,7 +38,6 @@ const CustomerInfoCard: React.FC<CustomerInfoCardProps> = ({
     <>
       <div className="d-flex justify-content-between align-items-center mb-3">
         <h5 className="mb-0">
-          <PersonCircle className="me-2" />
           Customer Information
         </h5>
         {canEdit && !isEditMode && (
@@ -119,6 +118,7 @@ const CustomerInfoCard: React.FC<CustomerInfoCardProps> = ({
       ) : (
         <>
           <p>
+            <PersonCircle className="me-2" />
             <strong>Name:</strong> {customer.name}
           </p>
           <p>

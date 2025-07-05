@@ -1,20 +1,18 @@
-// client/src/components/rentalItemsList/RentalItemsList.tsx
-
 import React from 'react';
 import { Row, Col, Image, Button, ButtonGroup, Badge } from 'react-bootstrap';
 import { BoxSeam, PencilSquare, Trash } from 'react-bootstrap-icons';
-import { RentedItemBase, PackageRentItem, CustomTailoringItem } from '../../types';
+import { SingleRentItem, RentedPackage, CustomTailoringItem } from '../../types';
 
 // --- COMPONENT PROPS INTERFACE ---
 interface RentalItemsListProps {
-  singleRents: RentedItemBase[];
-  packageRents: PackageRentItem[];
+  singleRents: SingleRentItem[];
+  packageRents: RentedPackage[];
   customTailoring: CustomTailoringItem[];
   canEditDetails: boolean;
-  onOpenEditItemModal: (item: RentedItemBase) => void;
-  onOpenDeleteItemModal: (item: RentedItemBase) => void;
-  onOpenEditPackageModal: (pkg: PackageRentItem) => void;
-  onOpenDeletePackageModal: (pkg: PackageRentItem) => void;
+  onOpenEditItemModal: (item: SingleRentItem) => void;
+  onOpenDeleteItemModal: (item: SingleRentItem) => void;
+  onOpenEditPackageModal: (pkg: RentedPackage) => void;
+  onOpenDeletePackageModal: (pkg: RentedPackage) => void;
   onOpenEditCustomItemModal: (item: CustomTailoringItem) => void;
   onOpenDeleteCustomItemModal: (item: CustomTailoringItem) => void;
 }
@@ -35,7 +33,7 @@ const RentalItemsList: React.FC<RentalItemsListProps> = ({
   onOpenDeleteCustomItemModal,
 }) => {
 
-  const SingleItem = ({ item }: { item: RentedItemBase }) => {
+  const SingleItem = ({ item }: { item: SingleRentItem }) => {
     const nameParts = item.name.split(',');
     const productName = nameParts[0] || "Unknown Item";
     const color = nameParts[1] || "N/A";
@@ -63,7 +61,7 @@ const RentalItemsList: React.FC<RentalItemsListProps> = ({
     );
   };
 
-  const PackageItem = ({ pkg }: { pkg: PackageRentItem }) => (
+  const PackageItem = ({ pkg }: { pkg: RentedPackage }) => (
     <Row className="align-items-center mb-3 border-bottom pb-3">
       <Col xs="auto">
         <Image src={pkg.imageUrl} thumbnail style={{ width: '80px', height: '80px', objectFit: 'cover' }} />

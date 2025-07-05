@@ -267,9 +267,6 @@ router.put('/:id/process', asyncHandler(async (req, res) => {
 // PUT to add a new item to an existing rental
 router.put('/:id/addItem', asyncHandler(async (req, res) => {
     const { id } = req.params;
-    
-    // Destructure the new flexible payload structure.
-    // We no longer rely on packageId, itemId, or association.
     const { singleRents, packageRents, customTailoring } = req.body;
 
     const session = await mongoose.startSession();
@@ -287,26 +284,68 @@ router.put('/:id/addItem', asyncHandler(async (req, res) => {
             throw new Error(`Cannot add items to a rental with status "${rental.status}".`);
         }
 
-        // --- Process Single Rents (if present) ---
+        // =========================================================================
+        // --- UPGRADED: Process Single Rents (if present) ---
+        // =========================================================================
         if (singleRents && Array.isArray(singleRents) && singleRents.length > 0) {
-            // Note: This block needs implementation to handle stock reduction for single items.
-            // The logic here would be complex, similar to your previous 'itemId' logic, 
-            // but iterating over the array.
-            
-            // Placeholder: rental.singleRents.push(...singleRents);
-        }
+            const stockUpdates = [];
 
-        // --- Process Package Rents (if present) ---
+            for (const newItem of singleRents) {
+                // Find if an item with the exact same name (incl. variation) already exists.
+                const existingItemIndex = rental.singleRents.findIndex(
+                    (existing) => existing.name === newItem.name
+                );
+                
+                // --- Perform a stock check before any modifications ---
+                const nameParts = newItem.name.split(',');
+                if (nameParts.length < 3) throw new Error(`Invalid item name format: ${newItem.name}`);
+
+                const size = nameParts.pop()?.trim();
+                const color = nameParts.pop()?.trim();
+                const productName = nameParts.join(',').trim();
+                
+                const productInDb = await ItemModel.findOne({ name: productName }).session(session);
+                if (!productInDb) {
+                    throw new Error(`Product "${productName}" not found in inventory.`);
+                }
+
+                const variationInDb = productInDb.variations.find(v => v.color === color && v.size === size);
+                if (!variationInDb || variationInDb.quantity < newItem.quantity) {
+                    throw new Error(`Insufficient stock for ${newItem.name}. Only ${variationInDb?.quantity || 0} available.`);
+                }
+                
+                // If stock is sufficient, prepare the stock update operation.
+                stockUpdates.push({
+                    updateOne: {
+                        filter: { _id: productInDb._id, "variations.color": color, "variations.size": size },
+                        update: { $inc: { "variations.$.quantity": -newItem.quantity } }
+                    }
+                });
+
+                // --- Decide whether to add a new item or increment an existing one ---
+                if (existingItemIndex > -1) {
+                    // Scenario 1: Item EXISTS. Increment its quantity.
+                    rental.singleRents[existingItemIndex].quantity += newItem.quantity;
+                } else {
+                    // Scenario 2: Item is NEW. Add it to the rental's array.
+                    rental.singleRents.push(newItem);
+                }
+            }
+
+            // Execute all prepared stock updates at once.
+            if (stockUpdates.length > 0) {
+                await ItemModel.bulkWrite(stockUpdates, { session });
+            }
+        }
+        // =========================================================================
+
+        // --- Process Package Rents (if present) --- (No changes needed here)
         if (packageRents && Array.isArray(packageRents) && packageRents.length > 0) {
             const stockUpdates = [];
-            
             for (const pkg of packageRents) {
-                // 1. Handle Stock Updates for Inventory Items within the package
                 if (pkg.packageFulfillment && Array.isArray(pkg.packageFulfillment)) {
                     for (const fulfillment of pkg.packageFulfillment) {
                         const item = fulfillment.assignedItem;
-                        
-                        // We only update stock for actual inventory items (those with itemId)
                         if (item && item.itemId && item.variation) {
                             const [itemColor, itemSize] = item.variation.split(', ');
                             stockUpdates.push({
@@ -318,34 +357,27 @@ router.put('/:id/addItem', asyncHandler(async (req, res) => {
                         }
                     }
                 }
-                
-                // 2. Add the entire new package object to the rental document's array
                 rental.packageRents.push(pkg);
             }
-
             if (stockUpdates.length > 0) {
                 await ItemModel.bulkWrite(stockUpdates, { session });
             }
         }
 
-        // --- Process Custom Tailoring (if present) ---
+        // --- Process Custom Tailoring (if present) --- (No changes needed here)
         if (customTailoring && Array.isArray(customTailoring) && customTailoring.length > 0) {
-            // These are the custom items associated with the package (or added standalone)
-            // Push all new custom items into the rental document's array
             rental.customTailoring.push(...customTailoring);
         }
 
-        // Step 2: Save the modified rental document.
+        // Save all changes to the rental document.
         const updatedRental = await rental.save({ session });
         
-        // Step 3: Commit the transaction.
         await session.commitTransaction();
         res.status(200).json(updatedRental);
 
     } catch (error) {
         await session.abortTransaction();
         console.error("Error adding item to rental:", error);
-        // Let the global error handler manage the response (which typically sends a 500 status)
         throw error; 
     } finally {
         session.endSession();

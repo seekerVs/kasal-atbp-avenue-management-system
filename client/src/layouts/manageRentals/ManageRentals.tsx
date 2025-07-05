@@ -12,6 +12,9 @@ import {
   Spinner,
   Alert,
   Modal,
+  Collapse,
+  InputGroup,
+  Form,
 } from 'react-bootstrap';
 import {
   PersonCircle,
@@ -21,6 +24,7 @@ import {
   ArrowCounterclockwise,
   CheckCircleFill,
   XCircleFill,
+  Search,
 } from 'react-bootstrap-icons';
 import axios from 'axios';
 import { RentalOrder, RentalStatus } from '../../types'; 
@@ -43,6 +47,8 @@ function ManageRentals() {
   
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [rentalToCancel, setRentalToCancel] = useState<RentalOrder | null>(null);
+  const [expandedRentals, setExpandedRentals] = useState<Map<string, boolean>>(new Map());
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     fetchRentals();
@@ -62,16 +68,12 @@ function ManageRentals() {
     }
   };
 
-  const filteredRentals = allRentals.filter(rental => {
-    if (!rental || !rental._id) return false;
-    if (activeTab === 'All') {
-      return rental.status !== 'Cancelled';
-    }
-    if (activeTab === 'Completed') {
-      return rental.status === 'Returned' || rental.status === 'Completed';
-    }
-    return rental.status === activeTab;
-  });
+  const formatCurrency = (value: number): string => {
+    return value.toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  };
 
   const getStatusBadgeVariant = (status: RentalStatus): BadgeVariant => {
     switch (status) {
@@ -84,6 +86,47 @@ function ManageRentals() {
       default: return 'secondary';
     }
   };
+
+  const filteredRentals = allRentals.filter(rental => {
+    if (!rental || !rental._id) return false;
+
+    // --- 1. Tab Filtering (same as before) ---
+    const lowercasedStatus = rental.status.toLowerCase();
+    const lowercasedActiveTab = activeTab.toLowerCase();
+
+    let tabMatch = false;
+    if (lowercasedActiveTab === 'all') {
+      tabMatch = lowercasedStatus !== 'cancelled';
+    } else if (lowercasedActiveTab === 'completed') {
+      tabMatch = lowercasedStatus === 'returned' || lowercasedStatus === 'completed';
+    } else {
+      tabMatch = lowercasedStatus === lowercasedActiveTab;
+    }
+
+    // If it doesn't match the selected tab, exclude it immediately.
+    if (!tabMatch) {
+      return false;
+    }
+
+    // --- 2. Search Term Filtering (the new part) ---
+    // If the search term is empty, no need to filter further.
+    if (!searchTerm.trim()) {
+      return true; // It already passed the tab filter.
+    }
+
+    const lowercasedSearch = searchTerm.toLowerCase();
+
+    // Check against multiple fields. Optional chaining (?.) prevents errors if data is missing.
+    const customerName = rental.customerInfo[0]?.name?.toLowerCase() || '';
+    const orderId = rental._id.toLowerCase();
+    const customerPhone = rental.customerInfo[0]?.phoneNumber || '';
+
+    return (
+      customerName.includes(lowercasedSearch) ||
+      orderId.includes(lowercasedSearch) ||
+      customerPhone.includes(lowercasedSearch)
+    );
+  });
   
   const handleShowCancelModal = (rental: RentalOrder) => {
     setRentalToCancel(rental);
@@ -109,8 +152,11 @@ function ManageRentals() {
     }
   };
 
+  
   const renderRentalOrderCard = (rental: RentalOrder) => {
     if (!rental || !rental._id) return null;
+    
+    // const displayTotal = calculateOrderTotal(rental); // This line was deleted in previous steps.
     const customer = rental.customerInfo[0] || {};
     
     // Combine all items into a single list for rendering
@@ -119,6 +165,23 @@ function ManageRentals() {
         ...(rental.packageRents || []),
         ...(rental.customTailoring || [])
     ];
+
+    // --- NEW: Configuration for collapsible items ---
+    const ITEMS_TO_SHOW_INITIALLY = 3;
+    const hasMoreItems = allItems.length > ITEMS_TO_SHOW_INITIALLY;
+    const isExpanded = expandedRentals.get(rental._id) || false; // Check if this rental is expanded
+
+    const displayedItems = allItems.slice(0, ITEMS_TO_SHOW_INITIALLY);
+    const hiddenItems = allItems.slice(ITEMS_TO_SHOW_INITIALLY);
+
+    // Function to toggle expansion for this specific rental
+    const toggleExpansion = () => {
+        setExpandedRentals(prevMap => {
+            const newMap = new Map(prevMap);
+            newMap.set(rental._id, !isExpanded);
+            return newMap;
+        });
+    };
 
     return (
       <Card key={rental._id} className="mb-4 shadow-sm">
@@ -137,37 +200,108 @@ function ManageRentals() {
             </Col>
           </Row>
           <hr />
-          {allItems.map((item, index) => (
-            <Row key={index} className="align-items-center my-3">
-              <Col xs="auto" className="me-3">
-                <Image src={item.imageUrl || 'https://placehold.co/80x80/e9ecef/adb5bd?text=Item'} fluid rounded style={{ width: "80px", height: "80px", objectFit: "cover" }} />
-              </Col>
-              <Col>
-                <p className="mb-0 fw-bold">{item.name}</p>
-                <p className="mb-0 text-muted small">Qty: {item.quantity}</p>
-              </Col>
-              <Col xs="auto" className="text-end">
-                <p className="mb-0 fw-bold text-danger" style={{ fontSize: "1.05em" }}>₱{(item.price * item.quantity).toFixed(2)}</p>
-              </Col>
-            </Row>
-          ))}
+                    {displayedItems.map((item, index) => {
+            // --- NEW: Parsing Logic ---
+            const nameParts = item.name.split(',');
+            const productName = nameParts[0].trim(); // The first part is always the name
+            
+            // Check if there are variation parts (e.g., color, size)
+            const hasVariation = nameParts.length > 1;
+            // Construct the variation string, e.g., "Champagne, M"
+            const variationText = hasVariation ? `${nameParts[1]}, ${nameParts[2]}`.trim() : null;
+
+            return (
+              <Row key={index} className="align-items-center my-3">
+                <Col xs="auto" className="me-3">
+                  <Image src={item.imageUrl || 'https://placehold.co/80x80/e9ecef/adb5bd?text=Item'} fluid rounded style={{ width: "80px", height: "80px", objectFit: "cover" }} />
+                </Col>
+                <Col>
+                  {/* Display the parsed product name */}
+                  <p className="mb-0 fw-bold">{productName}</p>
+                  
+                  {/* Conditionally render the variation text if it exists */}
+                  {variationText && (
+                      <p className="mb-1 text-muted small fst-italic">{variationText}</p>
+                  )}
+                  
+                  {/* Display the quantity */}
+                  <p className="mb-0 text-muted small">Qty: {item.quantity}</p>
+                </Col>
+                <Col xs="auto" className="text-end">
+                  <p className="mb-0 fw-bold text-danger" style={{ fontSize: "1.05em" }}>
+                    ₱{formatCurrency(item.price * item.quantity)}
+                  </p>
+                </Col>
+              </Row>
+            );
+          })}
+
+          {/* ======================================================= */}
+          {/* --- ADD THE COLLAPSIBLE SECTION --- */}
+          {/* ======================================================= */}
+                    {hasMoreItems && (
+              <>
+                  <Collapse in={isExpanded}>
+                      <div id={`rental-items-collapse-${rental._id}`}>
+                          {hiddenItems.map((item, index) => {
+                            // --- NEW: Parsing Logic ---
+                            const nameParts = item.name.split(',');
+                            const productName = nameParts[0].trim();
+                            const hasVariation = nameParts.length > 1;
+                            const variationText = hasVariation ? `${nameParts[1]}, ${nameParts[2]}`.trim() : null;
+
+                            return (
+                              <Row key={`hidden-${index}`} className="align-items-center my-3">
+                                  <Col xs="auto" className="me-3">
+                                      <Image src={item.imageUrl || 'https://placehold.co/80x80/e9ecef/adb5bd?text=Item'} fluid rounded style={{ width: "80px", height: "80px", objectFit: "cover" }} />
+                                  </Col>
+                                  <Col>
+                                      {/* Display the parsed product name */}
+                                      <p className="mb-0 fw-bold">{productName}</p>
+                                      
+                                      {/* Conditionally render the variation text */}
+                                      {variationText && (
+                                          <p className="mb-1 text-muted small fst-italic">{variationText}</p>
+                                      )}
+                                      
+                                      {/* Display the quantity */}
+                                      <p className="mb-0 text-muted small">Qty: {item.quantity}</p>
+                                  </Col>
+                                  <Col xs="auto" className="text-end">
+                                      <p className="mb-0 fw-bold text-danger" style={{ fontSize: "1.05em" }}>
+                                        ₱{formatCurrency(item.price * item.quantity)}
+                                      </p>
+                                  </Col>
+                              </Row>
+                            );
+                          })}
+                      </div>
+                  </Collapse>
+                  <Button 
+                      variant="link" 
+                      onClick={toggleExpansion} 
+                      aria-controls={`rental-items-collapse-${rental._id}`}
+                      aria-expanded={isExpanded}
+                      className="text-decoration-none p-0 mt-2"
+                  >
+                      {isExpanded ? 'Show Less' : `Show ${hiddenItems.length} More Items`}
+                  </Button>
+              </>
+          )}
+          {/* ======================================================= */}
+
           <hr className="my-3" />
           <Row className="align-items-center">
             <Col>
               <div className="mb-2">
                 <p className="mb-0 text-muted small">Total Amount</p>
-                <p className="fw-bold fs-5 mb-0">
-                  <span className="text-danger">
-                    {/* Use the server-calculated value. Provide a fallback of 0. */}
-                    ₱{(rental.financials.grandTotal || 0).toFixed(2)}
-                  </span>
-                </p>
+                <p className="fw-bold fs-5 mb-0"><span className="text-danger">₱{formatCurrency(rental.financials.grandTotal || 0)}</span></p>
                 {(rental.financials.depositAmount > 0 || rental.financials.shopDiscount > 0) && (
                   <p className="text-muted fst-italic mb-0" style={{ fontSize: '0.75rem' }}>
                     (Includes 
-                    {rental.financials.depositAmount > 0 && ` ₱${rental.financials.depositAmount.toFixed(2)} deposit`}
+                    {rental.financials.depositAmount > 0 && ` ₱${formatCurrency(rental.financials.depositAmount)} deposit`}
                     {rental.financials.depositAmount > 0 && rental.financials.shopDiscount > 0 && ' &'}
-                    {rental.financials.shopDiscount > 0 && ` ₱${rental.financials.shopDiscount.toFixed(2)} discount`}
+                    {rental.financials.shopDiscount > 0 && ` ₱${formatCurrency(rental.financials.shopDiscount)} discount`}
                     )
                   </p>
                 )}
@@ -202,6 +336,19 @@ function ManageRentals() {
     <div style={{ backgroundColor: "#F8F9FA", minHeight: "100vh", paddingTop: '1rem', paddingBottom: '1rem' }}>
       <Container fluid="lg">
         <Card className="shadow-sm overflow-hidden">
+          <Card.Header className="bg-white border-bottom-0 pt-3 px-3">
+            <div className="d-flex flex-wrap justify-content-end align-items-center">
+              <InputGroup style={{ maxWidth: '400px' }}>
+                <InputGroup.Text><Search /></InputGroup.Text>
+                <Form.Control
+                  type="search"
+                  placeholder="Search by Customer, Order ID, or Phone..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </InputGroup>
+            </div>
+          </Card.Header>
           <Nav variant="tabs" activeKey={activeTab} onSelect={(k) => setActiveTab(k as TabStatus)} className="px-3 pt-2">
             <Nav.Item><Nav.Link eventKey="All"><BoxSeam className="me-1" />All Rentals</Nav.Link></Nav.Item>
             <Nav.Item><Nav.Link eventKey="To Process"><CalendarCheck className="me-1" />To Process</Nav.Link></Nav.Item>
@@ -216,7 +363,12 @@ function ManageRentals() {
             ) : error ? (
               <Alert variant="danger">{error}</Alert>
             ) : filteredRentals.length === 0 ? (
-              <Alert variant="info">No rental orders found for the "{activeTab}" status.</Alert>
+              <Alert variant="info" className="m-3 text-center">
+                {searchTerm.trim()
+                  ? `No rentals match your search for "${searchTerm}" in this tab.`
+                  : `No rental orders found for the "${activeTab}" status.`
+                }
+              </Alert>
             ) : (
               filteredRentals.map(renderRentalOrderCard)
             )}

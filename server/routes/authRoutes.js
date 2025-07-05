@@ -31,15 +31,15 @@ router.post('/login', asyncHandler(async (req, res) => {
 
 // POST /api/auth/signup
 router.post('/signup', asyncHandler(async (req, res) => {
-  const { name, email, age, password } = req.body;
+  const { name, email, password } = req.body;
 
   const existingUser = await UserModel.findOne({ email });
   if (existingUser) {
     return res.status(400).json({ success: false, message: 'Email already exists.' });
   }
 
-  const newUser = new UserModel({ name, email, age, password });
-  await newUser.save(); // pre-save hook in model will hash password
+  const newUser = new UserModel({ name, email, password });
+  await newUser.save();
 
   const payload = { id: newUser._id, name: newUser.name };
   const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1d' });

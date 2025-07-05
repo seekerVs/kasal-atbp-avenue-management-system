@@ -26,39 +26,11 @@ import {
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import CustomerDetailsCard from '../../components/CustomerDetailsCard';
-
-// ===================================================================================
-// --- TYPE DEFINITIONS ---
-// ===================================================================================
-interface ItemVariation {
-  _id: string;
-  color: string;
-  size: string;
-  quantity: number;
-  imageUrl: string;
-}
-interface Product {
-  _id: string;
-  name: string;
-  price: number;
-  category: string;
-  variations: ItemVariation[];
-}
-interface CustomerDetails {
-  name: string;
-  phoneNumber: string;
-  email: string;
-  address: string;
-}
-interface RentalOrder {
-  _id: string;
-  customerInfo: CustomerDetails[];
-  status: string;
-  createdAt: string;
-}
+import { CustomerInfo, InventoryItem, RentalOrder } from '../../types';
 
 const API_URL = 'http://localhost:3001/api';
-const initialCustomerDetails: CustomerDetails = { name: '', phoneNumber: '', email: '', address: '' };
+
+const initialCustomerDetails: CustomerInfo = { name: '', phoneNumber: '', email: '', address: '' };
 
 // ===================================================================================
 // --- MAIN COMPONENT ---
@@ -67,13 +39,13 @@ function SingleRent() {
   const navigate = useNavigate();
 
   // State Management
-  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [allProducts, setAllProducts] = useState<InventoryItem[]>([]);
   const [allRentals, setAllRentals] = useState<RentalOrder[]>([]);
   const [productSearchTerm, setProductSearchTerm] = useState<string>('');
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<InventoryItem | null>(null);
   const [selectedVariationKey, setSelectedVariationKey] = useState<string>('');
   const [quantity, setQuantity] = useState<number>(1); // <-- NEW STATE FOR QUANTITY
-  const [customerDetails, setCustomerDetails] = useState<CustomerDetails>(initialCustomerDetails);
+  const [customerDetails, setCustomerDetails] = useState<CustomerInfo>(initialCustomerDetails);
   const [isNewCustomerMode, setIsNewCustomerMode] = useState(true);
   const [existingOpenRental, setExistingOpenRental] = useState<RentalOrder | null>(null);
   const [selectedRentalForDisplay, setSelectedRentalForDisplay] = useState<RentalOrder | null>(null);
@@ -86,7 +58,7 @@ function SingleRent() {
   const [notificationType, setNotificationType] = useState<'success' | 'danger'>('success');
   const [showReminderModal, setShowReminderModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [modalData, setModalData] = useState({ rentalId: '', itemName: '' });
+  const [modalData, setModalData] = useState({ rentalId: '', itemName: '', quantity: 0 });
   const [showProductSearchResults, setShowProductSearchResults] = useState(false);
 
   const productSearchResultsRef = useRef<HTMLDivElement>(null);
@@ -120,7 +92,7 @@ function SingleRent() {
     return () => { document.removeEventListener("mousedown", handleClickOutside); };
   }, []);
 
-  const filteredProducts = useMemo<Product[]>(() => {
+  const filteredProducts = useMemo<InventoryItem[]>(() => {
     if (!productSearchTerm.trim()) return [];
     return allProducts.filter(p => p.name.toLowerCase().includes(productSearchTerm.toLowerCase()) || p.category.toLowerCase().includes(productSearchTerm.toLowerCase()));
   }, [productSearchTerm, allProducts]);
@@ -133,7 +105,7 @@ function SingleRent() {
     setShowProductSearchResults(true);
   };
 
-  const handleSelectProduct = (product: Product) => {
+  const handleSelectProduct = (product: InventoryItem) => {
     setSelectedProduct(product);
     setProductSearchTerm(product.name);
     setShowProductSearchResults(false);
@@ -187,26 +159,76 @@ function SingleRent() {
     setShowReminderModal(false);
     if (!validateForm() || !selectedProduct || !currentSelectedVariation) return;
     setIsSubmitting(true);
+    
     try {
-      const rentalPayload = { itemId: selectedProduct._id, color: currentSelectedVariation.color, size: currentSelectedVariation.size, quantity: quantity, customerInfo: [customerDetails] };
+      // --- THIS IS THE FIX ---
+      // Build the payload in the structure the backend expects.
+      const rentalPayload = {
+        customerInfo: [customerDetails], // The customer info array
+        singleRents: [                   // The singleRents array
+          {                              // An object inside the array
+            name: `${selectedProduct.name},${currentSelectedVariation.color},${currentSelectedVariation.size}`,
+            price: selectedProduct.price,
+            quantity: quantity,
+            imageUrl: currentSelectedVariation.imageUrl,
+            notes: '', // Add notes field if you have one
+          },
+        ],
+      };
+      
+      // Now the payload matches the backend's expected structure.
       const response = await axios.post(`${API_URL}/rentals`, rentalPayload);
+      
       displayNotification('New rental created successfully! Redirecting...', 'success');
       setTimeout(() => navigate(`/rentals/${response.data._id}`), 1500);
-    } catch (apiError: any) { displayNotification(apiError.response?.data?.message || "Failed to create rental.", 'danger', 0);
-    } finally { setIsSubmitting(false); }
-  };
+
+    } catch (apiError: any) {
+      const errorMessage = apiError.response?.data?.message || "Failed to create rental.";
+      displayNotification(errorMessage, 'danger', 0);
+    } finally {
+      setIsSubmitting(false);
+    }
+};
 
   const addItemToExistingRental = async () => {
     if (!validateForm() || !existingOpenRental || !selectedProduct || !currentSelectedVariation) return;
     setIsSubmitting(true);
+    
     try {
-      const payload = { itemId: selectedProduct._id, color: currentSelectedVariation.color, size: currentSelectedVariation.size, quantity: quantity };
+      // --- THIS IS THE FIX ---
+      // Build the payload in the same structure as createNewRental
+      const payload = {
+        singleRents: [
+          {
+            name: `${selectedProduct.name},${currentSelectedVariation.color},${currentSelectedVariation.size}`,
+            price: selectedProduct.price,
+            quantity: quantity,
+            imageUrl: currentSelectedVariation.imageUrl,
+          },
+        ],
+      };
+
+      // Now the payload is correctly structured for the backend
       await axios.put(`${API_URL}/rentals/${existingOpenRental._id}/addItem`, payload);
-      setModalData({ rentalId: existingOpenRental._id, itemName: selectedProduct.name });
+      
+      setModalData({ 
+          rentalId: existingOpenRental._id, 
+          itemName: selectedProduct.name, 
+          quantity: quantity // <-- Capture the quantity here
+      });
       setShowSuccessModal(true);
-      setProductSearchTerm(''); setSelectedProduct(null); setSelectedVariationKey(''); setQuantity(1);
-    } catch (apiError: any) { displayNotification(apiError.response?.data?.message || "Failed to add item.", 'danger', 0);
-    } finally { setIsSubmitting(false); }
+      // Reset the form
+      setProductSearchTerm(''); 
+      setSelectedProduct(null); 
+      setSelectedVariationKey(''); 
+      setQuantity(1);
+
+    } catch (apiError: any) {
+      const errorMessage = apiError.response?.data?.message || "Failed to add item.";
+      displayNotification(errorMessage, 'danger', 0);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -254,7 +276,7 @@ function SingleRent() {
                           <option value="">-- Choose a Variation --</option>
                           {selectedProduct.variations.map(v => {
                             const variationKey = `${v.color}-${v.size}`;
-                            return ( <option key={v._id} value={variationKey} disabled={v.quantity <= 0}> {v.color} - {v.size} {v.quantity <= 0 ? '(Out of Stock)' : `(Stock: ${v.quantity})`} </option> );
+                            return ( <option key={variationKey} value={variationKey} disabled={v.quantity <= 0}> {v.color} - {v.size} {v.quantity <= 0 ? '(Out of Stock)' : `(Stock: ${v.quantity})`} </option> );
                           })}
                         </Form.Select>
                       </Form.Group>
@@ -318,7 +340,7 @@ function SingleRent() {
 
       <Modal show={showSuccessModal} onHide={() => setShowSuccessModal(false)} centered>
         <Modal.Header closeButton><Modal.Title>Item Added Successfully</Modal.Title></Modal.Header>
-        <Modal.Body><Alert variant="success" className="mb-0">Successfully added <strong>{quantity} x {modalData.itemName}</strong> to rental ID: <strong>{modalData.rentalId}</strong>.</Alert></Modal.Body>
+        <Modal.Body><Alert variant="success" className="mb-0">Successfully added <strong>{modalData.quantity} x {modalData.itemName}</strong> to rental ID: <strong>{modalData.rentalId}</strong>.</Alert></Modal.Body>
         <Modal.Footer><Button variant="secondary" onClick={() => setShowSuccessModal(false)}>OK</Button><Button variant="primary" onClick={() => navigate(`/rentals/${modalData.rentalId}`)}>View Rental</Button></Modal.Footer>
       </Modal>
     </Container>

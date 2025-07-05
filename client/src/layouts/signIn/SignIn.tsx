@@ -23,8 +23,7 @@ function SignIn({ setNavbarType }: SignInProps) {
     setErrorMessage(null); // Clear any previous error messages
 
     try {
-      const response = await axios.post("http://localhost:3001/login", {
-        // Replace with your actual backend login endpoint
+      const response = await axios.post("http://localhost:3001/api/auth/login", {
         email,
         password,
       });

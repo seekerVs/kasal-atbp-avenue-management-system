@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Container,
@@ -28,59 +28,16 @@ import { useNotification } from '../../contexts/NotificationContext';
 import {
   RentalOrder,
   CustomerInfo,
-  RentedItemBase,
-  PackageRentItem,
+  SingleRentItem,
+  RentedPackage,
   PackageFulfillment,
   CustomTailoringItem,
   RentalStatus,
   InventoryItem,
-  PackageDetails,
+  Package
 } from '../../types';
 
 const API_URL = 'http://localhost:3001/api';
-
-// ===================================================================================
-// --- HELPER FUNCTION ---
-// ===================================================================================
-const calculateSubtotal = (rental: RentalOrder | null): number => {
-    if (!rental) return 0;
-    const singleTotal = rental.singleRents?.reduce((sum, item) => sum + item.price * item.quantity, 0) || 0;
-    const packageTotal = rental.packageRents?.reduce((sum, item) => sum + item.price * item.quantity, 0) || 0;
-    const tailoringTotal = rental.customTailoring?.reduce((sum, item) => sum + item.price * item.quantity, 0) || 0;
-    return singleTotal + packageTotal + tailoringTotal;
-};
-
-const calculateRequiredDeposit = (rental: RentalOrder | null): { min: number; message: string } => {
-  if (!rental) return { min: 0, message: '' };
-
-  // 1. Calculate deposit for single rents
-  const singleRentsDeposit = rental.singleRents?.reduce((sum, item) => {
-    const depositPerItem = item.price < 500 ? item.price : 500;
-    return sum + (depositPerItem * item.quantity);
-  }, 0) || 0;
-
-  // 2. Calculate deposit for packages
-  const packageDeposit = rental.packageRents?.reduce((sum, pkg) => {
-    return sum + (2000 * pkg.quantity);
-  }, 0) || 0;
-
-  // 3. Calculate deposit for custom 'rent-back' items
-  const customDeposit = rental.customTailoring?.reduce((sum, item) => {
-    if (item.tailoringType === 'Tailored for Rent-Back') {
-      return sum + (item.price * item.quantity);
-    }
-    return sum;
-  }, 0) || 0;
-
-  const totalMinDeposit = singleRentsDeposit + packageDeposit + customDeposit;
-
-  let message = 'Deposit is calculated based on all items in the rental.';
-  if (totalMinDeposit === 0) {
-    message = 'No security deposit is required for this rental.';
-  }
-
-  return { min: totalMinDeposit, message };
-};
 
 // ===================================================================================
 // --- MAIN COMPONENT ---
@@ -111,20 +68,17 @@ function RentalViewer() {
   // State for modals and notifications
   const [showDeleteItemModal, setShowDeleteItemModal] = useState(false);
   const [showEditItemModal, setShowEditItemModal] = useState(false);
-  const [itemToModify, setItemToModify] = useState<RentedItemBase | null>(null);
+  const [itemToModify, setItemToModify] = useState<SingleRentItem | null>(null);
   const [showDeletePackageModal, setShowDeletePackageModal] = useState(false);
   const [showEditPackageModal, setShowEditPackageModal] = useState(false);
-  const [packageToModify, setPackageToModify] = useState<PackageRentItem | null>(null);
+  const [packageToModify, setPackageToModify] = useState<RentedPackage | null>(null);
   const [showDeleteCustomItemModal, setShowDeleteCustomItemModal] = useState(false);
   const [showEditCustomItemModal, setShowEditCustomItemModal] = useState(false);
   const [customItemToModify, setCustomItemToModify] = useState<CustomTailoringItem | null>(null);
 
   const [showValidationModal, setShowValidationModal] = useState(false);
   const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
-  const [allPackages, setAllPackages] = useState<PackageDetails[]>([]);
-
-  // --- DERIVED STATE & CALCULATIONS ---
-  const subtotal = useMemo(() => calculateSubtotal(rental), [rental]);
+  const [allPackages, setAllPackages] = useState<Package[]>([]);
   
   // --- DATA FETCHING & SYNCING ---
   useEffect(() => {
@@ -150,51 +104,22 @@ function RentalViewer() {
 
   useEffect(() => {
     if (rental) {
-      setEditableCustomer(rental.customerInfo[0]);
-      setEditableDiscount(String(rental.financials?.shopDiscount || '0'));
-      setEditableStartDate(rental.rentalStartDate);
-      setEditableEndDate(rental.rentalEndDate);
-      setEditableDeposit(String(rental.financials?.depositAmount || '0')); // Initialize deposit
+        // Sync local state directly from the server-provided rental object
+        setEditableCustomer(rental.customerInfo[0]);
+        setEditableDiscount(String(rental.financials?.shopDiscount || '0'));
+        setEditableStartDate(rental.rentalStartDate);
+        setEditableEndDate(rental.rentalEndDate);
+        
+        // The deposit amount is now directly from the server's calculation
+        setEditableDeposit(String(rental.financials?.depositAmount || '0'));
 
-      const downPayment = rental.financials?.downPayment;
-      if (downPayment?.referenceNumber) setPaymentUiMode('Gcash');
+        if (rental.financials?.downPayment?.referenceNumber) {
+            setPaymentUiMode('Gcash');
+        }
 
-      const savedDeposit = rental.financials?.depositAmount || 0;
-      const { min: defaultDeposit } = calculateRequiredDeposit(rental);
-      const currentDeposit = savedDeposit > 0 ? savedDeposit : defaultDeposit;
-      setEditableDeposit(String(currentDeposit)); // This line is correct
-
-      // --- THIS IS THE SECTION TO FIX ---
-      const subtotal = calculateSubtotal(rental);
-      const discount = rental.financials?.shopDiscount || 0;
-      const totalPaid = (rental.financials.downPayment?.amount || 0) + (rental.financials.finalPayment?.amount || 0);
-
-      // The Grand Total includes the items AND the deposit
-      const grandTotal = (subtotal - discount) + currentDeposit;
-      
-      const remainingBalance = grandTotal - totalPaid;
-
-      // Set the paymentAmount to the full remaining balance
-      setPaymentAmount(String(remainingBalance > 0 ? remainingBalance.toFixed(2) : '0.00'));
+        setPaymentAmount('0');
     }
-  }, [rental]);
-
-  const requiredDepositInfo = useMemo(() => {
-    if (!rental) return { min: 0, max: null, message: '' };
-    
-    // The calculation for max is now only relevant for a very specific case
-    const rentBackCustomItem = rental.customTailoring?.find(item => item.tailoringType === 'Tailored for Rent-Back');
-    const isSingleRentBackOnly = rentBackCustomItem && rental.singleRents.length === 0 && rental.packageRents.length === 0 && rental.customTailoring.length === 1;
-
-    const calculatedDeposit = calculateRequiredDeposit(rental);
-
-    return {
-      min: calculatedDeposit.min,
-      // The 'max' rule only applies if the *only* item is a single rent-back custom piece.
-      max: isSingleRentBackOnly ? calculatedDeposit.min : null,
-      message: calculatedDeposit.message
-    };
-  }, [rental]);
+  }, [rental]); 
 
   // --- EVENT HANDLERS ---
   const handleUpdateAndPay = async (payload: { status?: RentalStatus; rentalStartDate?: string; rentalEndDate?: string; shopDiscount?: number; depositAmount?: number; payment?: { amount: number; referenceNumber: string | null; } }) => {
@@ -202,12 +127,9 @@ function RentalViewer() {
 
     // --- NEW: Validate the deposit amount before sending ---
     const depositInput = parseFloat(editableDeposit) || 0;
-    if (depositInput < requiredDepositInfo.min) {
-      addNotification(`Deposit amount cannot be less than the required total of ₱${requiredDepositInfo.min.toFixed(2)}.`, 'danger');
-      return;
-    }
-    if (requiredDepositInfo.max !== null && depositInput > requiredDepositInfo.max) {
-      addNotification(`Deposit amount cannot be more than ₱${requiredDepositInfo.max.toFixed(2)}.`, 'danger');
+    const requiredMinDeposit = rental.financials.requiredDeposit || 0; 
+    if (depositInput < requiredMinDeposit) {
+      addNotification(`Deposit amount cannot be less than the required total of ₱${requiredMinDeposit.toFixed(2)}.`, 'danger');
       return;
     }
     
@@ -272,35 +194,28 @@ function RentalViewer() {
   const handleMarkAsPickedUp = () => {
     if (!rental) return;
 
-    // 1. Calculate the full financial picture, including the deposit
-    const discount = parseFloat(editableDiscount) || 0;
-    const deposit = parseFloat(editableDeposit) || 0;
-    const itemsTotal = subtotal - discount;
-    const grandTotal = itemsTotal + deposit; // The true total amount owed
-
-    const currentPaid = (rental.financials.downPayment?.amount || 0) + (rental.financials.finalPayment?.amount || 0);
+    // 1. Get all financial data directly from the server-provided rental object
+    const grandTotal = rental.financials.grandTotal || 0;
+    const totalPaid = rental.financials.totalPaid || 0;
     const finalPaymentInput = parseFloat(paymentAmount) || 0;
 
-    // 2. Perform validation against the Grand Total
-    // The total paid *after* this new payment must cover the grand total.
-    if (currentPaid + finalPaymentInput < grandTotal) {
-      const remainingNeeded = grandTotal - currentPaid;
-      addNotification(`Payment is insufficient to mark as picked up. Remaining balance (incl. deposit) is ₱${remainingNeeded.toFixed(2)}.`, 'danger');
-      return; // Stop the process
+    // 2. Validate if the new payment covers the remaining balance
+    // The total paid SO FAR plus the payment being made now must be >= the grand total.
+    if ((totalPaid + finalPaymentInput) < grandTotal) {
+        const remainingNeeded = grandTotal - totalPaid;
+        addNotification(`Payment is insufficient. Remaining balance of ₱${remainingNeeded.toFixed(2)} is required.`, 'danger');
+        return; // Stop the process
     }
     
-    // Build the payload
-    const payload: {
-        status: RentalStatus;
-        shopDiscount: number;
-        depositAmount: number;
-        payment?: { amount: number; referenceNumber: string | null; };
-    } = {
+    // 3. Build the payload for the update
+    const payload: Parameters<typeof handleUpdateAndPay>[0] = {
         status: 'To Return', // The target status
-        shopDiscount: discount,
-        depositAmount: deposit
+        // We also send the current discount/deposit values in case they were edited
+        shopDiscount: parseFloat(editableDiscount) || 0,
+        depositAmount: parseFloat(editableDeposit) || 0,
     };
 
+    // If a final payment amount was entered, include it in the payload.
     if (finalPaymentInput > 0) {
       payload.payment = {
         amount: finalPaymentInput,
@@ -308,6 +223,7 @@ function RentalViewer() {
       };
     }
 
+    // 4. Call the central update function
     handleUpdateAndPay(payload);
   };
 
@@ -332,8 +248,8 @@ function RentalViewer() {
     if (editableCustomer) setEditableCustomer({ ...editableCustomer, [e.target.name]: e.target.value });
   };
 
-  const handleOpenDeleteItemModal = (item: RentedItemBase) => { setItemToModify(item); setShowDeleteItemModal(true); };
-  const handleOpenEditItemModal = (item: RentedItemBase) => { setItemToModify(item); setShowEditItemModal(true); };
+  const handleOpenDeleteItemModal = (item: SingleRentItem) => { setItemToModify(item); setShowDeleteItemModal(true); };
+  const handleOpenEditItemModal = (item: SingleRentItem) => { setItemToModify(item); setShowEditItemModal(true); };
   const handleDeleteItem = async () => {
     if (!itemToModify || !rental) return;
     try {
@@ -363,8 +279,8 @@ function RentalViewer() {
     finally { setShowEditItemModal(false); setItemToModify(null); }
   };
 
-  const handleOpenEditPackageModal = (pkg: PackageRentItem) => { setPackageToModify(pkg); setShowEditPackageModal(true); };
-  const handleOpenDeletePackageModal = (pkg: PackageRentItem) => { setPackageToModify(pkg); setShowDeletePackageModal(true); };
+  const handleOpenEditPackageModal = (pkg: RentedPackage) => { setPackageToModify(pkg); setShowEditPackageModal(true); };
+  const handleOpenDeletePackageModal = (pkg: RentedPackage) => { setPackageToModify(pkg); setShowDeletePackageModal(true); };
   const handleSavePackageChanges = async (pkgName: string, updatedFulfillment: PackageFulfillment[]) => {
     if (!rental) return;
     try {
@@ -465,7 +381,7 @@ function RentalViewer() {
             rental={rental}
             status={rental.status}
             financials={rental.financials}
-            subtotal={subtotal}
+            subtotal={rental.financials.subtotal || 0}
             editableDiscount={editableDiscount}
             onDiscountChange={setEditableDiscount}
             editableStartDate={editableStartDate}
@@ -483,7 +399,11 @@ function RentalViewer() {
             onMarkAsPickedUp={handleMarkAsPickedUp}
             editableDeposit={editableDeposit}
             onDepositChange={setEditableDeposit}
-            requiredDepositInfo={requiredDepositInfo} // Pass the calculated info object
+            requiredDepositInfo={{
+                min: rental.financials.requiredDeposit || 0,
+                max: null,
+                message: 'Deposit details are based on the items in the rental.'
+            }} // Pass the calculated info object
           />
         </Col>
       </Row>

@@ -96,7 +96,7 @@ function App() {
                 }
               />
               <Route path="/products" element={<Products />} />
-              <Route path="/signUp" element={<Sign_up />} />
+              <Route path="/signUp" element={<Sign_up setNavbarType={setNavbarType} />} />
               <Route path="/services" element={<Services />} />
               <Route path="/about" element={<About />} />
               <Route path="/package" element={<Package />} />{" "}
