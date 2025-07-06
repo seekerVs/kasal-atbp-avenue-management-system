@@ -1,18 +1,19 @@
 // src/components/sidebar/Sidebar.tsx
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import {
-  Collapse,
   Navbar,
   Nav,
   NavDropdown,
   Offcanvas,
   Container,
   Image,
+  Dropdown,
 } from "react-bootstrap";
-import { BoxArrowRight, ChevronDown, Bootstrap } from "react-bootstrap-icons";
-import { sidebarItems, NavItem } from "./sidebarItems";
+import { BoxArrowRight, PersonCircle, GearFill, ChevronDown } from "react-bootstrap-icons";
+import { sidebarItems } from "./sidebarItems";
+import { SidebarNavItem } from "./SidebarNavItem"; // Import the new component
 import "./Sidebar.css";
 import { Logo2 } from "../../assets/images";
 
@@ -27,18 +28,25 @@ function Sidebar({ setNavbarType }: SidebarProps) {
   const [showOffcanvas, setShowOffcanvas] = useState(false);
   const handleCloseOffcanvas = () => setShowOffcanvas(false);
 
+  // --- REVISED: State management for active items ---
   const findActiveParent = (pathname: string): string | null => {
     for (const item of sidebarItems) {
-      if (item.subItems?.some((subItem) => subItem.path === pathname)) {
+      if (item.subItems?.some((sub) => sub.path === pathname)) {
         return item.title;
       }
     }
     return null;
   };
 
-  const [openKey, setOpenKey] = useState<string | null>(() =>
-    findActiveParent(location.pathname)
-  );
+  const [openKey, setOpenKey] = useState<string | null>(() => findActiveParent(location.pathname));
+  const [activeParent, setActiveParent] = useState<string | null>(() => findActiveParent(location.pathname));
+  
+  // NEW: Effect to keep the correct menu open when navigating
+  useEffect(() => {
+      const parent = findActiveParent(location.pathname);
+      setOpenKey(parent);
+      setActiveParent(parent);
+  }, [location.pathname]);
 
   const handleToggle = (key: string) => {
     setOpenKey(openKey === key ? null : key);
@@ -51,164 +59,75 @@ function Sidebar({ setNavbarType }: SidebarProps) {
     navigate("/signIn");
   };
 
-  // --- RENDER FUNCTION FOR DESKTOP SIDEBAR (No changes here) ---
-  const renderDesktopNavItem = (item: NavItem, index: number) => {
-    if (item.title === "divider") {
-      return <div key={`d-divider-${index}`} className="sidebar-divider"></div>;
-    }
-    const isCollapsible = item.subItems && item.subItems.length > 0;
-    const isOpen = openKey === item.title;
-    if (isCollapsible) {
-      return (
-        <div key={item.title}>
-          <div
-            className={`nav-link-custom collapsible-trigger ${
-              isOpen ? "open" : ""
-            }`}
-            onClick={() => handleToggle(item.title)}
-          >
-            <item.icon className="nav-icon" />
-            <span>{item.title}</span>
-            <ChevronDown
-              className={`chevron-icon ${isOpen ? "rotated" : ""}`}
-            />
-          </div>
-          <Collapse in={isOpen}>
-            <div className="sub-items-container">
-              {item.subItems!.map((sub) => (
-                <NavLink
-                  key={sub.path}
-                  to={sub.path}
-                  className="nav-link-custom"
-                >
-                  <span>{sub.title}</span>
-                </NavLink>
-              ))}
-            </div>
-          </Collapse>
-        </div>
-      );
-    }
-    return (
-      <NavLink key={item.title} to={item.path} className="nav-link-custom">
-        <item.icon className="nav-icon" />
-        <span>{item.title}</span>
-      </NavLink>
-    );
-  };
-
-  // --- RENDER FUNCTION FOR MOBILE OFFCANVAS ---
-  const renderOffcanvasItem = (item: NavItem, index: number) => {
-    if (item.title === "divider") {
-      return <NavDropdown.Divider key={`m-divider-${index}`} />;
-    }
-    if (item.subItems && item.subItems.length > 0) {
-      return (
-        // Add the custom CSS class here for dropdowns
-        <NavDropdown
-          key={item.title}
-          className="offcanvas-nav-link"
-          title={
-            <>
-              <item.icon className="me-2" />
-              {item.title}
-            </>
-          }
-          id={`offcanvas-dd-${item.title}`}
-        >
-          {item.subItems.map((subItem) => (
-            <NavDropdown.Item
-              as={NavLink}
-              to={subItem.path}
-              key={subItem.path}
-              onClick={handleCloseOffcanvas}
-            >
-              {subItem.title}
-            </NavDropdown.Item>
-          ))}
-        </NavDropdown>
-      );
-    }
-    return (
-      // Add the custom CSS class here for regular links
-      <Nav.Link
-        as={NavLink}
-        to={item.path}
-        key={item.path}
-        onClick={handleCloseOffcanvas}
-        className="offcanvas-nav-link"
-      >
-        <item.icon className="me-2" />
-        {item.title}
-      </Nav.Link>
-    );
-  };
-
   return (
     <>
-      {/* ===== DESKTOP SIDEBAR - No changes needed here ===== */}
+      {/* ===== DESKTOP SIDEBAR (Now much cleaner) ===== */}
       <nav className="sidebar d-none d-lg-flex">
         <div>
           <div className="sidebar-header fs-4">
-            <Image
-              src={Logo2}
-              alt="Store image"
-              width={60}
-              height={60}
-            />
+            <Image src={Logo2} alt="Store image" width={60} height={60} />
             <span>Kasal Atbp Avenue Mgmt System</span>
           </div>
-          {/* <div className="sidebar-divider"></div> */}
-          {sidebarItems.map(renderDesktopNavItem)}
+          {sidebarItems.map((item) => (
+            <SidebarNavItem
+              key={item.title}
+              item={item}
+              openKey={openKey}
+              activeParent={activeParent}
+              isMobile={false}
+              onToggle={handleToggle}
+            />
+          ))}
         </div>
         <div className="sidebar-footer">
           <div className="sidebar-divider"></div>
-          <div className="nav-link-custom" onClick={handleSignOut}>
-            <BoxArrowRight className="nav-icon" />
-            <span>Sign Out</span>
-          </div>
-        </div>
+          {/* --- NEW, MORE CONTROLLABLE DROPDOWN --- */}
+          <Dropdown drop="up" className="profile-dropdown">
+              <Dropdown.Toggle as="div" className="nav-link-custom">
+                  <PersonCircle className="nav-icon" />
+                  <span>My Profile</span>
+                  {/* We add our own chevron since we are using a custom toggle */}
+                  <ChevronDown className="chevron-icon" />
+              </Dropdown.Toggle>
+
+              <Dropdown.Menu variant="dark">
+                  <Dropdown.Item onClick={() => navigate('/settings')}>
+                      <GearFill className="me-2"/> Settings
+                  </Dropdown.Item>
+                  <Dropdown.Divider />
+                  <Dropdown.Item onClick={handleSignOut}>
+                      <BoxArrowRight className="me-2"/> Sign Out
+                  </Dropdown.Item>
+              </Dropdown.Menu>
+          </Dropdown>
+      </div>
       </nav>
-
-      {/* ===== MOBILE NAVBAR - Keep the dark top bar ===== */}
-      <Navbar
-        expand={false}
-        className="bg-primary d-lg-none"
-        sticky="top"
-        data-bs-theme="dark"
-      >
+      {/* ===== MOBILE NAVBAR & OFFCANVAS (Now much cleaner) ===== */}
+      <Navbar expand={false} className="bg-primary d-lg-none" sticky="top" data-bs-theme="dark">
         <Container fluid>
-          <Navbar.Brand as={NavLink} to="/dashboard">
-            Kasal Avenue
-          </Navbar.Brand>
-          <Navbar.Toggle
-            aria-controls="offcanvasNavbar-responsive"
-            onClick={() => setShowOffcanvas(true)}
-          />
-
-          {/* === THE MODIFIED OFFCANVAS SECTION === */}
-          <Navbar.Offcanvas
-            id="offcanvasNavbar-responsive"
-            placement="end"
-            // REMOVED: className="bg-primary" and data-bs-theme="dark"
-            // This defaults it to a light theme (white background, dark text/buttons)
-            show={showOffcanvas}
-            onHide={handleCloseOffcanvas}
-          >
+          <Navbar.Brand as={NavLink} to="/dashboard">Kasal Avenue</Navbar.Brand>
+          <Navbar.Toggle aria-controls="offcanvasNavbar-responsive" onClick={() => setShowOffcanvas(true)} />
+          <Navbar.Offcanvas id="offcanvasNavbar-responsive" placement="end" show={showOffcanvas} onHide={handleCloseOffcanvas}>
             <Offcanvas.Header closeButton>
               <Offcanvas.Title>Menu</Offcanvas.Title>
             </Offcanvas.Header>
             <Offcanvas.Body>
               <Nav className="justify-content-end flex-grow-1 pe-3">
-                {sidebarItems.map(renderOffcanvasItem)}
+                {sidebarItems.map((item) => (
+                    <SidebarNavItem
+                      key={`mobile-${item.title}`}
+                      item={item}
+                      openKey={openKey} // Not used on mobile but required by prop
+                      activeParent={activeParent}
+                      isMobile={true}
+                      onToggle={handleToggle}
+                      onCloseOffcanvas={handleCloseOffcanvas}
+                    />
+                ))}
               </Nav>
               <hr />
               <Nav>
-                {/* Add the custom class to the sign out link */}
-                <Nav.Link
-                  onClick={handleSignOut}
-                  className="offcanvas-nav-link"
-                >
+                <Nav.Link onClick={handleSignOut} className="offcanvas-nav-link">
                   <BoxArrowRight className="me-2" />
                   Sign Out
                 </Nav.Link>

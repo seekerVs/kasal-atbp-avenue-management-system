@@ -29,16 +29,6 @@ const API_URL = 'http://localhost:3001/api';
 // ===================================================================================
 function CustomRent() {
   const navigate = useNavigate();
-  const location = useLocation();
-  const associationState = location.state as { 
-      rentalId: string; 
-      mode?: 'create' | 'addToRental'; 
-      customerName: string; 
-      prefilledItemName: string;
-      packageName: string; // <-- NEW
-      packageRole: string; // <-- NEW
-      fulfillmentIndex: number;
-  } | null;
 
   // --- State Management ---
   const [measurementRefs, setMeasurementRefs] = useState<MeasurementRef[]>([]);
@@ -89,20 +79,6 @@ function CustomRent() {
     fetchData();
   }, []);
 
-  // --- Effect to handle "Association Mode" ---
-  useEffect(() => {
-    if (associationState) {
-      // Pre-fill form data from the state passed via navigate
-      setFormData(prev => ({
-          ...prev,
-          tailoring: {
-              ...prev.tailoring,
-              name: associationState.prefilledItemName,
-          }
-      }));
-    }
-  }, [associationState]);
-
   const uniqueCategories = useMemo(() => Array.from(new Set(measurementRefs.map(ref => ref.category))), [measurementRefs]);
   const filteredOutfits = useMemo(() => measurementRefs.filter(ref => ref.category === selectedCategory), [selectedCategory, measurementRefs]);
   const selectedRef = measurementRefs.find(ref => ref._id === selectedRefId);
@@ -137,7 +113,7 @@ function CustomRent() {
             tailoring: {
                 ...prev.tailoring, 
                 // Only update the name if not in association mode (where it's pre-filled)
-                name: associationState ? prev.tailoring.name : ref.outfitName 
+                name: ref.outfitName
             }, 
             measurements: {} 
         })); 
@@ -169,10 +145,8 @@ function CustomRent() {
   };
 
   const validateForm = () => {
-    if (!associationState) {
-        if (!formData.customer.name || !formData.customer.phoneNumber || !formData.customer.address) { 
-            displayNotification("Please fill in all required customer details (*).", 'danger'); return false; 
-        }
+    if (!formData.customer.name || !formData.customer.phoneNumber || !formData.customer.address) { 
+      displayNotification("Please fill in all required customer details (*).", 'danger'); return false; 
     }
     if (!selectedCategory) { displayNotification("Please select an Outfit Category.", 'danger'); return false; }
     if (!selectedRefId || !selectedRef) { displayNotification("Please select an Outfit Type.", 'danger'); return false; }
@@ -183,16 +157,10 @@ function CustomRent() {
     return true;
   };
 
-  const buildPayload = () => {
+    const buildPayload = () => {
     const { customer, tailoring, measurements } = formData;
-    const finalPayload: {
-        customTailoring: any[];
-        customerInfo?: any[];
-        association?: {
-            packageName: string;
-            role: string;
-        };
-    } = {
+    return {
+      customerInfo: [customer], // Always include customer info now
       customTailoring: [{ 
           ...tailoring, 
           measurements: measurements, 
@@ -202,20 +170,6 @@ function CustomRent() {
           outfitType: selectedRef?.outfitName || '' 
       }]
     };
-
-    // --- NEW: Add association info if it exists ---
-    if (associationState) {
-        finalPayload.association = {
-            packageName: associationState.packageName,
-            role: associationState.packageRole
-        };
-    }
-
-    if (!associationState) {
-      // @ts-ignore
-      finalPayload.customerInfo = [customer];
-    }
-    return finalPayload;
   };
 
   const createNewRental = async () => {
@@ -233,7 +187,7 @@ function CustomRent() {
   };
 
   const addItemToExistingRental = async () => {
-    const rentalId = associationState?.rentalId || existingOpenRental?._id;
+    const rentalId = existingOpenRental?._id;
     if (!rentalId || !validateForm()) { setIsSubmitting(false); return; }
     setIsSubmitting(true);
     try {
@@ -248,7 +202,7 @@ function CustomRent() {
   };
 
   const handleFormSubmission = () => {
-    const action = associationState ? addItemToExistingRental : (existingOpenRental ? addItemToExistingRental : createNewRental);
+    const action = existingOpenRental ? addItemToExistingRental : createNewRental;
     if (!validateForm()) return;
     if (formData.tailoring.price <= 0) {
         setPendingAction(() => action);
@@ -269,12 +223,10 @@ function CustomRent() {
         </Toast>
       </ToastContainer>
 
-      <h2 className="mb-4">
-        {associationState ? 'Create Custom Item for Package' : 'New Custom Tailoring Rental'}
-      </h2>
+      <h2 className="mb-4">New Custom Tailoring</h2>
       
       <Row className="g-4">
-        <Col lg={associationState ? 12 : 7} xl={associationState ? 12 : 8}>
+        <Col lg={7} xl={8}>
             <Card>
                 <Card.Header as="h5" className="d-flex align-items-center"><ClipboardCheck className="me-2"/>Outfit Details</Card.Header>
                 <Card.Body>
@@ -285,8 +237,8 @@ function CustomRent() {
                     {selectedRef && ( <>
                         <Form.Group className="mb-3">
                           <Form.Label>Custom Item Name <span className="text-danger">*</span></Form.Label>
-                          <Form.Control name="name" value={formData.tailoring.name} onChange={handleInputChange} placeholder="e.g., Debut Gown for Maria" required readOnly={!!associationState}/>
-                          <Form.Text className="text-muted">{associationState ? "This name is set by the package role and cannot be changed." : "This will be the name of the item in the rental record."}</Form.Text>
+                          <Form.Control name="name" value={formData.tailoring.name} onChange={handleInputChange} placeholder="e.g., Debut Gown for Maria" required />
+                          <Form.Text className="text-muted">This will be the name of the item in the rental record.</Form.Text>
                         </Form.Group>
                         <hr/>
                         <h6>Measurements (in cm)</h6>
@@ -317,44 +269,22 @@ function CustomRent() {
             </Card>
         </Col>
         
-        {!associationState && (
-            <Col lg={5} xl={4}>
-              <CustomerDetailsCard 
-                customerDetails={formData.customer}
-                onCustomerDetailChange={handleCustomerDetailChange}
-                isNewCustomerMode={isNewCustomerMode}
-                onSetIsNewCustomerMode={setIsNewCustomerMode}
-                allRentals={allRentals}
-                onSelectExisting={handleSelectCustomer}
-                onSubmit={handleFormSubmission}
-                isSubmitting={isSubmitting}
-                canSubmit={!!selectedRefId}
-                existingOpenRental={existingOpenRental}
-                selectedRentalForDisplay={selectedRentalForDisplay}
-              />
-            </Col>
-        )}
+        <Col lg={5} xl={4}>
+          <CustomerDetailsCard 
+            customerDetails={formData.customer}
+            onCustomerDetailChange={handleCustomerDetailChange}
+            isNewCustomerMode={isNewCustomerMode}
+            onSetIsNewCustomerMode={setIsNewCustomerMode}
+            allRentals={allRentals}
+            onSelectExisting={handleSelectCustomer}
+            onSubmit={handleFormSubmission}
+            isSubmitting={isSubmitting}
+            canSubmit={!!selectedRefId}
+            existingOpenRental={existingOpenRental}
+            selectedRentalForDisplay={selectedRentalForDisplay}
+          />
+        </Col>
       </Row>
-
-      {associationState && (
-        <Row className="mt-4">
-          <Col>
-              {/* ... The Alert ... */}
-              <div className="d-grid mt-3">
-                  <Button variant="danger" size="lg" onClick={handleFormSubmission} disabled={isSubmitting || !selectedRefId}>
-                      {isSubmitting ? <Spinner as="span" size="sm"/> : <PlusCircleFill className="me-2"/>}
-                      {/* --- NEW: Smart Button Text --- */}
-                      {associationState.mode === 'create' ? 'Save and Return to Package' : 'Add Custom Item to Rental'}
-                  </Button>
-              </div>
-              <div className="text-center mt-3">
-                  <Button variant="link" onClick={() => navigate(associationState.mode === 'create' ? '/packageRent' : `/rentals/${associationState.rentalId}`)}>
-                      <ArrowLeft className="me-1"/> Cancel and Go Back
-                  </Button>
-              </div>
-          </Col>
-      </Row>
-      )}
 
       <Modal show={showZeroPriceModal} onHide={() => setShowZeroPriceModal(false)} centered>
         <Modal.Header closeButton><Modal.Title><ExclamationTriangleFill className="me-2 text-warning" />Confirm Price</Modal.Title></Modal.Header>

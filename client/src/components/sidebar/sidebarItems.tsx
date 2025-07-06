@@ -1,20 +1,27 @@
+// src/components/sidebar/sidebarItems.tsx
+
 import {
   HouseDoorFill,
   CalendarCheck,
   ClipboardData,
-  ArchiveFill,
+  BoxSeam,
   Images,
   PeopleFill,
-  Speedometer2,
-  BoxSeam,
-  PersonCircle,
 } from "react-bootstrap-icons";
+import { Icon } from "react-bootstrap-icons"; // Import the base Icon type
 
+// A type for sub-items, where an icon is not required
+export interface SubNavItem {
+  title: string;
+  path: string;
+}
+
+// The main NavItem type for top-level entries
 export interface NavItem {
   title: string;
   path: string;
-  icon: React.ElementType;
-  subItems?: NavItem[];
+  icon: Icon; // This ensures we get proper type hints for icons
+  subItems?: SubNavItem[];
 }
 
 export const sidebarItems: NavItem[] = [
@@ -25,89 +32,42 @@ export const sidebarItems: NavItem[] = [
   },
   {
     title: "Rentals",
-    path: "/",
-    icon: ClipboardData, // better icon for transactions/rentals
+    path: "#", // Parent path can be "#" if it only serves as a trigger
+    icon: ClipboardData,
     subItems: [
-      {
-        title: "Manage Rentals",
-        path: "/manageRentals",
-        icon: HouseDoorFill,
-      },
-      {
-        title: "Single Rent",
-        path: "/singleRent",
-        icon: HouseDoorFill,
-      },
-      {
-        title: "Package Rent",
-        path: "/packageRent",
-        icon: HouseDoorFill,
-      },
-      {
-        title: "Custom",
-        path: "/customRent",
-        icon: HouseDoorFill,
-      },
+      { title: "Manage Rentals", path: "/manageRentals" },
+      { title: "Single Rent", path: "/singleRent" },
+      { title: "Package Rent", path: "/packageRent" },
+      { title: "Custom", path: "/customRent" },
     ],
   },
   {
     title: "Reservations",
     path: "/reservations",
-    icon: CalendarCheck, // calendar icon fits reservations
+    icon: CalendarCheck,
   },
   {
     title: "Inventory",
-    path: "/",
-    icon: BoxSeam, // Box is good for inventory
+    path: "#",
+    icon: BoxSeam,
     subItems: [
-      {
-        title: "Inventory Items",
-        path: "/inventoryItems",
-        icon: HouseDoorFill,
-      },
-      {
-        title: "Packages",
-        path: "/packageItems",
-        icon: HouseDoorFill,
-      },
+      { title: "Inventory Items", path: "/inventoryItems" },
+      { title: "Packages", path: "/packageItems" },
     ],
   },
   {
     title: "Content Management",
     path: "/contentManagement",
-    icon: Images, // Images for media/content
+    icon: Images,
   },
   {
     title: "divider",
     path: "",
-    icon: () => null,
+    icon: () => null, // Placeholder for dividers
   },
   {
     title: "Accounts",
     path: "/accounts",
-    icon: PeopleFill, // people icon more appropriate for accounts/users
+    icon: PeopleFill,
   },
 ];
-
-// {
-//     title: 'Home',
-//     path: '/home', // This path can be a parent route or just a trigger
-//     icon: HouseDoorFill,
-//     subItems: [
-//       {
-//         title: 'Overview',
-//         path: '/home', // Changed this to link to your existing dashboard
-//         icon: Speedometer2, // Just for example, sub-items can also have icons
-//       },
-//       {
-//         title: 'Updates',
-//         path: '/updates',
-//         icon: Speedometer2,
-//       },
-//       {
-//         title: 'Reports',
-//         path: '/reports',
-//         icon: Speedometer2,
-//       },
-//     ],
-//   }
