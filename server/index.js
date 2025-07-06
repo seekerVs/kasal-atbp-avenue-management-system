@@ -20,7 +20,6 @@ const packageRoutes = require('./routes/packageRoutes');
 const rentalRoutes = require('./routes/rentalRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const measurementRefRoutes = require('./routes/measurementRefRoutes');
-const userRoutes = require('./routes/userRoutes');
 
 // --- Route Definitions ---
 const API_PREFIX = '/api';
@@ -32,7 +31,6 @@ app.use(`${API_PREFIX}/packages`, packageRoutes);
 app.use(`${API_PREFIX}/rentals`, rentalRoutes);
 app.use(`${API_PREFIX}/dashboard`, dashboardRoutes);
 app.use(`${API_PREFIX}/measurementrefs`, measurementRefRoutes);
-app.use(`${API_PREFIX}/users`, userRoutes);
 
 // Sensor routes do not have the /api prefix as per original file
 app.use('/', sensorRoutes);
