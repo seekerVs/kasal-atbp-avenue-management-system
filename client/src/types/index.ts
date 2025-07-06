@@ -181,3 +181,11 @@ export interface SensorData {
   value?: number;
   updatedAt: string;
 }
+
+export interface User {
+  _id: string;
+  name: string;
+  email: string;
+  role: 'Admin' | 'User';
+  createdAt: string;
+}

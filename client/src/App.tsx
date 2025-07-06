@@ -38,6 +38,7 @@ import RentalViewer from "./layouts/rentalViewer/RentalViewer";
 import PackageRent from "./layouts/packageRent/PackageRent";
 import PackageItems from "./layouts/packageItems/PackageItems";
 import CustomRent from "./layouts/customRent/CustomRent";
+import Accounts from "./layouts/accounts/Accounts";
 
 // Import the responsive Sidebar component
 
@@ -258,6 +259,14 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <CustomTailoring />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/accounts"
+                  element={
+                    <ProtectedRoute>
+                      <Accounts />
                     </ProtectedRoute>
                   }
                 />
