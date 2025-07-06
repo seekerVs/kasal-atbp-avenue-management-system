@@ -63,11 +63,14 @@ function Sidebar({ setNavbarType }: SidebarProps) {
     <>
       {/* ===== DESKTOP SIDEBAR (Now much cleaner) ===== */}
       <nav className="sidebar d-none d-lg-flex">
-        <div>
-          <div className="sidebar-header fs-4">
-            <Image src={Logo2} alt="Store image" width={60} height={60} />
-            <span>Kasal Atbp Avenue Mgmt System</span>
-          </div>
+        {/* Header is now a direct child */}
+        <div className="sidebar-header fs-4">
+          <Image src={Logo2} alt="Store image" width={60} height={60} />
+          <span>Kasal Atbp Avenue Mgmt System</span>
+        </div>
+
+        {/* Scrolling content area is now a direct child */}
+        <div className="sidebar-scroll-area" style={{ flexGrow: 1, overflowY: 'auto' }}>
           {sidebarItems.map((item) => (
             <SidebarNavItem
               key={item.title}
@@ -79,28 +82,27 @@ function Sidebar({ setNavbarType }: SidebarProps) {
             />
           ))}
         </div>
+
+        {/* Footer is now a direct child */}
         <div className="sidebar-footer">
           <div className="sidebar-divider"></div>
-          {/* --- NEW, MORE CONTROLLABLE DROPDOWN --- */}
           <Dropdown drop="up" className="profile-dropdown">
-              <Dropdown.Toggle as="div" className="nav-link-custom">
-                  <PersonCircle className="nav-icon" />
-                  <span>My Profile</span>
-                  {/* We add our own chevron since we are using a custom toggle */}
-                  <ChevronDown className="chevron-icon" />
-              </Dropdown.Toggle>
-
-              <Dropdown.Menu variant="dark">
-                  <Dropdown.Item onClick={() => navigate('/settings')}>
-                      <GearFill className="me-2"/> Settings
-                  </Dropdown.Item>
-                  <Dropdown.Divider />
-                  <Dropdown.Item onClick={handleSignOut}>
-                      <BoxArrowRight className="me-2"/> Sign Out
-                  </Dropdown.Item>
-              </Dropdown.Menu>
+            <Dropdown.Toggle as="div" className="nav-link-custom">
+              <PersonCircle className="nav-icon" />
+              <span>My Profile</span>
+              <ChevronDown className="chevron-icon" />
+            </Dropdown.Toggle>
+            <Dropdown.Menu variant="dark">
+              <Dropdown.Item onClick={() => navigate('/settings')}>
+                <GearFill className="me-2"/> Settings
+              </Dropdown.Item>
+              <Dropdown.Divider />
+              <Dropdown.Item onClick={handleSignOut}>
+                <BoxArrowRight className="me-2"/> Sign Out
+              </Dropdown.Item>
+            </Dropdown.Menu>
           </Dropdown>
-      </div>
+        </div>
       </nav>
       {/* ===== MOBILE NAVBAR & OFFCANVAS (Now much cleaner) ===== */}
       <Navbar expand={false} className="bg-primary d-lg-none" sticky="top" data-bs-theme="dark">

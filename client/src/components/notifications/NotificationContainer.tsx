@@ -1,31 +1,34 @@
 import React from 'react';
-import { Alert, Toast, ToastContainer } from 'react-bootstrap';
+import { Toast, ToastContainer } from 'react-bootstrap';
 import { useNotification } from '../../contexts/NotificationContext';
 
 const NotificationContainer = () => {
   const { notifications, removeNotification } = useNotification();
 
   return (
-    // This container will hold all notifications and is positioned at the top-right
     <ToastContainer
       position="top-end"
       className="p-3"
-      style={{ zIndex: 1100, position: 'fixed' }} 
+      style={{ position: 'fixed', top: 0, right: 0, zIndex: 1100 }}
     >
-      {notifications.map(({ id, message, type }) => (
+      {notifications.map(({ id, message, type, title }) => (
         <Toast
           key={id}
           onClose={() => removeNotification(id)}
-          show={true}
+          show
           delay={5000}
           autohide
           bg={type}
           className="text-white"
         >
-          <Toast.Header closeButton={true}>
-            <strong className="me-auto text-capitalize">{type}</strong>
+          <Toast.Header closeButton>
+            <strong className="me-auto text-capitalize">
+              {title ?? type}
+            </strong>
           </Toast.Header>
-          <Toast.Body>{message}</Toast.Body>
+          <Toast.Body role="alert" aria-live="assertive">
+            {message}
+          </Toast.Body>
         </Toast>
       ))}
     </ToastContainer>

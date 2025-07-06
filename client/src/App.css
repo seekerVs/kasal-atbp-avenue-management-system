@@ -1,7 +1,8 @@
+/* In App.css */
+
 #root {
-  max-width: auto;
+  /* Remove max-width and padding. The outer container should just fill the viewport. */
   margin: 0 auto;
-  padding: 0;
   background-color: var(--bs-gray-100);
 }
 
@@ -13,3 +14,14 @@
   z-index: 1050;
 }
 
+/* --- ADD THIS NEW CLASS --- */
+/* This will apply to the div wrapping your <Routes> for the authenticated layout */
+.main-content {
+  flex-grow: 1;
+  /* Make this area scrollable if its content overflows */
+  overflow-y: auto;
+  /* Set a max-height to ensure it doesn't push the page down */
+  max-height: 100vh;
+  /* Add your padding here instead of on the root #root */
+  padding: 1.5rem; /* Or your preferred padding */
+}

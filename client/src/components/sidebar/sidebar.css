@@ -2,13 +2,23 @@
 
 /* Main sidebar container */
 .sidebar {
-  min-height: 100vh;
-  max-height: 110vh;
+  /* Positioning */
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+
+  /* Sizing */
+  height: 100vh; /* Use height instead of min/max for simplicity */
   min-width: 250px;
   max-width: 250px;
+  
+  /* Appearance */
   background-color: var(--bs-primary);
-  color: #adb5bd; /* Default text color */
-  flex-direction: column;
+  color: #adb5bd;
+  
+  /* Layout */
+  display: flex;
+  flex-direction: column; /* This lays out the header, middle, and footer vertically */
 }
 
 /* Sidebar header */
@@ -121,4 +131,34 @@
 /* This new div handles the text indentation */
 .sub-item-content {
   padding-left: 1.25rem; /* This is where the visual indentation happens */
+}
+
+.sidebar-scroll-area {
+  /* --- For Firefox --- */
+  scrollbar-width: thin; /* Makes the scrollbar thinner */
+  scrollbar-color: #6c757d var(--bs-primary); /* thumb-color track-color */
+}
+
+/* --- For Webkit browsers (Chrome, Safari, Edge, etc.) --- */
+
+/* 1. The scrollbar itself (the 'channel') */
+.sidebar-scroll-area::-webkit-scrollbar {
+  width: 8px; /* How wide the scrollbar is */
+}
+
+/* 2. The track (the background of the scrollbar) */
+.sidebar-scroll-area::-webkit-scrollbar-track {
+  background: transparent; /* Makes the track invisible */
+}
+
+/* 3. The thumb (the draggable part of the scrollbar) */
+.sidebar-scroll-area::-webkit-scrollbar-thumb {
+  background-color: #6c757d; /* A muted gray that fits the theme */
+  border-radius: 20px;       /* Makes it a rounded 'pill' shape */
+  border: 2px solid var(--bs-primary); /* Creates padding around the thumb using the sidebar's bg color */
+}
+
+/* 4. The thumb on hover */
+.sidebar-scroll-area::-webkit-scrollbar-thumb:hover {
+  background-color: #9ea6ad; /* A slightly lighter gray on hover for feedback */
 }

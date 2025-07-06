@@ -113,18 +113,12 @@ function App() {
             </Routes>
           </>
         ) : (
-          // --- Layout for Signed In users (Responsive Sidebar + Main Content) ---
-          // This outer div manages the responsive layout:
-          // - d-lg-flex: Becomes a flex container on large screens and up (sidebar next to content)
-          // - On smaller screens (below lg), it behaves as a normal block, allowing the mobile navbar (from Sidebar) to stack above the content.
           <div className="d-lg-flex" style={{ minHeight: "100vh" }}>
             {/* Sidebar component: Renders either the desktop fixed sidebar OR the mobile top bar with offcanvas */}
             <Sidebar setNavbarType={setNavbarType} />
             {/* Main content area: Fills remaining space next to sidebar on desktop, or flows below mobile navbar on small screens */}
-            <div className="flex-grow-1 px-2 px-lg-4 pt-4">
+            <div className="main-content">
               <Routes>
-                {/* All Protected Routes: These routes require an authenticated user */}
-                {/* The ProtectedRoute component will handle redirection if no token is found */}
                 <Route
                   path="/dashboard"
                   element={

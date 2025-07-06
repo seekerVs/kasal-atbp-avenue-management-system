@@ -1,48 +1,93 @@
-import React, { createContext, useState, useContext, ReactNode } from 'react';
+import React, {
+  createContext,
+  useState,
+  useContext,
+  ReactNode,
+  useCallback,
+} from 'react';
+import { v4 as uuidv4 } from 'uuid';
 
-type NotificationType = 'success' | 'danger' | 'warning' | 'info';
+export type NotificationType = 'success' | 'danger' | 'warning' | 'info';
 
 interface NotificationState {
+  id: string;
   message: string;
   type: NotificationType;
-  id: number;
+  title?: string;
 }
 
 interface NotificationContextType {
-  addNotification: (message: string, type: NotificationType) => void;
+  addNotification: (
+    message: string,
+    type: NotificationType,
+    title?: string,
+    duration?: number
+  ) => void;
+  removeNotification: (id: string) => void;
   notifications: NotificationState[];
-  removeNotification: (id: number) => void;
 }
 
-const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
+const NotificationContext = createContext<NotificationContextType | undefined>(
+  undefined
+);
 
 export const useNotification = () => {
   const context = useContext(NotificationContext);
   if (!context) {
-    throw new Error('useNotification must be used within a NotificationProvider');
+    throw new Error(
+      'useNotification must be used within a NotificationProvider'
+    );
   }
   return context;
 };
 
-export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+// allow notification outside react
+let notifyContextRef: NotificationContextType | undefined;
+
+export const notify = (
+  message: string,
+  type: NotificationType,
+  title?: string,
+  duration?: number
+) => {
+  notifyContextRef?.addNotification?.(message, type, title, duration);
+};
+
+export const NotificationProvider: React.FC<{ children: ReactNode }> = ({
+  children,
+}) => {
   const [notifications, setNotifications] = useState<NotificationState[]>([]);
 
-  const addNotification = (message: string, type: NotificationType) => {
-    const id = Date.now();
-    setNotifications(prev => [...prev, { id, message, type }]);
+  const removeNotification = useCallback((id: string) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  }, []);
 
-    // Automatically remove the notification after a delay
-    setTimeout(() => {
-      removeNotification(id);
-    }, 5000); // 5 second timeout
+  const addNotification = useCallback(
+    (
+      message: string,
+      type: NotificationType,
+      title?: string,
+      duration: number = 5000
+    ) => {
+      const id = uuidv4();
+      const newToast: NotificationState = { id, message, type, title };
+      setNotifications((prev) => [...prev, newToast]);
+
+      setTimeout(() => removeNotification(id), duration);
+    },
+    [removeNotification]
+  );
+
+  const contextValue: NotificationContextType = {
+    addNotification,
+    removeNotification,
+    notifications,
   };
 
-  const removeNotification = (id: number) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
-  };
+  notifyContextRef = contextValue;
 
   return (
-    <NotificationContext.Provider value={{ notifications, addNotification, removeNotification }}>
+    <NotificationContext.Provider value={contextValue}>
       {children}
     </NotificationContext.Provider>
   );
