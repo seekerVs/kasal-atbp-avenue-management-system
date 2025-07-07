@@ -11,6 +11,7 @@ connectDB();
 // --- Core Middleware ---
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({extended: true}))
 
 // --- Route Imports ---
 const authRoutes = require('./routes/authRoutes.js');
@@ -24,6 +25,8 @@ const contentRoutes = require('./routes/contentRoutes.js');
 
 // --- Route Definitions ---
 const API_PREFIX = '/api';
+
+const PORT = process.env.PORT || 3001;
 
 // Use the routers for specific base paths
 app.use(`${API_PREFIX}/auth`, authRoutes); // e.g., /api/auth/login
@@ -53,7 +56,6 @@ app.use((err, req, res, next) => {
 
 
 // --- Server Listening ---
-const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
