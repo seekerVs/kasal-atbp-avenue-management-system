@@ -39,8 +39,15 @@ app.use(`${API_PREFIX}/content`, contentRoutes);
 
 
 // Sensor routes do not have the /api prefix as per original file
-app.use('/', sensorRoutes);
+app.use('/sensor', sensorRoutes);
 
+app.get("/", (req, res) => {
+  res.status(200).json({ 
+    message: "Kasal Atbp Avenue Management System API is running.",
+    status: "OK",
+    timestamp: new Date().toISOString() 
+  });
+});
 
 // --- Global Error Handler Middleware ---
 // This should be the LAST piece of middleware.

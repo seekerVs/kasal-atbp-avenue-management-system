@@ -26,8 +26,8 @@ import {
   CardText,
   Gem
 } from 'react-bootstrap-icons';
-import axios from 'axios'; // Import axios for API calls
 import { InventoryItem, ItemVariation } from '../../types';
+import api from '../../services/api';
 
 
 // --- MAIN COMPONENT ---
@@ -42,16 +42,13 @@ function InventoryItems() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [currentItem, setCurrentItem] = useState<InventoryItem | null>(null);
 
-  // --- API Base URL (configure as needed) ---
-  const API_URL = 'http://localhost:3001/api'; // Replace with your actual API base URL
-
   // Fetch data on component mount
   useEffect(() => {
     const fetchInventory = async () => {
       setLoading(true);
       setError(null);
       try {
-        const response = await axios.get(`${API_URL}/inventory`);
+        const response = await api.get('/inventory');
         setInventory(response.data);
       } catch (err) {
         console.error("Error fetching inventory:", err);
@@ -84,7 +81,7 @@ function InventoryItems() {
     setError(null);
     const id = currentItem ? currentItem._id : undefined;
     const method = id ? 'put' : 'post';
-    const url = id ? `${API_URL}/inventory/${id}` : `${API_URL}/inventory`;
+    const url = id ? `/inventory/${id}` : '/inventory';
 
     // Ensure _id is not sent for new items, and correctly formatted for updates if needed by backend
     let payload: any = { ...itemData };
@@ -94,9 +91,11 @@ function InventoryItems() {
       delete payload._id;
     }
 
+    
+
 
     try {
-      const response = await axios[method](url, payload);
+      const response = await api[method](url, payload);
       const savedItem = response.data;
 
       if (id) {
@@ -116,7 +115,7 @@ function InventoryItems() {
     setError(null);
     const id = currentItem._id;
     try {
-      await axios.delete(`${API_URL}/inventory/${id}`);
+      await api.delete(`/inventory/${id}`);
       setInventory(inventory.filter(item => item._id !== id));
       handleCloseDeleteModal();
     } catch (err: any) {
