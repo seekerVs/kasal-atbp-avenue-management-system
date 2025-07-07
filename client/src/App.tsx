@@ -18,9 +18,8 @@ import Services from "./layouts/services/Services";
 import ProductViewer from "./layouts/productViewer/ProductViewer";
 import Package from "./layouts/package/Package";
 import CustomTailoring from "./layouts/customTailoring/CustomTailoring";
-import Dashboard from "./layouts/dashboard/Dashboard"; // Corrected path assumption
+import Dashboard from "./layouts/dashboard/Dashboard";
 import PackageViewer from "./layouts/packageViewer/PackageViewer";
-import Checkout from "./layouts/checkout/Checkout";
 import CompletedOrder from "./layouts/completedOrder/CompletedOrder";
 import ToReturnOrder from "./layouts/toReturnOrder/ToReturnOrder";
 import { NotificationProvider } from "./contexts/NotificationContext";
@@ -39,6 +38,7 @@ import PackageRent from "./layouts/packageRent/PackageRent";
 import PackageItems from "./layouts/packageItems/PackageItems";
 import CustomRent from "./layouts/customRent/CustomRent";
 import Accounts from "./layouts/accounts/Accounts";
+import ContentManagement from "./layouts/contentManagement/ContentManagement";
 
 // Import the responsive Sidebar component
 
@@ -208,10 +208,10 @@ function App() {
                   }
                 />
                 <Route
-                  path="/checkout"
+                  path="/contentManagement"
                   element={
                     <ProtectedRoute>
-                      <Checkout />
+                      <ContentManagement />
                     </ProtectedRoute>
                   }
                 />
@@ -269,31 +269,6 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <ProductViewer />
-                    </ProtectedRoute>
-                  }
-                />
-                {/* Add any other authenticated routes here, e.g., Customers, Reports, Integrations, Settings */}
-                <Route
-                  path="/customers"
-                  element={
-                    <ProtectedRoute>
-                      <div>Customers Page Content</div>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/reports"
-                  element={
-                    <ProtectedRoute>
-                      <div>Reports Page Content</div>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/integrations"
-                  element={
-                    <ProtectedRoute>
-                      <div>Integrations Page Content</div>
                     </ProtectedRoute>
                   }
                 />
