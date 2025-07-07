@@ -1,4 +1,4 @@
-// In server/models/Users.js
+// In server/models/User.js
 
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
@@ -24,5 +24,5 @@ UserSchema.pre('save', async function(next) {
 _  }
 });
 
-const UserModel = mongoose.model("users", UserSchema);
+const UserModel = mongoose.model("user", UserSchema);
 module.exports = UserModel;

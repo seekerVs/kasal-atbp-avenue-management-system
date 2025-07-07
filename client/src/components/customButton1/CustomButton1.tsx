@@ -1,12 +1,12 @@
 import React from "react";
 import { Button } from "react-bootstrap";
 import "./customButton1.css";
-import { Stars } from "react-bootstrap-icons";
+import { Magic } from "react-bootstrap-icons";
 
 function Custom_button1() {
   return (
     <Button className="custom-button1-style fw-semibold">
-      <Stars size={20} />
+      <Magic size={20} />
       Outfit Recomendation
     </Button>
   );

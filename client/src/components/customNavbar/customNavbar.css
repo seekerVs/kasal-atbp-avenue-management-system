@@ -39,4 +39,10 @@
   }
 }
 
+.nav-signin-button.active {
+  background-color: var(--bs-white);
+  color: var(--bs-primary);
+  border-color: var(--bs-primary);
+}
+
 

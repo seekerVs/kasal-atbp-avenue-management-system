@@ -10,3 +10,210 @@
     max-width: 400px;
 }
 
+.home-page-container {
+  /* 
+    Base margin for mobile devices. 
+    The mobile navbar is typically shorter.
+    Adjust this value to match your mobile navbar's height.
+  */
+  margin-top: 70px; 
+}
+
+/* 
+  When the screen is 992px or wider (Bootstrap's 'lg' breakpoint),
+  apply a larger margin to account for the taller desktop navbar.
+*/
+@media (min-width: 992px) {
+  .home-page-container {
+    /* Adjust this value to match your desktop navbar's height. */
+    margin-top: 80px; 
+  }
+}
+
+/* In home.css */
+
+/* --- Hero Section --- */
+.hero-section {
+  height: 300px;
+}
+@media (min-width: 992px) {
+  .hero-section {
+    height: 600px; /* Use standard media query */
+  }
+}
+
+.hero-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover; /* This is key for responsive images */
+  object-position: center top;
+}
+
+.hero-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem; /* Replaces gap-4 */
+  width: 90%; /* More responsive than fixed width */
+  max-width: 500px;
+}
+
+.hero-text-box {
+  background-color: rgba(0, 0, 0, 0.3); /* Slightly more subtle */
+  padding: 1.5rem;
+  border-radius: 0.25rem;
+  text-align: center;
+}
+
+.hero-text-box h1 {
+  font-size: 2rem; /* Use h1 for the main heading */
+  font-weight: bold;
+}
+
+.hero-search-form {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* --- Features Section --- */
+.features-section {
+  /* Defines the max-width and centers the section with top/bottom margin */
+  max-width: 900px;
+  margin: 2rem auto; /* Creates vertical spacing from other sections */
+  padding: 0 1rem; /* Adds horizontal padding on small screens */
+  text-align: center;
+}
+
+.features-grid {
+  display: grid;
+  /* Start with 1 column on the smallest screens */
+  grid-template-columns: 1fr;
+  gap: 2rem; /* The space between items */
+}
+
+/* On small screens and up (e.g., tablets), switch to 2 columns */
+@media (min-width: 576px) {
+  .features-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* On medium screens and up (e.g., desktops), switch to 4 columns */
+@media (min-width: 768px) {
+  .features-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* Style the individual feature item */
+.feature-item h5 {
+  font-weight: bold;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.feature-item .display-4 { /* Targets the react-bootstrap-icon component */
+  color: var(--bs-primary); /* Use your app's primary theme color */
+}
+
+/* --- Quality Call-to-Action (CTA) Section --- */
+.quality-cta-section {
+  background-color: var(--bs-primary); /* Your theme's primary red color */
+  color: white;
+  padding: 4rem 1rem; /* Generous vertical padding, some horizontal for mobile */
+  display: flex;
+  justify-content: center;
+}
+
+.quality-cta-content {
+  max-width: 900px;
+  width: 100%;
+  display: grid;
+  align-items: center;
+  gap: 2rem;
+  /* One column on mobile */
+  grid-template-columns: 1fr;
+}
+
+/* Switch to two columns on larger screens */
+@media (min-width: 768px) {
+  .quality-cta-content {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.quality-cta-text h2 {
+  font-size: 2.5rem;
+  font-weight: 600;
+  margin-bottom: 2rem;
+}
+
+.quality-point {
+  display: flex;
+  align-items: center;
+  margin-bottom: 1rem;
+  font-size: 1.1rem;
+}
+
+.quality-point-icon {
+  font-size: 1.5rem; /* 24px */
+  margin-right: 1rem;
+  flex-shrink: 0; /* Prevents the icon from shrinking */
+}
+
+.quality-cta-text .cta-button {
+  color: var(--bs-primary); /* Red text */
+  font-weight: bold;
+  padding: 0.75rem 1.5rem;
+}
+
+/* This container ensures the image doesn't overflow its grid cell */
+.quality-cta-image-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* --- Services Section --- */
+.services-section {
+  max-width: 900px;
+  margin: 0 auto; /* Center the section */
+  padding: 1rem 1rem; /* Add vertical spacing and horizontal padding */
+}
+
+.services-grid {
+  display: grid;
+  gap: 2rem; /* The space between cards */
+  /* One column on mobile */
+  grid-template-columns: 1fr;
+}
+
+/* For medium screens (tablets), show two columns */
+@media (min-width: 768px) {
+  .services-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* For large screens (desktops), show all three columns */
+@media (min-width: 992px) {
+  .services-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.service-card {
+  border: 1px solid #e9ecef; /* A subtle border */
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.service-card:hover {
+  transform: translateY(-5px); /* A slight lift on hover */
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1); /* A soft shadow on hover */
+}
+
+/* Ensure all card images have a consistent height */
+.service-card-img {
+  height: 200px;
+  object-fit: cover;
+}

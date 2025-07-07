@@ -189,3 +189,33 @@ export interface User {
   role: 'Admin' | 'User';
   createdAt: string;
 }
+
+// These should match the structure of your HomePageContent schema on the backend.
+export interface HeroData {
+  title: string;
+  searchPlaceholder: string;
+  imageUrl: string;
+}
+export interface FeatureData {
+  icon: string;
+  title: string;
+  description: string;
+}
+export interface ServiceData {
+  title: string;
+  text: string;
+  imageUrl: string;
+  path: string;
+}
+export interface QualityCTAData {
+  title: string;
+  points: string[];
+  buttonText: string;
+  imageUrl: string;
+}
+export interface HomePageContent {
+  hero: HeroData;
+  features: FeatureData[];
+  services: ServiceData[];
+  qualityCTA: QualityCTAData;
+}

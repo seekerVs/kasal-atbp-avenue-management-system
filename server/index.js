@@ -13,13 +13,14 @@ app.use(cors());
 app.use(express.json());
 
 // --- Route Imports ---
-const authRoutes = require('./routes/authRoutes');
-const sensorRoutes = require('./routes/sensorRoutes');
-const inventoryRoutes = require('./routes/inventoryRoutes');
-const packageRoutes = require('./routes/packageRoutes');
-const rentalRoutes = require('./routes/rentalRoutes');
-const dashboardRoutes = require('./routes/dashboardRoutes');
-const measurementRefRoutes = require('./routes/measurementRefRoutes');
+const authRoutes = require('./routes/authRoutes.js');
+const sensorRoutes = require('./routes/sensorRoutes.js');
+const inventoryRoutes = require('./routes/inventoryRoutes.js');
+const packageRoutes = require('./routes/packageRoutes.js');
+const rentalRoutes = require('./routes/rentalRoutes.js');
+const dashboardRoutes = require('./routes/dashboardRoutes.js');
+const measurementRefRoutes = require('./routes/measurementRefRoutes.js');
+const contentRoutes = require('./routes/contentRoutes.js');
 
 // --- Route Definitions ---
 const API_PREFIX = '/api';
@@ -31,6 +32,8 @@ app.use(`${API_PREFIX}/packages`, packageRoutes);
 app.use(`${API_PREFIX}/rentals`, rentalRoutes);
 app.use(`${API_PREFIX}/dashboard`, dashboardRoutes);
 app.use(`${API_PREFIX}/measurementrefs`, measurementRefRoutes);
+app.use(`${API_PREFIX}/content`, contentRoutes);
+
 
 // Sensor routes do not have the /api prefix as per original file
 app.use('/', sensorRoutes);
