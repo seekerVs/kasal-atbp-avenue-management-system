@@ -1,10 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Modal, Button, Form, Spinner, Alert, Row, Col } from 'react-bootstrap';
 import { Palette } from 'react-bootstrap-icons';
-import axios from 'axios';
 import { SingleRentItem, InventoryItem } from '../../../types';
-
-const API_URL = 'http://localhost:3001/api';
+import api from '../../../services/api';
 
 const getVariationKey = (v: { color: string, size: string }) => JSON.stringify({ color: v.color, size: v.size });
 
@@ -40,7 +38,7 @@ const EditItemModal: React.FC<EditItemModalProps> = ({ show, onHide, item, onSav
           setLoading(true);
           setError('');
           try {
-              const res = await axios.get(`${API_URL}/inventory/byFullName/${encodeURIComponent(item.name)}`);
+              const res = await api.get(`/inventory/byFullName/${encodeURIComponent(item.name)}`);
               setProductDetails(res.data);
           } catch (err) {
               setError('Could not load item variations.');

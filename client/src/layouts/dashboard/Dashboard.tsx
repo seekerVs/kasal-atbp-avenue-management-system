@@ -31,10 +31,10 @@ import {
   Area,
   ReferenceLine,
 } from "recharts";
-import axios from 'axios';
 import { useNavigate } from "react-router-dom";
 import "./dashboard.css";
 import { RentalOrder } from "../../types";
+import api from "../../services/api";
 
 
 // --- Data Interfaces ---
@@ -61,8 +61,6 @@ interface DashboardData {
 interface DashboardRentalOrder extends RentalOrder {
   itemCount: number; // The new field from our backend
 }
-
-const API_URL = 'http://localhost:3001/api';
 
 const formatSalesDataForChart = (
     apiData: { _id: string; totalSales: number }[],
@@ -136,7 +134,7 @@ function Dashboard() {
       setError(null);
       try {
         // Pass the dates as query parameters to the API
-        const response = await axios.get(`${API_URL}/dashboard/stats`, {
+        const response = await api.get('/dashboard/stats', {
           params: { startDate, endDate }
         });
         setDashboardData(response.data);

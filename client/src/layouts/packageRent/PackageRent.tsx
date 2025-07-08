@@ -13,15 +13,12 @@ import {
   Alert,
   Image as BsImage,
   Modal,
-  Toast,
-  ToastContainer,
 } from 'react-bootstrap';
 import {
   BoxSeam,
   ExclamationTriangleFill,
   Palette,
   PencilSquare,
-  Search,
   PlusCircle
 } from 'react-bootstrap-icons';
 import axios from 'axios';
@@ -29,7 +26,7 @@ import { useNavigate } from 'react-router-dom';
 import CustomerDetailsCard from '../../components/CustomerDetailsCard';
 
 import {
-  PackageDetails,
+  Package,
   InventoryItem,
   CustomerInfo,
   RentalOrder,
@@ -40,8 +37,8 @@ import {
 import AssignmentSubModal from '../../components/modals/assignmentSubModal/AssignmentSubModal';
 import CreateEditCustomItemModal from '../../components/modals/createEditCustomItemModal/CreateEditCustomItemModal';
 import { useNotification } from '../../contexts/NotificationContext';
+import api from '../../services/api';
 
-const API_URL = 'http://localhost:3001/api';
 const initialCustomerDetails: CustomerInfo = { name: '', phoneNumber: '', email: '', address: '' };
 
 // ===================================================================================
@@ -52,7 +49,7 @@ function PackageRent() {
   const { addNotification } = useNotification(); 
 
   // State Management
-  const [allPackages, setAllPackages] = useState<PackageDetails[]>([]);
+  const [allPackages, setAllPackages] = useState<Package[]>([]);
   const [allInventory, setAllInventory] = useState<InventoryItem[]>([]);
   const [allRentals, setAllRentals] = useState<RentalOrder[]>([]);
   const [selectedPackageId, setSelectedPackageId] = useState<string>('');
@@ -121,10 +118,10 @@ function PackageRent() {
     const fetchData = async () => {
       try {
         const [packagesRes, inventoryRes, rentalsRes, refsRes] = await Promise.all([
-          axios.get(`${API_URL}/packages`),
-          axios.get(`${API_URL}/inventory`),
-          axios.get(`${API_URL}/rentals`),
-          axios.get(`${API_URL}/measurementrefs`),
+          api.get('/packages'),
+          api.get('/inventory'),
+          api.get('/rentals'),
+          api.get('/measurementrefs'),
         ]);
         setAllPackages(packagesRes.data || []);
         setAllInventory(inventoryRes.data || []);
@@ -336,7 +333,7 @@ useEffect(() => {
         customTailoring: customItemsForRental
       };
 
-      const response = await axios.post(`${API_URL}/rentals`, rentalPayload);
+      const response = await api.post('/rentals', rentalPayload);
       addNotification("New rental created successfully! Redirecting...", 'success'); // Using global notification
       console.log("RESPONSE FROM /rentals:", response.data);
       setTimeout(() => navigate(`/rentals/${response.data._id}`), 1500);
@@ -402,7 +399,7 @@ useEffect(() => {
       console.log("hiii")
       console.log("SENDING THIS PAYLOAD TO /addItem:", JSON.stringify(payload, null, 2));
 
-      await axios.put(`${API_URL}/rentals/${existingOpenRental._id}/addItem`, payload);
+      await api.put(`/rentals/${existingOpenRental._id}/addItem`, payload);
       
       // Reset form and show success
       setModalData({ rentalId: existingOpenRental._id, itemName: selectedPackage.name });

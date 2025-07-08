@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Container, Form, Button, Card, InputGroup, Alert } from "react-bootstrap";
 import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeSlash } from "react-bootstrap-icons";
-import axios from 'axios'; // Import axios
+import api from "../../services/api";
 
 // You will likely need this prop from App.tsx to change the navbar after signup
 interface SignUpProps {
@@ -47,8 +47,7 @@ function Sign_up({ setNavbarType }: SignUpProps) {
     setIsLoading(true);
 
     try {
-      // --- Call your backend API ---
-      const response = await axios.post("http://localhost:3001/api/auth/signup", {
+      const response = await api.post("/auth/signup", {
         name,
         email,
         password,

@@ -27,8 +27,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import CustomerDetailsCard from '../../components/CustomerDetailsCard';
 import { CustomerInfo, InventoryItem, RentalOrder } from '../../types';
-
-const API_URL = 'http://localhost:3001/api';
+import api from '../../services/api';
 
 const initialCustomerDetails: CustomerInfo = { name: '', phoneNumber: '', email: '', address: '' };
 
@@ -75,7 +74,10 @@ function SingleRent() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [productsResponse, rentalsResponse] = await Promise.all([ axios.get(`${API_URL}/inventory`), axios.get(`${API_URL}/rentals`) ]);
+        const [productsResponse, rentalsResponse] = await Promise.all([
+          api.get('/inventory'),
+          api.get('/rentals')
+        ]);
         setAllProducts(productsResponse.data || []);
         setAllRentals(rentalsResponse.data || []);
       } catch (err) { displayNotification('Failed to load initial data.', 'danger', 0);
@@ -177,7 +179,7 @@ function SingleRent() {
       };
       
       // Now the payload matches the backend's expected structure.
-      const response = await axios.post(`${API_URL}/rentals`, rentalPayload);
+      const response = await api.post('/rentals', rentalPayload);
       
       displayNotification('New rental created successfully! Redirecting...', 'success');
       setTimeout(() => navigate(`/rentals/${response.data._id}`), 1500);
@@ -209,7 +211,7 @@ function SingleRent() {
       };
 
       // Now the payload is correctly structured for the backend
-      await axios.put(`${API_URL}/rentals/${existingOpenRental._id}/addItem`, payload);
+      await api.put(`/rentals/${existingOpenRental._id}/addItem`, payload);
       
       setModalData({ 
           rentalId: existingOpenRental._id, 

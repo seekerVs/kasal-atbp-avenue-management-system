@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Button, Card, Table, Badge, Modal, Form, InputGroup, Spinner, Alert, ListGroup, Accordion } from 'react-bootstrap';
-import { PlusCircleFill, BoxSeam, PencilSquare, Trash, Search } from 'react-bootstrap-icons';
-import axios from 'axios';
-import { PackageDetails, InventoryItem, PackageAssignment, ColorMotif } from '../../types';
+import { PlusCircleFill, BoxSeam, PencilSquare, Trash } from 'react-bootstrap-icons';
+import { Package, InventoryItem, PackageAssignment, ColorMotif } from '../../types';
 import AssignmentSubModal from '../../components/modals/assignmentSubModal/AssignmentSubModal';
+import api from '../../services/api';
 
 interface FormAssignment extends PackageAssignment {
   isCustom?: boolean;
@@ -13,7 +13,7 @@ interface FormColorMotif extends Omit<ColorMotif, 'assignments'> {
   assignments: FormAssignment[];
 }
 
-interface FormPackageData extends Omit<PackageDetails, 'colorMotifs' | '_id'> {
+interface FormPackageData extends Omit<Package, 'colorMotifs' | '_id'> {
   colorMotifs: FormColorMotif[];
 }
 
@@ -22,20 +22,18 @@ interface InclusionItem {
   role: string;
 }
 
-const API_URL = 'http://localhost:3001/api';
-
 // ===================================================================================
 // --- MAIN COMPONENT: PackageItems ---
 // ===================================================================================
 function PackageItems() {
-  const [packages, setPackages] = useState<PackageDetails[]>([]);
+  const [packages, setPackages] = useState<Package[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
   const [showPackageModal, setShowPackageModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [currentPackage, setCurrentPackage] = useState<PackageDetails | null>(null);
+  const [currentPackage, setCurrentPackage] = useState<Package | null>(null);
 
   useEffect(() => {
     fetchPackages();
@@ -44,7 +42,7 @@ function PackageItems() {
   const fetchPackages = async () => {
     setLoading(true); setError(null);
     try {
-      const response = await axios.get(`${API_URL}/packages`);
+      const response = await api.get('/packages');
       setPackages(response.data);
     } catch (err) {
       setError('Failed to load packages.');
@@ -53,20 +51,20 @@ function PackageItems() {
     }
   };
 
-  const handleOpenModal = (pkg: PackageDetails  | null) => {
+  const handleOpenModal = (pkg: Package  | null) => {
     setCurrentPackage(pkg);
     setShowPackageModal(true);
   };
 
-  const handleOpenDeleteModal = (pkg: PackageDetails ) => {
+  const handleOpenDeleteModal = (pkg: Package ) => {
     setCurrentPackage(pkg);
     setShowDeleteModal(true);
   };
 
-  const handleSavePackage = async (packageData: PackageDetails) => {
+  const handleSavePackage = async (packageData: Package) => {
     const id = packageData._id;
     const method = id ? 'put' : 'post';
-    const url = id ? `${API_URL}/packages/${id}` : `${API_URL}/packages`;
+    const url = id ? `/packages/${id}` : `/packages`;
 
     // Sanitize the data to match the backend schema, now including all necessary fields.
     const sanitizedPackageData = {
@@ -98,7 +96,7 @@ function PackageItems() {
     };
 
     try {
-      await axios[method](url, sanitizedPackageData);
+      await api[method](url, sanitizedPackageData);
       fetchPackages(); 
       setShowPackageModal(false);
     } catch (err: any) {
@@ -109,7 +107,7 @@ function PackageItems() {
   const handleDeletePackage = async () => {
     if (!currentPackage) return;
     try {
-      await axios.delete(`${API_URL}/packages/${currentPackage._id}`);
+      await api.delete(`/packages/${currentPackage._id}`);
       fetchPackages();
       setShowDeleteModal(false);
     } catch (err) {
@@ -183,8 +181,8 @@ function PackageItems() {
 interface PackageFormModalProps {
   show: boolean;
   onHide: () => void;
-  onSave: (data: PackageDetails) => void; // Use the official type
-  packageData: PackageDetails | null;    // Use the official type
+  onSave: (data: Package) => void; // Use the official type
+  packageData: Package | null;    // Use the official type
 }
 
 function PackageFormModal({ show, onHide, onSave, packageData }: PackageFormModalProps) {
@@ -196,10 +194,18 @@ function PackageFormModal({ show, onHide, onSave, packageData }: PackageFormModa
     const [inclusionItems, setInclusionItems] = useState<InclusionItem[]>([{ quantity: 1, role: '' }]);
 
     useEffect(() => {
-        if (show) {
-            axios.get(`${API_URL}/inventory`).then(res => {
+        const fetchInventoryForModal = async () => {
+            try {
+                const res = await api.get('/inventory');
                 setInventory(res.data || []);
-            });
+            } catch (err) {
+                console.error("Failed to fetch inventory for package modal:", err);
+                // Optionally, you could set an error state here to show the user
+            }
+        };
+
+        if (show) {
+            fetchInventoryForModal();
         }
     }, [show]);
 
@@ -494,7 +500,7 @@ function PackageFormModal({ show, onHide, onSave, packageData }: PackageFormModa
                       };
                       
                       // 3. Call the onSave prop with the complete, correct data
-                      onSave(finalSaveData as PackageDetails);
+                      onSave(finalSaveData as Package);
                   }}>
                     Save Package
                   </Button>

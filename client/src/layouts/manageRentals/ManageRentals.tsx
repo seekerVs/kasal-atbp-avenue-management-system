@@ -28,11 +28,11 @@ import {
 } from 'react-bootstrap-icons';
 import axios from 'axios';
 import { RentalOrder, RentalStatus } from '../../types'; 
+import api from '../../services/api';
 
 
 type TabStatus = RentalStatus | 'All';
 
-const API_URL = 'http://localhost:3001/api';
 type BadgeVariant = 'primary' | 'secondary' | 'success' | 'danger' | 'warning' | 'info' | 'light' | 'dark';
 
 // ===================================================================================
@@ -58,7 +58,7 @@ function ManageRentals() {
     setLoading(true);
     setError(null);
     try {
-      const response = await axios.get(`${API_URL}/rentals`);
+      const response = await api.get('/rentals');
       setAllRentals(response.data || []);
     } catch (err) {
       console.error("Error fetching rentals:", err);
@@ -136,9 +136,9 @@ function ManageRentals() {
   const handleConfirmCancel = async () => {
     if (!rentalToCancel) return;
     try {
-      await axios.put(
-            `${API_URL}/rentals/${rentalToCancel._id}/process`, 
-            { status: 'Cancelled' }
+      await api.put(
+        `/rentals/${rentalToCancel._id}/process`, 
+        { status: 'Cancelled' }
       );
       fetchRentals();
     } catch (err) {

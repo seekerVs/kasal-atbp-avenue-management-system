@@ -25,6 +25,33 @@ api.interceptors.request.use(config => {
   return Promise.reject(error);
 });
 
+/**
+ * Uploads a file to the backend server.
+ * @param file The File object to upload.
+ * @returns The URL of the uploaded file from Vercel Blob.
+ */
+export async function uploadFile(file: File): Promise<string> {
+  // Create a FormData object to send the file
+  const formData = new FormData();
+  formData.append('file', file); // The key 'file' must match what multer expects
+
+  try {
+    const response = await api.post('/upload', formData, {
+      // This header is crucial for file uploads
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+
+    // The backend returns the full blob object; we just need the URL.
+    return response.data.url;
+  } catch (error) {
+    console.error('File upload failed:', error);
+    // Re-throw the error so the calling component can handle it
+    throw error;
+  }
+}
+
 
 // 5. Export the configured instance as the default
 export default api;

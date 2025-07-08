@@ -36,8 +36,7 @@ import {
   InventoryItem,
   Package
 } from '../../types';
-
-const API_URL = 'http://localhost:3001/api';
+import api from '../../services/api';
 
 // ===================================================================================
 // --- MAIN COMPONENT ---
@@ -87,9 +86,9 @@ function RentalViewer() {
       setLoading(true);
       try {
         const [rentalRes, inventoryRes, packagesRes] = await Promise.all([
-          axios.get(`${API_URL}/rentals/${id}`),
-          axios.get(`${API_URL}/inventory`),
-          axios.get(`${API_URL}/packages`) // <-- Add this new API call
+          api.get(`/rentals/${id}`),
+          api.get('/inventory'),
+          api.get('/packages')
         ]);
         setRental(rentalRes.data);
         setInventory(inventoryRes.data);
@@ -138,7 +137,7 @@ function RentalViewer() {
     // ----------------------------------------------------
 
     try {
-      const response = await axios.put(`${API_URL}/rentals/${rental._id}/process`, payload);
+      const response = await api.put(`/rentals/${rental._id}/process`, payload);
       setRental(response.data);
       addNotification('Order updated successfully!', 'success');
     } catch (err: any) { 
@@ -152,7 +151,7 @@ function RentalViewer() {
 
     try {
       // 1. Call the new validation endpoint
-      const validationResponse = await axios.get(`${API_URL}/rentals/${rental._id}/pre-pickup-validation`);
+      const validationResponse = await api.get(`/rentals/${rental._id}/pre-pickup-validation`);
       const warnings = validationResponse.data.warnings;
 
       // 2. Check if there are any warnings
@@ -230,7 +229,7 @@ function RentalViewer() {
   const handleSaveChanges = async () => {
     if (!editableCustomer || !id) return;
     try {
-      const response = await axios.put(`${API_URL}/rentals/${id}/customer`, editableCustomer);
+      const response = await api.put(`/rentals/${id}/customer`, editableCustomer);
       setRental(response.data);
       setIsEditMode(false);
       addNotification('Customer details updated successfully!', 'success');
@@ -253,7 +252,7 @@ function RentalViewer() {
   const handleDeleteItem = async () => {
     if (!itemToModify || !rental) return;
     try {
-        const response = await axios.delete(`${API_URL}/rentals/${rental._id}/items/${encodeURIComponent(itemToModify.name)}`);
+        const response = await api.delete(`/rentals/${rental._id}/items/${encodeURIComponent(itemToModify.name)}`);
         setRental(response.data);
         addNotification('Item removed successfully!', 'success');
     } catch (err: any) { 
@@ -270,7 +269,7 @@ function RentalViewer() {
         quantity: newQuantity, 
         newVariation: { color: newVariation.color, size: newVariation.size }};
     try {
-        const response = await axios.put(`${API_URL}/rentals/${rental._id}/items/${encodeURIComponent(itemToModify.name)}`, payload);
+        const response = await api.put(`/rentals/${rental._id}/items/${encodeURIComponent(itemToModify.name)}`, payload);
         setRental(response.data);
         addNotification('Item updated successfully!', 'success');
     } catch (err: any) { 
@@ -284,7 +283,7 @@ function RentalViewer() {
   const handleSavePackageChanges = async (pkgName: string, updatedFulfillment: PackageFulfillment[]) => {
     if (!rental) return;
     try {
-      const response = await axios.put(`${API_URL}/rentals/${rental._id}/packages/${encodeURIComponent(pkgName)}`, { packageFulfillment: updatedFulfillment });
+      const response = await api.put(`/rentals/${rental._id}/packages/${encodeURIComponent(pkgName)}`, { packageFulfillment: updatedFulfillment });
       setRental(response.data);
       addNotification('Package details updated successfully!', 'success');
     } catch (err: any) { 
@@ -295,7 +294,7 @@ function RentalViewer() {
   const handleDeletePackage = async () => {
     if (!packageToModify || !rental) return;
     try {
-      const response = await axios.delete(`${API_URL}/rentals/${rental._id}/packages/${encodeURIComponent(packageToModify.name)}`);
+      const response = await api.delete(`/rentals/${rental._id}/packages/${encodeURIComponent(packageToModify.name)}`);
       setRental(response.data);
       addNotification('Package removed successfully!', 'success');
     } catch (err: any) {  
@@ -309,7 +308,7 @@ function RentalViewer() {
   const handleSaveCustomItemChanges = async (updatedItem: CustomTailoringItem) => {
     if (!rental) return;
     try {
-        const response = await axios.put(`${API_URL}/rentals/${rental._id}/custom-items`, updatedItem);
+        const response = await api.put(`/rentals/${rental._id}/custom-items`, updatedItem);
         setRental(response.data);
         addNotification('Custom item updated successfully!', 'success');
     } catch (err: any) { 
@@ -320,7 +319,7 @@ function RentalViewer() {
   const handleDeleteCustomItem = async () => {
     if (!customItemToModify || !rental) return;
     try {
-        const response = await axios.delete(`${API_URL}/rentals/${rental._id}/custom-items/${encodeURIComponent(customItemToModify.name)}`);
+        const response = await api.delete(`/rentals/${rental._id}/custom-items/${encodeURIComponent(customItemToModify.name)}`);
         setRental(response.data);
         addNotification('Custom item removed successfully!', 'success');
     } catch (err: any) { 

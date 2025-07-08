@@ -1,0 +1,30 @@
+/* client/src/components/imageDropzone/ImageDropzone.css */
+
+.dropzone {
+  border: 2px dashed #adb5bd;
+  border-radius: 0.375rem;
+  padding: 2rem;
+  text-align: center;
+  color: #6c757d;
+  cursor: pointer;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+
+.dropzone:hover {
+  border-color: var(--bs-primary);
+}
+
+.dropzone.active {
+  border-color: var(--bs-success);
+  background-color: #e9f7ef;
+}
+
+.dropzone-content {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.dropzone-content.error {
+  color: var(--bs-danger);
+}

@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Container, Row, Col, Form, Button, Card, Spinner, Alert, InputGroup, Modal, ToastContainer, Toast } from 'react-bootstrap';
-import { ClipboardCheck, Palette, Gem, Camera, Pen, ExclamationTriangleFill, Trash, PlusCircleFill, ArrowLeft } from 'react-bootstrap-icons';
-import axios from "axios";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Container, Row, Col, Form, Button, Card, Spinner, InputGroup, Modal, ToastContainer, Toast } from 'react-bootstrap';
+import { ClipboardCheck, Palette, Gem, Camera, Pen, ExclamationTriangleFill, Trash, PlusCircleFill } from 'react-bootstrap-icons';
+import { useNavigate } from "react-router-dom";
 
 import CustomerDetailsCard from "../../components/CustomerDetailsCard";
 import { MeasurementRef, CustomerInfo, RentalOrder, MeasurementValues, CustomTailoringItem } from '../../types';
+import api from "../../services/api";
 
 // --- TYPE DEFINITIONS (Specific to this component's state) ---
 type InitialCustomTailoringData = Omit<CustomTailoringItem, 'measurements' | 'outfitCategory' | 'outfitType'>;
@@ -22,7 +22,6 @@ const initialTailoringData: InitialCustomTailoringData = {
   designSpecifications: '', 
   referenceImages: ['']
 };
-const API_URL = 'http://localhost:3001/api';
 
 // ===================================================================================
 // --- MAIN RENT COMPONENT ---
@@ -67,8 +66,8 @@ function CustomRent() {
         setLoading(true);
         try {
             const [refsRes, rentalsRes] = await Promise.all([
-                axios.get(`${API_URL}/measurementrefs`),
-                axios.get(`${API_URL}/rentals`),
+                api.get('/measurementrefs'),
+                api.get('/rentals'),
             ]);
             setMeasurementRefs(refsRes.data || []);
             setAllRentals(rentalsRes.data || []);
@@ -177,7 +176,7 @@ function CustomRent() {
     setIsSubmitting(true);
     try {
       const payload = buildPayload();
-      const response = await axios.post(`${API_URL}/rentals`, payload);
+      const response = await api.post('/rentals', payload);
       displayNotification("Custom rental created successfully! Redirecting...");
       setTimeout(() => { navigate(`/rentals/${response.data._id}`); }, 1500);
     } catch (err: any) { 
@@ -192,7 +191,7 @@ function CustomRent() {
     setIsSubmitting(true);
     try {
         const payload = buildPayload();
-        await axios.put(`${API_URL}/rentals/${rentalId}/addItem`, payload);
+        await api.put(`/rentals/${rentalId}/addItem`, payload);
         displayNotification("Custom item added successfully! Redirecting...");
         setTimeout(() => navigate(`/rentals/${rentalId}`), 1500);
     } catch (err: any) { 

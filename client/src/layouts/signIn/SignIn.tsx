@@ -3,7 +3,7 @@ import { Form, Button, Card, InputGroup, Alert } from "react-bootstrap"; // Impo
 import { Eye, EyeSlash } from "react-bootstrap-icons";
 import CustomFooter from "../../components/customFooter/CustomFooter"; // Assuming this path is correct
 import { useNavigate } from "react-router-dom";
-import axios from "axios"; // Import axios
+import api from "../../services/api";
 
 interface SignInProps {
   setNavbarType: (type: "main" | "alt") => void;
@@ -23,7 +23,7 @@ function SignIn({ setNavbarType }: SignInProps) {
     setErrorMessage(null); // Clear any previous error messages
 
     try {
-      const response = await axios.post("http://localhost:3001/api/auth/login", {
+      const response = await api.post("/auth/login", {
         email,
         password,
       });

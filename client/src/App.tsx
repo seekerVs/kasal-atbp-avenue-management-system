@@ -20,8 +20,6 @@ import Package from "./layouts/package/Package";
 import CustomTailoring from "./layouts/customTailoring/CustomTailoring";
 import Dashboard from "./layouts/dashboard/Dashboard";
 import PackageViewer from "./layouts/packageViewer/PackageViewer";
-import CompletedOrder from "./layouts/completedOrder/CompletedOrder";
-import ToReturnOrder from "./layouts/toReturnOrder/ToReturnOrder";
 import { NotificationProvider } from "./contexts/NotificationContext";
 import NotificationContainer from "./components/notifications/NotificationContainer";
 
@@ -180,22 +178,6 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <ManageRentals />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/toReturnOrder"
-                  element={
-                    <ProtectedRoute>
-                      <ToReturnOrder />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/completedOrder"
-                  element={
-                    <ProtectedRoute>
-                      <CompletedOrder />
                     </ProtectedRoute>
                   }
                 />

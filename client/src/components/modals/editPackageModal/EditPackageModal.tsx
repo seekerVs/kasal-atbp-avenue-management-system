@@ -4,9 +4,7 @@ import { RentedPackage, PackageFulfillment, InventoryItem, FulfillmentItem, Cust
 import AssignmentSubModal from '../assignmentSubModal/AssignmentSubModal';
 import CreateEditCustomItemModal from '../createEditCustomItemModal/CreateEditCustomItemModal'; 
 import { PencilSquare, PlusCircle } from 'react-bootstrap-icons';
-import axios from 'axios'; // For fetching measurement refs
-
-const API_URL = 'http://localhost:3001/api';
+import api from '../../../services/api';
 
 interface EditPackageModalProps {
   show: boolean;
@@ -31,11 +29,17 @@ const EditPackageModal: React.FC<EditPackageModalProps> = ({ show, onHide, pkg, 
   
 
   useEffect(() => {
-    // When the main modal is shown, fetch the measurement templates
+    const fetchMeasurementRefs = async () => {
+      try {
+        const res = await api.get('/measurementrefs');
+        setMeasurementRefs(res.data || []);
+      } catch (err) {
+        console.error("Failed to fetch measurement refs", err);
+      }
+    };
+
     if (show) {
-      axios.get(`${API_URL}/measurementrefs`)
-        .then(res => setMeasurementRefs(res.data || []))
-        .catch(err => console.error("Failed to fetch measurement refs", err));
+      fetchMeasurementRefs();
     }
   }, [show]);
 

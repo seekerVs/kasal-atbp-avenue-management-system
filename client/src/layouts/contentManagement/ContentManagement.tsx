@@ -6,10 +6,8 @@ import { Book, Image as ImageIcon, CardChecklist, Gear, Star, HandThumbsUp, Save
 import axios from 'axios';
 import { useNotification } from '../../contexts/NotificationContext';
 import { HomePageContent } from "../../types";
-
-// --- TYPE DEFINITIONS ---
-
-const API_URL = 'http://localhost:3001/api';
+import api from '../../services/api';
+import { ImageDropzone } from '../../components/imageDropzone/ImageDropzone';
 
 // This is the list of available icons for the "Features" section.
 // It must match the keys in the iconMap in your FeaturesSection.tsx component.
@@ -29,7 +27,7 @@ function ContentManagement() {
       setLoading(true);
       setError(null);
       try {
-        const response = await axios.get(`${API_URL}/content/home`);
+        const response = await api.get('/content/home');
         setContent(response.data);
       } catch (err) {
         setError('Failed to load home page content. Please try again later.');
@@ -41,6 +39,27 @@ function ContentManagement() {
     };
     fetchContent();
   }, []);
+
+  const handleImageUploadSuccess = (
+  section: 'hero' | 'services' | 'qualityCTA',
+  newImageUrl: string,
+  index: number | null = null // Index is only needed for arrays like 'services'
+  ) => {
+    setContent(prev => {
+        if (!prev) return null;
+        
+        // Handle updates for items in an array (e.g., the services section)
+        if (index !== null && Array.isArray(prev[section])) {
+            const newArray = [...(prev[section] as any[])];
+            newArray[index] = { ...newArray[index], imageUrl: newImageUrl };
+            return { ...prev, [section]: newArray };
+        }
+        
+        // Handle updates for direct objects (e.g., hero, qualityCTA)
+        return { ...prev, [section]: { ...(prev[section] as any), imageUrl: newImageUrl }};
+    });
+    addNotification('Image uploaded successfully!', 'success');
+  };
 
   // Generic handler for nested objects like 'hero' or 'qualityCTA'
   const handleObjectChange = (section: keyof HomePageContent, e: React.ChangeEvent<HTMLInputElement>) => {
@@ -93,7 +112,7 @@ function ContentManagement() {
     }
     setSaving(true);
     try {
-      await axios.put(`${API_URL}/content/home`, content);
+      await api.put('/content/home', content);
       addNotification('Home page content saved successfully!', 'success');
     } catch (err) {
       addNotification('Failed to save content. Please check the console.', 'danger');
@@ -134,10 +153,11 @@ function ContentManagement() {
               <Form.Label>Search Bar Placeholder</Form.Label>
               <Form.Control name="searchPlaceholder" value={content.hero.searchPlaceholder} onChange={(e: any) => handleObjectChange('hero', e)} />
             </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>Background Image URL</Form.Label>
-              <Form.Control name="imageUrl" value={content.hero.imageUrl} onChange={(e: any) => handleObjectChange('hero', e)} />
-            </Form.Group>
+            <ImageDropzone 
+              label="Background Image"
+              currentImageUrl={content.hero.imageUrl}
+              onUploadSuccess={(newUrl) => handleImageUploadSuccess('hero', newUrl)}
+            />
           </Accordion.Body>
         </Accordion.Item>
 
@@ -188,7 +208,11 @@ function ContentManagement() {
                 <Card.Body>
                     <Form.Group className="mb-3"><Form.Label>Title</Form.Label><Form.Control value={service.title} onChange={(e) => handleArrayChange('services', index, 'title', e.target.value)} /></Form.Group>
                     <Form.Group className="mb-3"><Form.Label>Text</Form.Label><Form.Control as="textarea" rows={2} value={service.text} onChange={(e) => handleArrayChange('services', index, 'text', e.target.value)} /></Form.Group>
-                    <Form.Group className="mb-3"><Form.Label>Image URL</Form.Label><Form.Control value={service.imageUrl} onChange={(e) => handleArrayChange('services', index, 'imageUrl', e.target.value)} /></Form.Group>
+                    <ImageDropzone 
+                      label="Service Image"
+                      currentImageUrl={service.imageUrl}
+                      onUploadSuccess={(newUrl) => handleImageUploadSuccess('services', newUrl, index)}
+                    />
                     <Form.Group className="mb-3"><Form.Label>Button Link Path</Form.Label><Form.Control value={service.path} onChange={(e) => handleArrayChange('services', index, 'path', e.target.value)} placeholder="e.g., /products" /></Form.Group>
                 </Card.Body>
                </Card>
@@ -202,7 +226,11 @@ function ContentManagement() {
             <Accordion.Body>
                 <Form.Group className="mb-3"><Form.Label>Title</Form.Label><Form.Control name="title" value={content.qualityCTA.title} onChange={(e: any) => handleObjectChange('qualityCTA', e)} /></Form.Group>
                 <Form.Group className="mb-3"><Form.Label>Button Text</Form.Label><Form.Control name="buttonText" value={content.qualityCTA.buttonText} onChange={(e: any) => handleObjectChange('qualityCTA', e)} /></Form.Group>
-                <Form.Group className="mb-3"><Form.Label>Image URL</Form.Label><Form.Control name="imageUrl" value={content.qualityCTA.imageUrl} onChange={(e: any) => handleObjectChange('qualityCTA', e)} /></Form.Group>
+                <ImageDropzone  
+                  label="Section Image"
+                  currentImageUrl={content.qualityCTA.imageUrl}
+                  onUploadSuccess={(newUrl) => handleImageUploadSuccess('qualityCTA', newUrl)}
+                />
                 <hr/>
                 <h6>Feature Points</h6>
                 {content.qualityCTA.points.map((point, index) => (

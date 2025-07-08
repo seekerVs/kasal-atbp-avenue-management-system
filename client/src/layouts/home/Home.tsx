@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from "react";
 import { Container, Spinner } from "react-bootstrap";
 import CustomFooter from "../../components/customFooter/CustomFooter";
-import axios from 'axios';
 
 // Import the new section components
 import { HeroSection } from './HeroSection';
@@ -13,8 +12,7 @@ import { QualityCTASection } from './QualityCTASection';
 // The main CSS can be imported here
 import "./home.css";
 import { HomePageContent } from "../../types";
-
-const API_URL = 'http://localhost:3001/api';
+import api from "../../services/api";
 
 function Home() {
   const [pageContent, setPageContent] = useState<HomePageContent | null>(null);
@@ -24,7 +22,7 @@ function Home() {
     const fetchContent = async () => {
       try {
         // Ensure you have this endpoint on your backend
-        const response = await axios.get(`${API_URL}/content/home`); 
+        const response = await api.get('/content/home');
         setPageContent(response.data);
         
       } catch (error) {
