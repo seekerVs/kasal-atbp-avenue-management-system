@@ -1,45 +1,48 @@
 const jwt = require('jsonwebtoken');
-const asyncHandler = require('../utils/asyncHandler'); // You are already using this pattern
-const User = require('../models/Users'); // We need the User model to find the user from the token
+const asyncHandler = require('express-async-handler');
+const User = require('../models/User'); // adjust the path if needed
 
-/**
- * Protects routes by verifying the JWT token from the Authorization header.
- */
+// Middleware to protect routes
 const protect = asyncHandler(async (req, res, next) => {
   let token;
 
-  // Check if the Authorization header exists and starts with "Bearer"
+  // Check for Bearer token in Authorization header
   if (
     req.headers.authorization &&
-    req.headers.authorization.startsWith('Bearer')
+    req.headers.authorization.startsWith('Bearer ')
   ) {
     try {
-      // 1. Get the token from the header (e.g., "Bearer <token>" -> "<token>")
       token = req.headers.authorization.split(' ')[1];
 
-      // 2. Verify the token using your JWT_SECRET
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-      // 3. Find the user by the ID stored in the token and attach it to the request object.
-      // We exclude the password from the object we attach to the request for security.
-      req.user = await User.findById(decoded.id).select('-password');
-      
-      if (!req.user) {
-          res.status(401);
-          throw new Error('Not authorized, user not found');
+      if (!token) {
+        res.status(401);
+        throw new Error('Not authorized, token missing');
       }
 
-      // 4. Proceed to the next middleware or the actual route handler
-      next();
-    } catch (error) {
-      console.error('Token verification failed:', error);
-      res.status(401); // 401 Unauthorized
-      throw new Error('Not authorized, token failed');
-    }
-  }
+      // Verify token and decode
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-  // If there's no token at all
-  if (!token) {
+      // Fetch the user and attach to req
+      req.user = await User.findById(decoded.id).select('-password');
+
+      if (!req.user) {
+        res.status(401);
+        throw new Error('Not authorized, user not found');
+      }
+
+      next(); // Proceed to the next middleware or route handler
+    } catch (error) {
+      console.error('Auth Error:', error.message);
+
+      if (error.name === 'TokenExpiredError') {
+        res.status(401);
+        throw new Error('Token expired, please log in again');
+      }
+
+      res.status(401);
+      throw new Error('Not authorized, token invalid');
+    }
+  } else {
     res.status(401);
     throw new Error('Not authorized, no token');
   }

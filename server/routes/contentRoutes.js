@@ -1,28 +1,58 @@
-// server/routes/contentRoutes.js
 const express = require('express');
 const router = express.Router();
 const HomePageContent = require('../models/HomePageContent');
-const { protect } = require('../middleware/authMiddleware'); // You MUST protect the update route
+const { protect } = require('../middleware/authMiddleware'); // Auth middleware
 
-// --- PUBLIC ENDPOINT: Get Home Page Content ---
-// GET /api/content/home
+// --- GET /api/content/home ---
+// Public: Get or create the homepage content
 router.get('/home', async (req, res) => {
-  // Find the single document for the home page, or create it if it doesn't exist
-  let content = await HomePageContent.findById('main_home_page');
-  if (!content) {
-    content = await HomePageContent.create({}); // Create with default values
+  try {
+    let content = await HomePageContent.findById('main_home_page');
+
+    if (!content) {
+      content = await HomePageContent.create({ _id: 'main_home_page' });
+      console.log("🆕 Created new home page content document.");
+    }
+
+    res.json(content);
+  } catch (err) {
+    console.error("❌ Failed to fetch home page content:", err);
+    res.status(500).json({ message: 'Failed to load home page content.' });
   }
-  res.json(content);
 });
 
-// --- PROTECTED ENDPOINT: Update Home Page Content ---
-// PUT /api/content/home
-router.put('/home', protect, async (req, res) => { // 'protect' is your auth middleware
-  const updatedContent = await HomePageContent.findByIdAndUpdate('main_home_page', req.body, {
-    new: true,
-    upsert: true, // Creates the document if it doesn't exist
-  });
-  res.json(updatedContent);
+// --- PUT /api/content/home ---
+// Protected: Update or create the homepage content
+router.put('/home', protect, async (req, res) => {
+  try {
+    const updatedContent = await HomePageContent.findByIdAndUpdate(
+      'main_home_page',
+      { $set: req.body },
+      {
+        new: true,
+        upsert: true,
+      }
+    );
+
+    console.log("✅ Updated home page content:");
+    console.dir(updatedContent.toObject(), { depth: null });
+
+    res.json(updatedContent);
+  } catch (err) {
+    console.error("❌ Failed to update home page content:", err);
+    res.status(500).json({ message: 'Failed to update home page content.' });
+  }
+});
+
+// --- [Optional] GET /api/content/home/raw ---
+// Debugging route: View raw MongoDB content (do not expose this in production)
+router.get('/home/raw', async (req, res) => {
+  try {
+    const doc = await HomePageContent.findById('main_home_page');
+    res.json(doc);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to fetch raw home page document.' });
+  }
 });
 
 module.exports = router;

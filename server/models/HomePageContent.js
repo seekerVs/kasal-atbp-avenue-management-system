@@ -20,10 +20,7 @@ const ServiceSchema = new mongoose.Schema({
   path: { type: String, required: true },
 }, { _id: false });
 
-// ==========================================================
-// --- THIS IS THE FIX ---
-// Capitalize the 'S' in mongoose.Schema
-// ==========================================================
+
 const QualityCTASchema = new mongoose.Schema({ 
   title: { type: String, default: 'High Quality Outfits' },
   points: [String],
