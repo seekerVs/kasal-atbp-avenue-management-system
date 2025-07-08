@@ -112,6 +112,7 @@ function ContentManagement() {
     }
     setSaving(true);
     try {
+      console.log("DATA BEING SENT TO BACKEND:", JSON.stringify(content, null, 2));
       await api.put('/content/home', content);
       addNotification('Home page content saved successfully!', 'success');
     } catch (err) {
