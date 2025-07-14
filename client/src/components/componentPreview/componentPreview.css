@@ -1,0 +1,43 @@
+/*
+  The wrapper no longer needs to be a flex container.
+  It's just a simple block element.
+*/
+.preview-wrapper {
+  margin-bottom: 2rem;
+}
+
+.preview-title {
+  font-weight: 600;
+  margin-bottom: 1rem;
+  padding-left: 0.5rem;
+}
+
+/*
+  The frame is also a simple block element now.
+  We REMOVED flex-grow and height: 100%.
+  It will now be as tall as its content.
+*/
+.preview-frame {
+  position: relative;
+  width: 100%;
+  border: 1px solid #dee2e6;
+  border-radius: 0.375rem;
+  background-color: #f8f9fa;
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.05);
+  height: 85vh;
+  overflow: auto; /* Allow both vertical and horizontal scrolling if needed */
+}
+
+/* The rest of the CSS remains the same */
+.preview-scaling-container {
+  transform-origin: top left;
+  -webkit-backface-visibility: hidden;
+  -moz-backface-visibility: hidden;
+  -ms-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+.preview-viewport {
+  background-color: white;
+  height: 100vh;
+}

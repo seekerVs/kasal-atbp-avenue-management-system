@@ -39,7 +39,6 @@ app.use(`${API_PREFIX}/measurementrefs`, measurementRefRoutes);
 app.use(`${API_PREFIX}/content`, contentRoutes);
 app.use(`${API_PREFIX}/upload`, uploadRoutes);
 
-
 // Sensor routes do not have the /api prefix as per original file
 app.use('/sensor', sensorRoutes);
 

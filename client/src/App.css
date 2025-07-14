@@ -14,6 +14,17 @@
   z-index: 1050;
 }
 
+.unprotected-container {
+  margin-top: 70px; 
+}
+
+
+@media (min-width: 992px) {
+  .unprotected-container {
+    margin-top: 80px; 
+  }
+}
+
 /* --- ADD THIS NEW CLASS --- */
 /* This will apply to the div wrapping your <Routes> for the authenticated layout */
 .main-content {

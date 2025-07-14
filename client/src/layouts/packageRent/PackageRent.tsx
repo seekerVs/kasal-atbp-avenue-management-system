@@ -24,6 +24,7 @@ import {
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import CustomerDetailsCard from '../../components/CustomerDetailsCard';
+import { v4 as uuidv4 } from 'uuid';
 
 import {
   Package,
@@ -36,8 +37,8 @@ import {
 } from '../../types';
 import AssignmentSubModal from '../../components/modals/assignmentSubModal/AssignmentSubModal';
 import CreateEditCustomItemModal from '../../components/modals/createEditCustomItemModal/CreateEditCustomItemModal';
-import { useNotification } from '../../contexts/NotificationContext';
 import api from '../../services/api';
+import { useAlert } from '../../contexts/AlertContext';
 
 const initialCustomerDetails: CustomerInfo = { name: '', phoneNumber: '', email: '', address: '' };
 
@@ -46,7 +47,7 @@ const initialCustomerDetails: CustomerInfo = { name: '', phoneNumber: '', email:
 // ===================================================================================
 function PackageRent() {
   const navigate = useNavigate();
-  const { addNotification } = useNotification(); 
+  const { addAlert } = useAlert();
 
   // State Management
   const [allPackages, setAllPackages] = useState<Package[]>([]);
@@ -129,7 +130,7 @@ function PackageRent() {
         setMeasurementRefs(refsRes.data || []);
       } catch (err) {
         console
-        addNotification("Failed to load initial data.","danger")
+        addAlert("Failed to load initial data.","danger")
       } finally {
         setLoading(false);
       }
@@ -278,12 +279,12 @@ useEffect(() => {
 
   const validateAndProceed = (action: 'create' | 'add') => {
     if (!selectedPackageId) {
-        addNotification("Please select a package.", 'danger');
+        addAlert("Please select a package.", 'danger');
         console.error("No package selected.");
         return;
     }
     if (!customerDetails.name.trim() || !customerDetails.phoneNumber.trim()) {
-        addNotification("Customer Name and Phone Number are required.", 'danger');
+        addAlert("Customer Name and Phone Number are required.", 'danger');
         console.error("Customer details are incomplete.");
         return;
     }
@@ -334,11 +335,10 @@ useEffect(() => {
       };
 
       const response = await api.post('/rentals', rentalPayload);
-      addNotification("New rental created successfully! Redirecting...", 'success'); // Using global notification
-      console.log("RESPONSE FROM /rentals:", response.data);
+      addAlert("New rental created successfully! Redirecting...", 'success'); // Using global notification
       setTimeout(() => navigate(`/rentals/${response.data._id}`), 1500);
     } catch (apiError: any) {
-      addNotification(apiError.response?.data?.message || "Failed to create package rental.", 'danger');
+      addAlert(apiError.response?.data?.message || "Failed to create package rental.", 'danger');
       console.error("API Error:", apiError);
     } finally {
       setIsSubmitting(false);
@@ -348,25 +348,39 @@ useEffect(() => {
   const buildFinalPayload = () => {
     // This array will hold the full CustomTailoringItem objects for the top-level DB array.
     const customItemsForRental: CustomTailoringItem[] = [];
+
+    // This array will hold the fulfillment data with correct references.
     const finalPackageFulfillment = fulfillmentData.map(fulfill => {
+        // Handle custom items
         if (fulfill.isCustom) {
             const assigned = fulfill.assignedItem;
+            // Check if it's a fully-formed custom item from the modal
             if (assigned && 'outfitCategory' in assigned) {
-                customItemsForRental.push(assigned as CustomTailoringItem);
+
+              customItemsForRental.push(assigned as CustomTailoringItem);
+
+              return {
+                  role: fulfill.role,
+                  wearerName: fulfill.wearerName,
+                  assignedItem: {
+                      itemId: (assigned as CustomTailoringItem)._id,
+                  },
+                  isCustom: true
+              };
             }
+            // If it's a custom slot but no details were added, return a placeholder
             return {
                 role: fulfill.role,
                 wearerName: fulfill.wearerName,
-                assignedItem: {
-                    name: assigned?.name || `${selectedPackage?.name.split(',')[0]}: ${fulfill.role}`
-                },
-                isCustom: true // CRITICAL: Persist this flag to the database.
+                assignedItem: { name: `${selectedPackage?.name.split(',')[0]}: ${fulfill.role}` }, // Placeholder name is fine here as it will be replaced.
+                isCustom: true
             };
-
         } else {
+            // Handle standard inventory items (no changes needed)
             return fulfill;
         }
     });
+
     return {
         finalPackageFulfillment,
         customItemsForRental
@@ -375,7 +389,7 @@ useEffect(() => {
 
   const handleAddItemToExistingRental = async () => {
     if (!existingOpenRental || !selectedPackage) { 
-        addNotification("No package selected or no existing rental found.", 'danger'); 
+        addAlert("No package selected or no existing rental found.", 'danger'); 
         console.error("No package selected or no existing rental found.");
         return; 
     }
@@ -396,8 +410,6 @@ useEffect(() => {
         }],
         customTailoring: customItemsForRental
       };
-      console.log("hiii")
-      console.log("SENDING THIS PAYLOAD TO /addItem:", JSON.stringify(payload, null, 2));
 
       await api.put(`/rentals/${existingOpenRental._id}/addItem`, payload);
       
@@ -408,7 +420,7 @@ useEffect(() => {
       setSelectedMotifId('');
       setFulfillmentData([]);
     } catch (apiError: any) {
-      addNotification(apiError.response?.data?.message || "Failed to add item to rental.", 'danger');
+      addAlert(apiError.response?.data?.message || "Failed to add item to rental.", 'danger');
       console.error("API Error:", apiError);
     } finally {
       setIsSubmitting(false);

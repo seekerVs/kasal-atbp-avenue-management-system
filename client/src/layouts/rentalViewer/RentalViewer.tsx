@@ -12,7 +12,7 @@ import {
   Modal,
   ListGroup,
 } from 'react-bootstrap';
-import axios from 'axios';
+
 import { ExclamationTriangleFill } from 'react-bootstrap-icons';
 
 // Import Child Components
@@ -22,7 +22,7 @@ import OrderActions from '../../components/orderActions/OrderActions';
 import EditItemModal from '../../components/modals/editItemModal/EditItemModal';
 import EditPackageModal from '../../components/modals/editPackageModal/EditPackageModal';
 import EditCustomItemModal from '../../components/modals/editCustomItemModal/EditCustomItemModal'; // Import the new modal
-import { useNotification } from '../../contexts/NotificationContext';
+import { useAlert } from '../../contexts/AlertContext';
 
 // Import Centralized Types
 import {
@@ -44,7 +44,7 @@ import api from '../../services/api';
 function RentalViewer() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { addNotification } = useNotification(); 
+  const { addAlert } = useAlert();
   
   // --- STATE MANAGEMENT ---
   const [rental, setRental] = useState<RentalOrder | null>(null);
@@ -78,10 +78,12 @@ function RentalViewer() {
   const [showValidationModal, setShowValidationModal] = useState(false);
   const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
   const [allPackages, setAllPackages] = useState<Package[]>([]);
+  const [packageHasCustomItems, setPackageHasCustomItems] = useState(false);
+  const [canProceedWithWarnings, setCanProceedWithWarnings] = useState(false);
   
   // --- DATA FETCHING & SYNCING ---
   useEffect(() => {
-    if (!id) { addNotification("No rental ID provided.", 'danger'); setLoading(false); return; }
+    if (!id) { addAlert("No rental ID provided.", 'danger'); setLoading(false); return; }
     const fetchRentalAndInventory = async () => {
       setLoading(true);
       try {
@@ -95,11 +97,11 @@ function RentalViewer() {
         setAllPackages(packagesRes.data);
       } catch (err) { 
         console.error("Error fetching data:", err); 
-        addNotification("Failed to load rental details.", 'danger');
+        addAlert("Failed to load rental details.", 'danger');
       } finally { setLoading(false); }
     };
     fetchRentalAndInventory();
-  }, [id, addNotification]);
+  }, [id, addAlert]);
 
   useEffect(() => {
     if (rental) {
@@ -128,7 +130,7 @@ function RentalViewer() {
     const depositInput = parseFloat(editableDeposit) || 0;
     const requiredMinDeposit = rental.financials.requiredDeposit || 0; 
     if (depositInput < requiredMinDeposit) {
-      addNotification(`Deposit amount cannot be less than the required total of ₱${requiredMinDeposit.toFixed(2)}.`, 'danger');
+      addAlert(`Deposit amount cannot be less than the required total of ₱${requiredMinDeposit.toFixed(2)}.`, 'danger');
       return;
     }
     
@@ -139,9 +141,9 @@ function RentalViewer() {
     try {
       const response = await api.put(`/rentals/${rental._id}/process`, payload);
       setRental(response.data);
-      addNotification('Order updated successfully!', 'success');
+      addAlert('Rental updated successfully!', 'success');
     } catch (err: any) { 
-      addNotification(err.response?.data?.message || "Failed to update details.", 'danger');
+      addAlert(err.response?.data?.message || "Failed to update details.", 'danger');
     }
   };
 
@@ -150,42 +152,66 @@ function RentalViewer() {
     if (!rental) return;
 
     try {
-      // 1. Call the new validation endpoint
+      // 1. Call the validation endpoint to get server-side warnings
       const validationResponse = await api.get(`/rentals/${rental._id}/pre-pickup-validation`);
-      const warnings = validationResponse.data.warnings;
+      const warnings: string[] = validationResponse.data.warnings || [];
 
-      // 2. Check if there are any warnings
-      if (warnings && warnings.length > 0) {
-        // If there are warnings, show the modal and stop
-        setValidationWarnings(warnings);
+      // 2. NEW LOGIC: Check if at least one package role is complete
+      let isAnyRoleComplete = false;
+      if (rental.packageRents && rental.packageRents.length > 0) {
+        isAnyRoleComplete = rental.packageRents.some(pkg => 
+          pkg.packageFulfillment.some(fulfill => {
+            const assigned = fulfill.assignedItem;
+            const isInventoryComplete = !fulfill.isCustom && assigned && 'itemId' in assigned && assigned.itemId && assigned.variation;
+            const isCustomComplete = fulfill.isCustom && assigned && 'outfitCategory' in assigned;
+            return isInventoryComplete || isCustomComplete;
+          })
+        );
+      }
+      
+      // 3. Set the state that the modal will use
+      setValidationWarnings(warnings);
+      setCanProceedWithWarnings(isAnyRoleComplete); // This controls the "Proceed" button
+
+      // 4. Decide the next step
+      if (warnings.length > 0) {
+        // If there are warnings, show the modal.
         setShowValidationModal(true);
       } else {
-        // 3. If validation passes, proceed with the original logic
-        const amountToPay = parseFloat(paymentAmount) || 0;
-        const discountAmount = parseFloat(editableDiscount) || 0;
-        const isPaid = (rental.financials.downPayment?.amount || 0) > 0;
-
-        const payload: Parameters<typeof handleUpdateAndPay>[0] = {
-            status: 'To Pickup',
-            rentalStartDate: editableStartDate,
-            rentalEndDate: editableEndDate,
-            shopDiscount: discountAmount,
-        };
-        
-        // Only include payment details if this is the first payment
-        if (!isPaid && amountToPay > 0) {
-            payload.payment = {
-                amount: amountToPay,
-                referenceNumber: paymentUiMode === 'Gcash' ? gcashRef : null,
-            };
-        }
-        
-        // Call the central update function
-        handleUpdateAndPay(payload);
+        // If there are no warnings, proceed directly by calling the helper function.
+        proceedToUpdateStatus();
       }
+
     } catch (err: any) {
-      addNotification(err.response?.data?.message || 'Pre-pickup check failed.', 'danger');
+      addAlert(err.response?.data?.message || 'Pre-pickup check failed.', 'danger');
     }
+  };
+
+  const proceedToUpdateStatus = () => {
+    if (!rental) return;
+
+    // Hide the modal if it was open
+    setShowValidationModal(false);
+
+    const amountToPay = parseFloat(paymentAmount) || 0;
+    const discountAmount = parseFloat(editableDiscount) || 0;
+    const isPaid = (rental.financials.downPayment?.amount || 0) > 0;
+
+    const payload: Parameters<typeof handleUpdateAndPay>[0] = {
+        status: 'To Pickup',
+        rentalStartDate: editableStartDate,
+        rentalEndDate: editableEndDate,
+        shopDiscount: discountAmount,
+    };
+    
+    if (!isPaid && amountToPay > 0) {
+        payload.payment = {
+            amount: amountToPay,
+            referenceNumber: paymentUiMode === 'Gcash' ? gcashRef : null,
+        };
+    }
+    
+    handleUpdateAndPay(payload);
   };
 
 
@@ -202,7 +228,7 @@ function RentalViewer() {
     // The total paid SO FAR plus the payment being made now must be >= the grand total.
     if ((totalPaid + finalPaymentInput) < grandTotal) {
         const remainingNeeded = grandTotal - totalPaid;
-        addNotification(`Payment is insufficient. Remaining balance of ₱${remainingNeeded.toFixed(2)} is required.`, 'danger');
+        addAlert(`Payment is insufficient. Remaining balance of ₱${remainingNeeded.toFixed(2)} is required.`, 'danger');
         return; // Stop the process
     }
     
@@ -232,9 +258,9 @@ function RentalViewer() {
       const response = await api.put(`/rentals/${id}/customer`, editableCustomer);
       setRental(response.data);
       setIsEditMode(false);
-      addNotification('Customer details updated successfully!', 'success');
+      addAlert('Customer details updated successfully!', 'success');
     } catch (err) { 
-      addNotification("Failed to save customer details.", 'danger'); 
+      addAlert("Failed to save customer details.", 'danger'); 
     }
   };
 
@@ -249,14 +275,48 @@ function RentalViewer() {
 
   const handleOpenDeleteItemModal = (item: SingleRentItem) => { setItemToModify(item); setShowDeleteItemModal(true); };
   const handleOpenEditItemModal = (item: SingleRentItem) => { setItemToModify(item); setShowEditItemModal(true); };
+
+  const handleDeleteEntireRental = async (rentalId: string) => {
+    addAlert("This rental is now empty and will be deleted.", 'info');
+    try {
+      // Use the existing DELETE /api/rentals/:id endpoint
+      await api.delete(`/rentals/${rentalId}`);
+      // Redirect after a short delay to allow the user to see the notification
+      setTimeout(() => {
+        navigate('/manageRentals');
+      }, 2000);
+    } catch (err: any) {
+      addAlert(err.response?.data?.message || "Failed to delete the empty rental.", 'danger');
+    }
+  };
+
+  const checkAndCleanupIfEmpty = (updatedRental: RentalOrder) => {
+    const isEmpty = 
+      (!updatedRental.singleRents || updatedRental.singleRents.length === 0) &&
+      (!updatedRental.packageRents || updatedRental.packageRents.length === 0) &&
+      (!updatedRental.customTailoring || updatedRental.customTailoring.length === 0);
+
+    if (isEmpty) {
+      handleDeleteEntireRental(updatedRental._id);
+      return true; // Return true to signal that cleanup has started
+    }
+    return false; // No cleanup needed
+  };
+
   const handleDeleteItem = async () => {
     if (!itemToModify || !rental) return;
     try {
-        const response = await api.delete(`/rentals/${rental._id}/items/${encodeURIComponent(itemToModify.name)}`);
+        const response = await api.delete(`/rentals/${rental._id}/items/${itemToModify._id}`);
+    
+        // Check if the rental is now empty. If so, stop further processing.
+        const wasCleanedUp = checkAndCleanupIfEmpty(response.data);
+        if (wasCleanedUp) return;
+
+        // If not cleaned up, update the state as usual.
         setRental(response.data);
-        addNotification('Item removed successfully!', 'success');
+        addAlert('Item removed successfully!', 'success');
     } catch (err: any) { 
-      addNotification("Failed to remove item.", 'danger'); 
+      addAlert("Failed to remove item.", 'danger'); 
     }
     finally { setShowDeleteItemModal(false); setItemToModify(null); }
   };
@@ -269,67 +329,196 @@ function RentalViewer() {
         quantity: newQuantity, 
         newVariation: { color: newVariation.color, size: newVariation.size }};
     try {
-        const response = await api.put(`/rentals/${rental._id}/items/${encodeURIComponent(itemToModify.name)}`, payload);
+        const response = await api.put(`/rentals/${rental._id}/items/${itemToModify._id}`, payload);
         setRental(response.data);
-        addNotification('Item updated successfully!', 'success');
+        addAlert('Item updated successfully!', 'success');
     } catch (err: any) { 
-      addNotification("Failed to update item.", 'danger'); 
+      addAlert("Failed to update item.", 'danger'); 
     }
     finally { setShowEditItemModal(false); setItemToModify(null); }
   };
 
   const handleOpenEditPackageModal = (pkg: RentedPackage) => { setPackageToModify(pkg); setShowEditPackageModal(true); };
-  const handleOpenDeletePackageModal = (pkg: RentedPackage) => { setPackageToModify(pkg); setShowDeletePackageModal(true); };
-  const handleSavePackageChanges = async (pkgName: string, updatedFulfillment: PackageFulfillment[]) => {
-    if (!rental) return;
-    try {
-      const response = await api.put(`/rentals/${rental._id}/packages/${encodeURIComponent(pkgName)}`, { packageFulfillment: updatedFulfillment });
-      setRental(response.data);
-      addNotification('Package details updated successfully!', 'success');
-    } catch (err: any) { 
-      addNotification("Failed to update package details.", 'danger'); 
-    }
-    finally { setShowEditPackageModal(false); setPackageToModify(null); }
+  const handleOpenDeletePackageModal = (pkg: RentedPackage) => {
+    // 1. Determine if the package contains any roles that are custom.
+    const hasCustom = pkg.packageFulfillment.some(
+      (fulfill) => fulfill.isCustom === true
+    );
+    
+    // 2. Set both state variables needed for the modal.
+    setPackageToModify(pkg);
+    setPackageHasCustomItems(hasCustom);
+    setShowDeletePackageModal(true);
   };
-  const handleDeletePackage = async () => {
-    if (!packageToModify || !rental) return;
-    try {
-      const response = await api.delete(`/rentals/${rental._id}/packages/${encodeURIComponent(packageToModify.name)}`);
-      setRental(response.data);
-      addNotification('Package removed successfully!', 'success');
-    } catch (err: any) {  
-      addNotification("Failed to remove package.", 'danger'); 
-    }
-    finally { setShowDeletePackageModal(false); setPackageToModify(null); }
+  
+  const handleSavePackageChanges = async (
+    updatedFulfillment: PackageFulfillment[], 
+    updatedCustomItems: CustomTailoringItem[]
+  ) => {
+      // 1. Check for necessary state variables.
+      if (!rental || !packageToModify) {
+          addAlert("Cannot save package, rental data is missing.", "danger");
+          return;
+      }
+
+      try {
+          const response = await api.put(
+              `/rentals/${rental._id}/packages/${packageToModify._id}/consolidated`, 
+              {
+                  packageFulfillment: updatedFulfillment, // The cleaned fulfillment references
+                  customItems: updatedCustomItems,       // The full data for new or edited custom items
+              }
+          );
+
+          // The API now returns the fully updated rental, so we can set it directly.
+          setRental(response.data);
+          addAlert('Package details updated successfully!', 'success');
+          
+      } catch (err: any) { 
+          // Handle any errors from the API calls.
+          const errorMessage = err.response?.data?.message || "Failed to update package details.";
+          addAlert(errorMessage, 'danger'); 
+      } finally { 
+          // Always close the modal and reset the state.
+          setShowEditPackageModal(false); 
+          setPackageToModify(null); 
+      }
   };
+    const handleDeletePackage = async () => {
+      if (!packageToModify || !rental) return;
+      try {
+        const response = await api.delete(`/rentals/${rental._id}/packages/${packageToModify._id}`);
+      
+        const wasCleanedUp = checkAndCleanupIfEmpty(response.data);
+        if (wasCleanedUp) return;
+        
+        setRental(response.data);
+        addAlert('Package removed successfully!', 'success');
+      } catch (err: any) {  
+        addAlert("Failed to remove package.", 'danger'); 
+      }
+      finally { setShowDeletePackageModal(false); setPackageToModify(null); }
+    };
 
   const handleOpenEditCustomItemModal = (item: CustomTailoringItem) => { setCustomItemToModify(item); setShowEditCustomItemModal(true); };
   const handleOpenDeleteCustomItemModal = (item: CustomTailoringItem) => { setCustomItemToModify(item); setShowDeleteCustomItemModal(true); };
   const handleSaveCustomItemChanges = async (updatedItem: CustomTailoringItem) => {
     if (!rental) return;
     try {
-        const response = await api.put(`/rentals/${rental._id}/custom-items`, updatedItem);
+        const response = await api.put(`/rentals/${rental._id}/custom-items/${updatedItem._id}`, updatedItem);
         setRental(response.data);
-        addNotification('Custom item updated successfully!', 'success');
+        addAlert('Custom item updated successfully!', 'success');
     } catch (err: any) { 
-      addNotification("Failed to update custom item.", 'danger');
+      addAlert("Failed to update custom item.", 'danger');
     }
     finally { setShowEditCustomItemModal(false); setCustomItemToModify(null); }
   };
+
   const handleDeleteCustomItem = async () => {
     if (!customItemToModify || !rental) return;
     try {
-        const response = await api.delete(`/rentals/${rental._id}/custom-items/${encodeURIComponent(customItemToModify.name)}`);
+        const response = await api.delete(`/rentals/${rental._id}/custom-items/${customItemToModify._id}`);
+
+        const wasCleanedUp = checkAndCleanupIfEmpty(response.data);
+        if (wasCleanedUp) return;
+        
         setRental(response.data);
-        addNotification('Custom item removed successfully!', 'success');
+        addAlert('Custom item removed successfully!', 'success')
     } catch (err: any) { 
-      addNotification("Failed to remove custom item.", 'danger');
+      addAlert("Failed to remove custom item.", 'danger');
     }
     finally { setShowDeleteCustomItemModal(false); setCustomItemToModify(null); }
   };
 
+  const handleDiscountChange = (value: string) => {
+    // 1. Safely get the maximum possible discount (the total value of all items).
+    // The `itemsTotal` is calculated by the backend and is the perfect value for this.
+    const maxDiscount = rental?.financials?.itemsTotal;
+
+    // 2. If we don't have a max value to compare against, just update the input.
+    if (maxDiscount === undefined || maxDiscount === null) {
+      setEditableDiscount(value);
+      return;
+    }
+
+    // 3. Parse the user's input into a number.
+    const newDiscountValue = parseFloat(value) || 0;
+
+    // 4. THE VALIDATION: Check if the entered discount exceeds the maximum.
+    if (newDiscountValue > maxDiscount) {
+      // If it does, show a notification and reset the input to the max value.
+      addAlert(
+        `Discount cannot exceed the rental total of ₱${maxDiscount.toFixed(2)}.`,
+        'danger'
+      );
+      setEditableDiscount(String(maxDiscount));
+    } else {
+      // If the value is valid, update the state with the user's input.
+      setEditableDiscount(value);
+    }
+  };
+
+  const handleDepositChange = (value: string) => {
+    // 1. Get the validation boundaries from the rental's financial data.
+    const subtotal = rental?.financials?.itemsTotal;
+
+    // 2. If we can't get the subtotal yet, just update the state directly.
+    if (subtotal === undefined || subtotal === null) {
+      setEditableDeposit(value);
+      return;
+    }
+
+    // 3. Parse the user's input. Default to 0 if it's not a valid number.
+    const newDepositValue = parseFloat(value) || 0;
+
+    // 4. --- APPLY THE VALIDATION RULES ---
+
+    // Rule A: If the entered deposit is greater than the subtotal...
+    if (newDepositValue > subtotal) {
+      // ...notify the user and cap the value at the subtotal.
+      addAlert(
+        `Deposit cannot exceed the item subtotal of ₱${subtotal.toFixed(2)}.`,
+        'danger'
+      );
+      setEditableDeposit(String(subtotal));
+      return; // Stop further processing
+    }
+
+    // Rule B: If the entered deposit is less than zero...
+    if (newDepositValue < 0) {
+      // ...reset the value to "0".
+      setEditableDeposit('0');
+      return; // Stop further processing
+    }
+    
+    // 5. If all validations pass, update the state with the user's input.
+    setEditableDeposit(value);
+  };
+
+  const handleDepositBlur = () => {
+    if (editableDeposit.trim() === '') {
+      setEditableDeposit('0');
+    }
+  };
+
+  const handleDiscountBlur = () => {
+    // If the discount input is empty when the user clicks away,
+    // set it to "0" to prevent calculation errors.
+    if (editableDiscount.trim() === '') {
+      setEditableDiscount('0');
+    }
+  };
+
+  const handlePaymentAmountBlur = () => {
+    // If the payment amount input is empty when the user clicks away,
+    // set it back to "0" to prevent validation issues.
+    if (paymentAmount.trim() === '') {
+      setPaymentAmount('0');
+    }
+  };
+
   if (loading) { return <Container className="text-center py-5"><Spinner /></Container>; }
-  if (!rental || !editableCustomer) { return <Container><Alert variant="info">Rental order data could not be displayed.</Alert></Container>; }
+  if (!rental || !editableCustomer) { return <Container><Alert variant="info">Rental data could not be displayed.</Alert></Container>; }
   
   const canEditDetails = rental.status === 'To Process';
 
@@ -345,7 +534,7 @@ function RentalViewer() {
         <Col md={8}>
           <Card className="mb-4">
             <Card.Header as="h5" className="d-flex justify-content-between align-items-center">
-              <span>Order ID: {rental._id}</span>
+              <span>Rental ID: {rental._id}</span>
               <small className="text-muted">Created: {new Date(rental.createdAt).toLocaleDateString()}</small>
             </Card.Header>
             <Card.Body>
@@ -382,7 +571,8 @@ function RentalViewer() {
             financials={rental.financials}
             subtotal={rental.financials.subtotal || 0}
             editableDiscount={editableDiscount}
-            onDiscountChange={setEditableDiscount}
+            onDiscountChange={handleDiscountChange}
+            onDiscountBlur={handleDiscountBlur}
             editableStartDate={editableStartDate}
             onStartDateChange={setEditableStartDate}
             editableEndDate={editableEndDate}
@@ -392,17 +582,14 @@ function RentalViewer() {
             onPaymentUiModeChange={setPaymentUiMode}
             paymentAmount={paymentAmount}
             onPaymentAmountChange={setPaymentAmount}
+            onPaymentAmountBlur={handlePaymentAmountBlur}
             gcashRef={gcashRef}
             onGcashRefChange={setGcashRef}
             onUpdateAndPay={handleUpdateAndPay}
             onMarkAsPickedUp={handleMarkAsPickedUp}
             editableDeposit={editableDeposit}
-            onDepositChange={setEditableDeposit}
-            requiredDepositInfo={{
-                min: rental.financials.requiredDeposit || 0,
-                max: null,
-                message: 'Deposit details are based on the items in the rental.'
-            }} // Pass the calculated info object
+            onDepositChange={handleDepositChange}
+            onDepositBlur={handleDepositBlur}
           />
         </Col>
       </Row>
@@ -418,7 +605,23 @@ function RentalViewer() {
 
       <Modal show={showDeletePackageModal} onHide={() => setShowDeletePackageModal(false)} centered>
         <Modal.Header closeButton><Modal.Title>Confirm Package Deletion</Modal.Title></Modal.Header>
-        <Modal.Body>Are you sure you want to remove the package: <strong>{packageToModify?.name.split(',')[0]}</strong> from this rental? This will return all its items to stock.</Modal.Body>
+        <Modal.Body>
+          {/* --- REPLACE the old Modal.Body content with this block --- */}
+          <p>
+            Are you sure you want to remove the package: <strong>{packageToModify?.name.split(',')[0]}</strong> from this rental?
+          </p>
+          <p className="mb-0">
+            This will return all of its assigned inventory items to stock.
+          </p>
+
+          {/* This is the new conditional warning */}
+          {packageHasCustomItems && (
+            <Alert variant="warning" className="mt-3 mb-0">
+              <ExclamationTriangleFill className="me-2" />
+              <strong>Important:</strong> This package includes custom-made items. Deleting it will also permanently remove their details from this rental.
+            </Alert>
+          )}
+        </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowDeletePackageModal(false)}>Cancel</Button>
           <Button variant="danger" onClick={handleDeletePackage}>Delete Package</Button>
@@ -439,11 +642,19 @@ function RentalViewer() {
         <Modal.Header closeButton>
           <Modal.Title>
             <ExclamationTriangleFill className="me-2 text-warning" />
-            Action Required
+            Review Incomplete Items
           </Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          <p>This rental cannot be moved to "To Pickup" yet. Please resolve the following issues:</p>
+          {canProceedWithWarnings ? (
+            <p>
+              The following items are incomplete. You can still proceed with the pickup, but please review these issues:
+            </p>
+          ) : (
+            <p>
+              This rental cannot be moved to "To Pickup" until the following issues are resolved:
+            </p>
+          )}
           <ListGroup variant="flush">
             {validationWarnings.map((warning, index) => (
               <ListGroup.Item key={index} className="text-danger border-0 ps-0">
@@ -456,6 +667,13 @@ function RentalViewer() {
           <Button variant="secondary" onClick={() => setShowValidationModal(false)}>
             Close
           </Button>
+
+          {/* This button ONLY appears if the condition is met */}
+          {canProceedWithWarnings && (
+            <Button variant="primary" onClick={proceedToUpdateStatus}>
+              Proceed Anyway
+            </Button>
+          )}
         </Modal.Footer>
       </Modal>
 

@@ -6,9 +6,10 @@ import { useNavigate } from "react-router-dom";
 import CustomerDetailsCard from "../../components/CustomerDetailsCard";
 import { MeasurementRef, CustomerInfo, RentalOrder, MeasurementValues, CustomTailoringItem } from '../../types';
 import api from "../../services/api";
+import { useAlert } from "../../contexts/AlertContext";
 
 // --- TYPE DEFINITIONS (Specific to this component's state) ---
-type InitialCustomTailoringData = Omit<CustomTailoringItem, 'measurements' | 'outfitCategory' | 'outfitType'>;
+export type InitialCustomTailoringData = Omit<CustomTailoringItem, '_id' | 'measurements' | 'outfitCategory' | 'outfitType'>;
 
 // --- INITIAL STATE & CONSTANTS ---
 const initialCustomerDetails: CustomerInfo = { name: '', phoneNumber: '', email: '', address: '' };
@@ -28,6 +29,7 @@ const initialTailoringData: InitialCustomTailoringData = {
 // ===================================================================================
 function CustomRent() {
   const navigate = useNavigate();
+  const { addAlert } = useAlert();
 
   // --- State Management ---
   const [measurementRefs, setMeasurementRefs] = useState<MeasurementRef[]>([]);
@@ -50,15 +52,6 @@ function CustomRent() {
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showNotification, setShowNotification] = useState(false);
-  const [notificationMessage, setNotificationMessage] = useState('');
-  const [notificationType, setNotificationType] = useState<'success' | 'danger'>('success');
-
-  const displayNotification = (message: string, type: 'success' | 'danger' = 'success', duration: number = 3000) => {
-    setNotificationMessage(message);
-    setNotificationType(type);
-    setShowNotification(true);
-    if (type === 'success' && duration > 0) setTimeout(() => setShowNotification(false), duration);
-  };
   
   // --- Data Fetching Effect ---
   useEffect(() => {
@@ -72,7 +65,7 @@ function CustomRent() {
             setMeasurementRefs(refsRes.data || []);
             setAllRentals(rentalsRes.data || []);
         } catch (err) { 
-            displayNotification("Failed to load initial data.", "danger");
+            addAlert("Failed to load initial data.", "danger");
         } finally { setLoading(false); }
     };
     fetchData();
@@ -145,14 +138,14 @@ function CustomRent() {
 
   const validateForm = () => {
     if (!formData.customer.name || !formData.customer.phoneNumber || !formData.customer.address) { 
-      displayNotification("Please fill in all required customer details (*).", 'danger'); return false; 
+      addAlert("Please fill in all required customer details (*).", 'danger'); return false; 
     }
-    if (!selectedCategory) { displayNotification("Please select an Outfit Category.", 'danger'); return false; }
-    if (!selectedRefId || !selectedRef) { displayNotification("Please select an Outfit Type.", 'danger'); return false; }
-    if (!formData.tailoring.name.trim()) { displayNotification("Custom Item Name cannot be empty.", 'danger'); return false; }
-    for (const measurement of selectedRef.measurements) { if (!formData.measurements[measurement]) { displayNotification(`Please fill in the "${measurement}" measurement.`, 'danger'); return false; } }
-    if (formData.tailoring.materials.every(m => m.trim() === '')) { displayNotification("Materials field cannot be empty.", 'danger'); return false; }
-    if (!formData.tailoring.designSpecifications.trim()) { displayNotification("Design Specifications field cannot be empty.", 'danger'); return false; }
+    if (!selectedCategory) { addAlert("Please select an Outfit Category.", 'danger'); return false; }
+    if (!selectedRefId || !selectedRef) { addAlert("Please select an Outfit Type.", 'danger'); return false; }
+    if (!formData.tailoring.name.trim()) { addAlert("Custom Item Name cannot be empty.", 'danger'); return false; }
+    for (const measurement of selectedRef.measurements) { if (!formData.measurements[measurement]) { addAlert(`Please fill in the "${measurement}" measurement.`, 'danger'); return false; } }
+    if (formData.tailoring.materials.every(m => m.trim() === '')) { addAlert("Materials field cannot be empty.", 'danger'); return false; }
+    if (!formData.tailoring.designSpecifications.trim()) { addAlert("Design Specifications field cannot be empty.", 'danger'); return false; }
     return true;
   };
 
@@ -177,10 +170,10 @@ function CustomRent() {
     try {
       const payload = buildPayload();
       const response = await api.post('/rentals', payload);
-      displayNotification("Custom rental created successfully! Redirecting...");
+      addAlert("Custom rental created successfully! Redirecting...","success");
       setTimeout(() => { navigate(`/rentals/${response.data._id}`); }, 1500);
     } catch (err: any) { 
-      displayNotification(err.response?.data?.message || "Failed to create request.", 'danger'); 
+      addAlert(err.response?.data?.message || "Failed to create request.", 'danger'); 
       setIsSubmitting(false);
     } 
   };
@@ -192,10 +185,10 @@ function CustomRent() {
     try {
         const payload = buildPayload();
         await api.put(`/rentals/${rentalId}/addItem`, payload);
-        displayNotification("Custom item added successfully! Redirecting...");
+        addAlert("Custom item added successfully! Redirecting...","success");
         setTimeout(() => navigate(`/rentals/${rentalId}`), 1500);
     } catch (err: any) { 
-        displayNotification(err.response?.data?.message || "Failed to add to rental.", 'danger');
+        addAlert(err.response?.data?.message || "Failed to add to rental.", 'danger');
         setIsSubmitting(false);
     }
   };
@@ -215,15 +208,7 @@ function CustomRent() {
 
   return (
     <Container fluid>
-      <ToastContainer position="top-end" className="p-3" style={{ zIndex: 1056 }}>
-        <Toast onClose={() => setShowNotification(false)} show={showNotification} delay={3000} autohide={notificationType === 'success'} bg={notificationType} className="text-white">
-          <Toast.Header><strong className="me-auto text-capitalize">{notificationType}</strong></Toast.Header>
-          <Toast.Body>{notificationMessage}</Toast.Body>
-        </Toast>
-      </ToastContainer>
-
       <h2 className="mb-4">New Custom Tailoring</h2>
-      
       <Row className="g-4">
         <Col lg={7} xl={8}>
             <Card>
@@ -239,6 +224,12 @@ function CustomRent() {
                           <Form.Control name="name" value={formData.tailoring.name} onChange={handleInputChange} placeholder="e.g., Debut Gown for Maria" required />
                           <Form.Text className="text-muted">This will be the name of the item in the rental record.</Form.Text>
                         </Form.Group>
+                        <hr/>
+                        <Row>
+                            <Col md={4}><Form.Group><Form.Label>Quantity <span className="text-danger">*</span></Form.Label><Form.Control type="number" name="quantity" value={formData.tailoring.quantity} onChange={handleInputChange} min="1" required /></Form.Group></Col>
+                            <Col md={4}><Form.Group><Form.Label>Tailoring Type</Form.Label><Form.Select name="tailoringType" value={formData.tailoring.tailoringType} onChange={handleInputChange}><option>Tailored for Purchase</option><option>Tailored for Rent-Back</option></Form.Select></Form.Group></Col>
+                            <Col md={4}><Form.Group><Form.Label>Price <span className="text-danger">*</span></Form.Label><InputGroup><InputGroup.Text>₱</InputGroup.Text><Form.Control type="number" name="price" value={formData.tailoring.price} onChange={handleInputChange} required /></InputGroup></Form.Group></Col>
+                        </Row>
                         <hr/>
                         <h6>Measurements (in cm)</h6>
                         <Row>{selectedRef.measurements.map(m => (<Col md={6} lg={4} key={m}><Form.Group className="mb-2"><Form.Label className="small">{m} <span className="text-danger">*</span></Form.Label><Form.Control size="sm" type="number" value={formData.measurements[m] || ''} onChange={e => handleMeasurementChange(m, e.target.value)} required /></Form.Group></Col>))}</Row>
@@ -257,12 +248,7 @@ function CustomRent() {
                             ))}<Button variant="outline-secondary" size="sm" onClick={() => addDynamicListItem('referenceImages')}><PlusCircleFill className="me-1"/>Add Image URL</Button>
                         </Form.Group>
                         <Form.Group className="mb-3"><Form.Label><Pen className="me-2"/>Additional Notes</Form.Label><Form.Control name="notes" value={formData.tailoring.notes} onChange={handleInputChange} as="textarea" rows={2} /></Form.Group>
-                        <hr/>
-                        <Row>
-                            <Col md={4}><Form.Group><Form.Label>Quantity <span className="text-danger">*</span></Form.Label><Form.Control type="number" name="quantity" value={formData.tailoring.quantity} onChange={handleInputChange} min="1" required /></Form.Group></Col>
-                            <Col md={4}><Form.Group><Form.Label>Tailoring Type</Form.Label><Form.Select name="tailoringType" value={formData.tailoring.tailoringType} onChange={handleInputChange}><option>Tailored for Purchase</option><option>Tailored for Rent-Back</option></Form.Select></Form.Group></Col>
-                            <Col md={4}><Form.Group><Form.Label>Price <span className="text-danger">*</span></Form.Label><InputGroup><InputGroup.Text>₱</InputGroup.Text><Form.Control type="number" name="price" value={formData.tailoring.price} onChange={handleInputChange} required /></InputGroup></Form.Group></Col>
-                        </Row>
+                        
                     </>)}
                 </Card.Body>
             </Card>

@@ -26,9 +26,10 @@ import {
   XCircleFill,
   Search,
 } from 'react-bootstrap-icons';
-import axios from 'axios';
+
 import { RentalOrder, RentalStatus } from '../../types'; 
 import api from '../../services/api';
+import { formatCurrency } from '../../utils/formatters';
 
 
 type TabStatus = RentalStatus | 'All';
@@ -62,17 +63,10 @@ function ManageRentals() {
       setAllRentals(response.data || []);
     } catch (err) {
       console.error("Error fetching rentals:", err);
-      setError("Failed to load rental orders. Please try again.");
+      setError("Failed to load rentals. Please try again.");
     } finally {
       setLoading(false);
     }
-  };
-
-  const formatCurrency = (value: number): string => {
-    return value.toLocaleString('en-US', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
   };
 
   const getStatusBadgeVariant = (status: RentalStatus): BadgeVariant => {
@@ -143,8 +137,8 @@ function ManageRentals() {
       fetchRentals();
     } catch (err) {
       console.error("Error cancelling rental:", err);
-      setError("Failed to cancel the order. Please try again later.");
-      const errorMessage = (err as any).response?.data?.message || "Failed to cancel the order. Please try again later.";
+      setError("Failed to cancel the rental. Please try again later.");
+      const errorMessage = (err as any).response?.data?.message || "Failed to cancel the rental. Please try again later.";
       setError(errorMessage);
     } finally {
       setShowCancelModal(false);
@@ -187,7 +181,7 @@ function ManageRentals() {
       <Card key={rental._id} className="mb-4 shadow-sm">
         <Card.Header className="d-flex justify-content-between align-items-center bg-light border-bottom">
           <div>
-            <strong className="me-2">Order ID: {rental._id}</strong>
+            <strong className="me-2">Rental ID: {rental._id}</strong>
             <small className="text-muted">(Date: {new Date(rental.createdAt).toLocaleDateString()})</small>
           </div>
           <Badge bg={getStatusBadgeVariant(rental.status)} pill>{rental.status.toUpperCase()}</Badge>
@@ -342,7 +336,7 @@ function ManageRentals() {
                 <InputGroup.Text><Search /></InputGroup.Text>
                 <Form.Control
                   type="search"
-                  placeholder="Search by Customer, Order ID, or Phone..."
+                  placeholder="Search by Customer, Rental ID, or Phone..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
@@ -366,7 +360,7 @@ function ManageRentals() {
               <Alert variant="info" className="m-3 text-center">
                 {searchTerm.trim()
                   ? `No rentals match your search for "${searchTerm}" in this tab.`
-                  : `No rental orders found for the "${activeTab}" status.`
+                  : `No rental found for the "${activeTab}" status.`
                 }
               </Alert>
             ) : (
@@ -381,12 +375,12 @@ function ManageRentals() {
           <Modal.Title>Confirm Cancellation</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          Are you sure you want to cancel order <strong>{rentalToCancel?._id}</strong>?
+          Are you sure you want to cancel rental <strong>{rentalToCancel?._id}</strong>?
           This action will restore any applicable stock to inventory and cannot be undone.
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowCancelModal(false)}>Close</Button>
-          <Button variant="danger" onClick={handleConfirmCancel}>Yes, Cancel Order</Button>
+          <Button variant="danger" onClick={handleConfirmCancel}>Yes, Cancel Rental</Button>
         </Modal.Footer>
       </Modal>
     </div>

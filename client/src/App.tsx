@@ -22,6 +22,8 @@ import Dashboard from "./layouts/dashboard/Dashboard";
 import PackageViewer from "./layouts/packageViewer/PackageViewer";
 import { NotificationProvider } from "./contexts/NotificationContext";
 import NotificationContainer from "./components/notifications/NotificationContainer";
+import { AlertProvider } from "./contexts/AlertContext";
+import AlertContainer from "./components/alerts/AlertContainer";
 
 // Import helper components
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -37,6 +39,8 @@ import PackageItems from "./layouts/packageItems/PackageItems";
 import CustomRent from "./layouts/customRent/CustomRent";
 import Accounts from "./layouts/accounts/Accounts";
 import ContentManagement from "./layouts/contentManagement/ContentManagement";
+import Appointments from "./layouts/appointments/Appointments";
+import Reservations from "./layouts/reservations/Reservations";
 
 // Import the responsive Sidebar component
 
@@ -76,206 +80,227 @@ function App() {
 
   return (
     <NotificationProvider>
-      <Router>
-        <NotificationContainer />
-        {navbarType === "main" ? (
-          // --- Layout for Signed Out users (Custom_navbar1 and public routes) ---
-          <>
-            <div className="custom-navbar-wrapper">
-              <Custom_navbar1 />
+      <AlertProvider>
+        <Router>
+          <NotificationContainer />
+          <AlertContainer />
+          {navbarType === "main" ? (
+            // --- Layout for Signed Out users (Custom_navbar1 and public routes) ---
+            <>
+              <div className="custom-navbar-wrapper">
+                <Custom_navbar1 />
+              </div>
+              <div className="unprotected-container">
+                <Routes>
+                  {/* Home Route: If authenticated, redirect to Dashboard. Otherwise, show Home. */}
+                  <Route
+                    path="/"
+                    element={
+                      <RedirectIfAuthenticated redirectTo="/dashboard">
+                        <Home />
+                      </RedirectIfAuthenticated>
+                    }
+                  />
+                  <Route path="/products" element={<Products />} />
+                  <Route path="/signUp" element={<Sign_up setNavbarType={setNavbarType} />} />
+                  <Route path="/services" element={<Services />} />
+                  <Route path="/about" element={<About />} />
+                  <Route path="/package" element={<Package />} />{" "}
+                  {/* Public access to package selection */}
+                  <Route path="/customTailoring" element={<CustomTailoring />} />{" "}
+                  {/* Public access to custom tailoring */}
+                  {/* SignIn Route: Set navbarType on successful sign-in */}
+                  <Route
+                    path="/signIn"
+                    element={<SignIn setNavbarType={setNavbarType} />}
+                  />
+                  <Route path="/productViewer/:id" element={<ProductViewer />} />
+                </Routes>
+              </div>
+            </>
+          ) : (
+            <div className="d-lg-flex" style={{ minHeight: "100vh" }}>
+              {/* Sidebar component: Renders either the desktop fixed sidebar OR the mobile top bar with offcanvas */}
+              <Sidebar setNavbarType={setNavbarType} />
+              {/* Main content area: Fills remaining space next to sidebar on desktop, or flows below mobile navbar on small screens */}
+              <div className="main-content">
+                <Routes>
+                  <Route
+                    path="/dashboard"
+                    element={
+                      <ProtectedRoute>
+                        <Dashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/rentals/:id"
+                    element={
+                      <ProtectedRoute>
+                        <RentalViewer />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/singleRent"
+                    element={
+                      <ProtectedRoute>
+                        <SingleRent />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/packageRent"
+                    element={
+                      <ProtectedRoute>
+                        <PackageRent />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/customRent"
+                    element={
+                      <ProtectedRoute>
+                        <CustomRent />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/inventoryItems"
+                    element={
+                      <ProtectedRoute>
+                        <InventoryItems />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/packageItems"
+                    element={
+                      <ProtectedRoute>
+                        <PackageItems />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/manageRentals"
+                    element={
+                      <ProtectedRoute>
+                        <ManageRentals />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/packageViewer"
+                    element={
+                      <ProtectedRoute>
+                        <PackageViewer />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/contentManagement"
+                    element={
+                      <ProtectedRoute>
+                        <ContentManagement />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/appointments"
+                    element={
+                      <ProtectedRoute>
+                        <Appointments />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/reservations"
+                    element={
+                      <ProtectedRoute>
+                        <Reservations />
+                      </ProtectedRoute>
+                    }
+                  />
+                  {/* Assuming these can also be protected, even if public in main layout */}
+                  <Route
+                    path="/products"
+                    element={
+                      <ProtectedRoute>
+                        <Products />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/services"
+                    element={
+                      <ProtectedRoute>
+                        <Services />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/about"
+                    element={
+                      <ProtectedRoute>
+                        <About />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/package"
+                    element={
+                      <ProtectedRoute>
+                        <Package />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/customTailoring"
+                    element={
+                      <ProtectedRoute>
+                        <CustomTailoring />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/accounts"
+                    element={
+                      <ProtectedRoute>
+                        <Accounts />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/productViewer/:id"
+                    element={
+                      <ProtectedRoute>
+                        <ProductViewer />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/settings"
+                    element={
+                      <ProtectedRoute>
+                        <div>Settings Page Content</div>
+                      </ProtectedRoute>
+                    }
+                  />
+                  {/* Fallback route for authenticated users landing on unrecognized paths */}
+                  <Route
+                    path="*"
+                    element={
+                      <ProtectedRoute>
+                        <Dashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                </Routes>
+              </div>
             </div>
-            <Routes>
-              {/* Home Route: If authenticated, redirect to Dashboard. Otherwise, show Home. */}
-              <Route
-                path="/"
-                element={
-                  <RedirectIfAuthenticated redirectTo="/dashboard">
-                    <Home />
-                  </RedirectIfAuthenticated>
-                }
-              />
-              <Route path="/products" element={<Products />} />
-              <Route path="/signUp" element={<Sign_up setNavbarType={setNavbarType} />} />
-              <Route path="/services" element={<Services />} />
-              <Route path="/about" element={<About />} />
-              <Route path="/package" element={<Package />} />{" "}
-              {/* Public access to package selection */}
-              <Route path="/customTailoring" element={<CustomTailoring />} />{" "}
-              {/* Public access to custom tailoring */}
-              {/* SignIn Route: Set navbarType on successful sign-in */}
-              <Route
-                path="/signIn"
-                element={<SignIn setNavbarType={setNavbarType} />}
-              />
-              <Route path="/productViewer/:id" element={<ProductViewer />} />
-            </Routes>
-          </>
-        ) : (
-          <div className="d-lg-flex" style={{ minHeight: "100vh" }}>
-            {/* Sidebar component: Renders either the desktop fixed sidebar OR the mobile top bar with offcanvas */}
-            <Sidebar setNavbarType={setNavbarType} />
-            {/* Main content area: Fills remaining space next to sidebar on desktop, or flows below mobile navbar on small screens */}
-            <div className="main-content">
-              <Routes>
-                <Route
-                  path="/dashboard"
-                  element={
-                    <ProtectedRoute>
-                      <Dashboard />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/rentals/:id"
-                  element={
-                    <ProtectedRoute>
-                      <RentalViewer />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/singleRent"
-                  element={
-                    <ProtectedRoute>
-                      <SingleRent />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/packageRent"
-                  element={
-                    <ProtectedRoute>
-                      <PackageRent />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/customRent"
-                  element={
-                    <ProtectedRoute>
-                      <CustomRent />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/inventoryItems"
-                  element={
-                    <ProtectedRoute>
-                      <InventoryItems />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/packageItems"
-                  element={
-                    <ProtectedRoute>
-                      <PackageItems />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/manageRentals"
-                  element={
-                    <ProtectedRoute>
-                      <ManageRentals />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/packageViewer"
-                  element={
-                    <ProtectedRoute>
-                      <PackageViewer />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/contentManagement"
-                  element={
-                    <ProtectedRoute>
-                      <ContentManagement />
-                    </ProtectedRoute>
-                  }
-                />
-                {/* Assuming these can also be protected, even if public in main layout */}
-                <Route
-                  path="/products"
-                  element={
-                    <ProtectedRoute>
-                      <Products />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/services"
-                  element={
-                    <ProtectedRoute>
-                      <Services />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/about"
-                  element={
-                    <ProtectedRoute>
-                      <About />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/package"
-                  element={
-                    <ProtectedRoute>
-                      <Package />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/customTailoring"
-                  element={
-                    <ProtectedRoute>
-                      <CustomTailoring />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/accounts"
-                  element={
-                    <ProtectedRoute>
-                      <Accounts />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/productViewer/:id"
-                  element={
-                    <ProtectedRoute>
-                      <ProductViewer />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/settings"
-                  element={
-                    <ProtectedRoute>
-                      <div>Settings Page Content</div>
-                    </ProtectedRoute>
-                  }
-                />
-                {/* Fallback route for authenticated users landing on unrecognized paths */}
-                <Route
-                  path="*"
-                  element={
-                    <ProtectedRoute>
-                      <Dashboard />
-                    </ProtectedRoute>
-                  }
-                />
-              </Routes>
-            </div>
-          </div>
-        )}
-      </Router>
+          )}
+        </Router>
+      </AlertProvider>
     </NotificationProvider>
   );
 }

@@ -1,0 +1,102 @@
+/* General container for the page */
+.about-page-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0;
+  gap: 3rem; /* Use rem for scalable spacing */
+}
+
+/* Hero Section */
+.about-hero {
+  background-color: #212529; /* Bootstrap's 'dark' color */
+}
+
+.about-hero-image {
+  max-height: 400px;
+  width: 100%;
+  object-fit: cover;
+  opacity: 0.7;
+}
+
+/* Welcome Text Section */
+.welcome-section {
+  padding: 0 1rem;
+}
+@media (min-width: 768px) {
+  .welcome-section {
+    padding: 0 5rem;
+  }
+}
+
+/* Company History Section */
+.history-container {
+  display: flex;
+  flex-direction: column;
+}
+@media (min-width: 768px) {
+  .history-container {
+    flex-direction: row;
+  }
+}
+
+.history-image-wrapper {
+  flex: 1 1 60%; /* Takes up 60% of the space on larger screens */
+}
+
+.history-text-wrapper {
+  flex: 1 1 40%; /* Takes up 40% of the space */
+  display: flex;
+  align-items: center;
+  padding: 2rem;
+  background-color: var(--bs-primary); /* Use Bootstrap CSS variables */
+  color: var(--bs-light);
+}
+
+.history-text-wrapper p {
+  text-align: left;
+  margin: 0;
+}
+
+/* Features Section */
+.feature-icon-wrapper {
+  width: 44px;
+  height: 44px;
+  margin: 0 auto;
+  background-color: #333; /* A custom dark grey */
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Newsletter Section */
+.newsletter-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  width: 100%;
+  gap: 2rem;
+}
+@media (min-width: 768px) {
+  .newsletter-section {
+    flex-direction: row;
+    justify-content: space-between;
+    text-align: left;
+    padding: 2rem 5rem;
+  }
+}
+
+.newsletter-form {
+  display: flex;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 400px; /* Constrain form width on mobile */
+}
+@media (min-width: 768px) {
+  .newsletter-form {
+    width: auto; /* Allow form to shrink to content on desktop */
+  }
+}
+

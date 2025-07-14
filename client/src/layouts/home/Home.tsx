@@ -48,7 +48,7 @@ function Home() {
   // --- NO CHANGES NEEDED BELOW THIS LINE ---
   // TypeScript is now happy because it knows `pageContent` is not null here.
   return (
-    <Container fluid className="home-page-container p-0">
+    <Container fluid className="p-0">
       
       <HeroSection data={pageContent.hero} />
       <FeaturesSection data={pageContent.features} />

@@ -15,18 +15,13 @@ const SingleRentItemSchema = new mongoose.Schema({
   quantity: { type: Number, required: true },
   imageUrl: { type: String },
   notes: { type: String },
-}, { _id: false });
+});
 
 const AssignedItemSchema = new mongoose.Schema({
   itemId: { type: String }, // Can be ObjectId string or custom string
   name: { type: String },
   variation: { type: String },
   imageUrl: { type: String },
-  // status is optional as it might not exist on empty objects
-  status: { 
-    type: String, 
-    enum: ['Assigned', 'Pending Fit', 'Pending Name', 'Fitting', 'Included', 'Excluded', 'Not Assigned'],
-  },
 }, { _id: false });
 
 const PackageFulfillmentSchema = new mongoose.Schema({
@@ -43,9 +38,10 @@ const PackageRentItemSchema = new mongoose.Schema({
   imageUrl: { type: String },
   notes: { type: String },
   packageFulfillment: { type: [PackageFulfillmentSchema] },
-}, { _id: false });
+});
 
 const CustomTailoringItemSchema = new mongoose.Schema({
+  _id: { type: String, required: true },
   name: { type: String, required: true },
   price: { type: Number, required: true },
   quantity: { type: Number, default: 1 },

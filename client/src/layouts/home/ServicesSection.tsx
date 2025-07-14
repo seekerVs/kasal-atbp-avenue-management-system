@@ -5,13 +5,21 @@ import { ServiceData } from '../../types';
 
 const PLACEHOLDER_IMAGE = 'https://placehold.co/600x400/6c757d/FFFFFF?text=Service+Image';
 
+// --- THIS IS THE FIX ---
+// Create a static mapping from the service TITLE to its hardcoded path.
+// This relies on the title from the CMS being stable.
+const SERVICE_PATHS: { [key: string]: string } = {
+  'Single Item Rentals': '/products',
+  'Packages': '/package',
+  'Custom Tailoring': '/customTailoring',
+};
+
 interface ServiceCardProps {
   service: ServiceData;
 }
 
 function ServiceCard({ service }: ServiceCardProps) {
   const navigate = useNavigate();
-  
   const [imageSrc, setImageSrc] = useState(service.imageUrl || PLACEHOLDER_IMAGE);
 
   useEffect(() => {
@@ -21,6 +29,10 @@ function ServiceCard({ service }: ServiceCardProps) {
   const handleImageError = () => {
     setImageSrc(PLACEHOLDER_IMAGE);
   };
+
+  // Look up the correct path from our static map using the service's title.
+  // Default to the home page '/' if a title doesn't match, as a safe fallback.
+  const destinationPath = SERVICE_PATHS[service.title] || '/';
 
   return (
     <Card className="service-card">
@@ -37,7 +49,8 @@ function ServiceCard({ service }: ServiceCardProps) {
         <Button
           variant="primary"
           className="mt-auto align-self-end"
-          onClick={() => navigate(service.path)}
+          // Use the path looked up from our static map
+          onClick={() => navigate(destinationPath)}
         >
           See More
         </Button>
@@ -46,7 +59,7 @@ function ServiceCard({ service }: ServiceCardProps) {
   );
 }
 
-// --- Main Section Component ---
+// --- Main Section Component (no changes needed here) ---
 interface ServicesSectionProps {
   data: ServiceData[];
 }
@@ -55,7 +68,6 @@ export function ServicesSection({ data }: ServicesSectionProps) {
   return (
     <section className="services-section">
       <div className="services-grid">
-
         {data.map((service) => (
           <ServiceCard key={service.title} service={service} />
         ))}

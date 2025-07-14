@@ -12,61 +12,7 @@ import {
   CashCoin,
 } from 'react-bootstrap-icons';
 import { RentalStatus, Financials, RentalOrder } from '../../types'; // Import from centralized types
-
-
-// ===================================================================
-// --- NEW: DepositBreakdown Sub-Component ---
-// ===================================================================
-interface DepositBreakdownProps {
-  rental: RentalOrder;
-}
-
-const DepositBreakdown: React.FC<DepositBreakdownProps> = ({ rental }) => {
-  const formatCurrency = (amount: number) => `₱${amount.toFixed(2)}`;
-
-  return (
-    // Use a flush accordion to remove borders and box-shadow
-    <Accordion flush className="mt-1"> 
-      <Accordion.Item eventKey="0">
-        <Accordion.Header>
-          <span className="small text-primary fst-italic text-decoration-underline">
-            View deposit breakdown
-          </span>
-        </Accordion.Header>
-        <Accordion.Body className="p-2 border-top">
-          <ListGroup variant="flush">
-            {rental.singleRents?.map((item, index) => {
-              const deposit = item.price < 500 ? item.price : 500;
-              return (
-                <ListGroup.Item key={`single-${index}`} className="d-flex justify-content-between small text-muted p-1 border-0">
-                  <span>{item.name.split(',')[0]} (x{item.quantity})</span>
-                  <span className="fw-normal">{formatCurrency(deposit * item.quantity)}</span>
-                </ListGroup.Item>
-              );
-            })}
-            {rental.packageRents?.map((pkg, index) => (
-              <ListGroup.Item key={`pkg-${index}`} className="d-flex justify-content-between small text-muted p-1 border-0">
-                <span>{pkg.name.split(',')[0]} (x{pkg.quantity})</span>
-                <span className="fw-normal">{formatCurrency(2000 * pkg.quantity)}</span>
-              </ListGroup.Item>
-            ))}
-            {rental.customTailoring?.map((item, index) => {
-              if (item.tailoringType === 'Tailored for Rent-Back') {
-                return (
-                  <ListGroup.Item key={`custom-${index}`} className="d-flex justify-content-between small text-muted p-1 border-0">
-                    <span>{item.name} (x{item.quantity})</span>
-                    <span className="fw-normal">{formatCurrency(item.price * item.quantity)}</span>
-                  </ListGroup.Item>
-                );
-              }
-              return null;
-            })}
-          </ListGroup>
-        </Accordion.Body>
-      </Accordion.Item>
-    </Accordion>
-  );
-};
+import { formatCurrency } from '../../utils/formatters';
 
 // --- HELPER FUNCTIONS ---
 const getStatusIcon = (status: RentalStatus) => {
@@ -88,6 +34,7 @@ interface OrderActionsProps {
   subtotal: number;
   editableDiscount: string;
   onDiscountChange: (value: string) => void;
+  onDiscountBlur: () => void; 
   editableStartDate: string;
   onStartDateChange: (value: string) => void;
   editableEndDate: string;
@@ -97,16 +44,13 @@ interface OrderActionsProps {
   onPaymentUiModeChange: (mode: 'Cash' | 'Gcash') => void;
   paymentAmount: string;
   onPaymentAmountChange: (value: string) => void;
+  onPaymentAmountBlur: () => void;
   gcashRef: string;
   onGcashRefChange: (value: string) => void;
   onMarkAsPickedUp: () => void;
   editableDeposit: string;
   onDepositChange: (value: string) => void;
-  requiredDepositInfo: {
-    min: number;
-    max: number | null;
-    message: string;
-  };
+  onDepositBlur: () => void;
   onUpdateAndPay: (payload: { 
     status?: RentalStatus; 
     rentalStartDate?: string; 
@@ -127,6 +71,7 @@ const OrderActions: React.FC<OrderActionsProps> = ({
   subtotal,
   editableDiscount,
   onDiscountChange,
+  onDiscountBlur,
   editableStartDate,
   onStartDateChange,
   editableEndDate,
@@ -136,18 +81,21 @@ const OrderActions: React.FC<OrderActionsProps> = ({
   onPaymentUiModeChange,
   paymentAmount,
   onPaymentAmountChange,
+  onPaymentAmountBlur,
   gcashRef,
   onGcashRefChange,
   onUpdateAndPay,
   onMarkAsPickedUp,
   editableDeposit,
   onDepositChange,
+  onDepositBlur,
   onInitiateMoveToPickup,
-  requiredDepositInfo = { min: 0, max: null, message: '' },
 }) => {
 
   const discountAmount = parseFloat(editableDiscount) || 0;
   const depositAmount = parseFloat(editableDeposit) || 0;
+  const isStandardDeposit = parseFloat(editableDeposit) === (financials.requiredDeposit || 0);
+  
   const itemsTotal = subtotal - discountAmount;
 
   const grandTotal = itemsTotal + depositAmount;
@@ -165,9 +113,55 @@ const OrderActions: React.FC<OrderActionsProps> = ({
     onGcashRefChange(alphanumericValue);
   };
 
+  const handleUseRecommendedDeposit = () => {
+    // This handler resets the editableDeposit state to the system-calculated value.
+    onDepositChange(String(financials.requiredDeposit || 0));
+  };
+
   const showPaymentForm = 
     (status === 'To Process' && !isPaid) || 
     (status === 'To Pickup' && !isFullyPaid);
+
+  const shouldDisableButton = 
+    // Disable if it's the first payment ('To Process' status) AND payment details are invalid.
+    (status === 'To Process' && (
+      (parseFloat(paymentAmount) <= 0) ||
+      (paymentUiMode === 'Gcash' && gcashRef.trim() === '')
+    )) ||
+    // Disable if it's the final payment ('To Pickup') AND payment details are invalid.
+    (status === 'To Pickup' && !isFullyPaid && (
+      (parseFloat(paymentAmount) <= 0) ||
+      (paymentUiMode === 'Gcash' && gcashRef.trim() === '')
+  ));
+
+  const handlePaymentAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+
+    // Allow the input to be temporarily empty while typing
+    if (value.trim() === '') {
+      onPaymentAmountChange('');
+      return;
+    }
+
+    const newAmount = parseFloat(value);
+
+    // Rule 1: Prevent negative numbers
+    if (newAmount < 0) {
+      onPaymentAmountChange('0');
+      return;
+    }
+
+    // Rule 2: Cap the amount at the total amount due.
+    // The max payment is either the remaining balance or, if it's a new rental, the grand total.
+    const maxPayment = remainingBalance > 0 ? remainingBalance : grandTotal;
+    if (newAmount > maxPayment) {
+      onPaymentAmountChange(String(maxPayment));
+      return;
+    }
+    
+    // If validation passes, update state with the user's input
+    onPaymentAmountChange(value);
+  };
 
   const getPaymentStatusBadge = (): { variant: string; text: string } => {
     if (isFullyPaid) return { variant: 'success', text: 'Fully Paid' };
@@ -176,32 +170,7 @@ const OrderActions: React.FC<OrderActionsProps> = ({
   };
   const paymentStatusInfo = getPaymentStatusBadge();
 
-  const handlePaymentAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let newAmount = parseFloat(e.target.value);
-    // Prevent negative numbers
-    if (newAmount < 0) {
-      newAmount = 0;
-    }
-    // Cap the amount at the remaining balance
-    if (remainingBalance > 0 && newAmount > remainingBalance) {
-      newAmount = remainingBalance;
-    }
-    // Update the state via the prop function, converting back to a string
-    onPaymentAmountChange(String(newAmount));
-  };
-
-  // --- NEW: Handler for deposit input to enforce min/max if needed ---
-  const handleDepositChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    // Basic validation to prevent non-numeric input if desired, but for now just pass up
-    onDepositChange(value);
-  };
-
   if (!rental) return null; // Add a guard clause in case rental is null
-  const totalItemCount = 
-      (rental.singleRents?.reduce((sum, item) => sum + item.quantity, 0) || 0) +
-      (rental.packageRents?.reduce((sum, item) => sum + item.quantity, 0) || 0) +
-      (rental.customTailoring?.reduce((sum, item) => sum + item.quantity, 0) || 0);
 
   return (
     <Card className="shadow-sm">
@@ -239,59 +208,105 @@ const OrderActions: React.FC<OrderActionsProps> = ({
         <hr />
         <div className="d-flex justify-content-between align-items-center mb-2">
           <span className="text-muted">Subtotal</span>
-          <span>₱{subtotal.toFixed(2)}</span>
+          <span>₱{formatCurrency(financials.itemsTotal || 0)}</span>
         </div>
         <Form.Group as={Row} className="align-items-center mb-2">
           <Form.Label column sm={6} className="text-muted">Shop Discount</Form.Label>
           <Col sm={6}>
             <InputGroup>
               <InputGroup.Text>₱</InputGroup.Text>
-              <Form.Control type="number" value={editableDiscount} onChange={(e) => onDiscountChange(e.target.value)} disabled={!canEditDetails} />
+              <Form.Control type="number" value={editableDiscount} onChange={(e) => onDiscountChange(e.target.value)} onBlur={onDiscountBlur} disabled={!canEditDetails} min="0" style={{ textAlign: 'right' }} />
             </InputGroup>
           </Col>
         </Form.Group>
 
         {/* --- NEW: DEPOSIT INPUT SECTION --- */}
         <div className="mb-2"> {/* Use a simple div as the main wrapper */}
-          {/* This row is ONLY for the label and the input field */}
           <Form.Group as={Row} className="align-items-center mb-2">
-            <Form.Label column sm={6} className="text-muted">
-                Security Deposit
-            </Form.Label>
-            <Col sm={6}>
-              <InputGroup>
-                <InputGroup.Text>₱</InputGroup.Text>
-                <Form.Control 
-                  type="number" 
-                  value={editableDeposit} 
-                  onChange={handleDepositChange} 
-                  disabled={!canEditDetails}
-                  min={requiredDepositInfo.min}
-                  max={requiredDepositInfo.max ?? undefined}
-                />
-              </InputGroup>
-            </Col>
-          </Form.Group>
+          <Form.Label column sm={6} className="text-muted">Security Deposit</Form.Label>
+          <Col sm={6}>
+            <InputGroup>
+              <InputGroup.Text>₱</InputGroup.Text>
+              <Form.Control 
+                type="number" 
+                value={editableDeposit} 
+                onBlur={onDepositBlur}
+                onChange={(e) => onDepositChange(e.target.value)} 
+                disabled={!canEditDetails}
+                min="0"
+                style={{ textAlign: 'right' }} 
+              />
+            </InputGroup>
+          </Col>
+        </Form.Group>
 
-          {/* The Accordion and its message are now placed OUTSIDE the aligned row */}
-          {/* We add a nested Row and Col to indent it correctly under the input field */}
+        {/* Conditionally Rendered Deposit Breakdown */}
+        {isStandardDeposit && canEditDetails && (
           <Row>
-            <Col sm={6}></Col> {/* This is an empty offset column */}
-            <Col sm={6}>
-              {totalItemCount > 1 && canEditDetails ? (
-                <DepositBreakdown rental={rental} />
-              ) : requiredDepositInfo.message && canEditDetails ? (
-                <Form.Text className="text-muted">
-                  {requiredDepositInfo.message}
-                </Form.Text>
-              ) : null}
+            <Col sm={{ span: 6, offset: 6 }}> {/* Indent the accordion */}
+              <Accordion flush className="mt-1">
+                <Accordion.Item eventKey="0">
+                  <Accordion.Header as="div" className="p-0">
+                    <span className="small text-primary fst-italic text-decoration-underline" style={{cursor: 'pointer'}}>
+                      View deposit breakdown
+                    </span>
+                  </Accordion.Header>
+                  <Accordion.Body className="p-2 border-top">
+                    <ListGroup variant="flush">
+                      {/* --- THIS IS THE NEW LOGIC --- */}
+                      {/* We calculate the breakdown on the fly from the rental's item arrays. */}
+
+                      {/* Breakdown for Single Rent Items */}
+                      {rental.singleRents?.map((item, index) => (
+                        <ListGroup.Item key={`single-dep-${index}`} className="d-flex justify-content-between small text-muted p-1 border-0">
+                          <span>{item.name.split(',')[0]} (x{item.quantity})</span>
+                          <span className="fw-normal">{formatCurrency((item.price < 500 ? item.price : 500) * item.quantity)}</span>
+                        </ListGroup.Item>
+                      ))}
+
+                      {/* Breakdown for Package Rent Items */}
+                      {rental.packageRents?.map((pkg, index) => (
+                        <ListGroup.Item key={`pkg-dep-${index}`} className="d-flex justify-content-between small text-muted p-1 border-0">
+                          <span>{pkg.name.split(',')[0]} (x{pkg.quantity})</span>
+                          <span className="fw-normal">{formatCurrency(2000 * pkg.quantity)}</span>
+                        </ListGroup.Item>
+                      ))}
+
+                      {/* Breakdown for Custom Tailoring Items (Rent-Back only) */}
+                      {rental.customTailoring?.filter(item => item.tailoringType === 'Tailored for Rent-Back').map((item, index) => (
+                        <ListGroup.Item key={`custom-dep-${index}`} className="d-flex justify-content-between small text-muted p-1 border-0">
+                          <span>{item.name} (x{item.quantity})</span>
+                          <span className="fw-normal">{formatCurrency(item.price * item.quantity)}</span>
+                        </ListGroup.Item>
+                      ))}
+
+                    </ListGroup>
+                  </Accordion.Body>
+                </Accordion.Item>
+              </Accordion>
             </Col>
           </Row>
+        )}
+
+        {!isStandardDeposit && canEditDetails && (
+          <Row>
+            <Col sm={{ span: 6, offset: 6 }}>
+              <Button
+                variant="link"
+                size="sm"
+                className="p-0 text-decoration-underline"
+                onClick={handleUseRecommendedDeposit}
+              >
+                Use recommended deposit
+              </Button>
+            </Col>
+          </Row>
+        )}
         </div>
         
         <div className="d-flex justify-content-between align-items-baseline mb-3">
           <p className="mb-0 fs-5 fw-bold">Total Amount:</p>
-          <p className="h4 fw-bold text-danger">₱{grandTotal.toFixed(2)}</p>
+          <p className="h4 fw-bold text-danger">₱{formatCurrency(grandTotal)}</p>
         </div>
         <hr />
         
@@ -308,7 +323,7 @@ const OrderActions: React.FC<OrderActionsProps> = ({
                 <div className="mb-2 pb-1 border-bottom">
                   <div className="d-flex justify-content-between small">
                     <span className="text-muted">Down Payment ({financials.downPayment.referenceNumber ? 'GCash' : 'Cash'}):</span>
-                    <span className="fw-bold">₱{financials.downPayment.amount.toFixed(2)}</span>
+                    <span className="fw-bold">₱{formatCurrency(financials.downPayment.amount)}</span>
                   </div>
                   {/* --- NEW: Conditionally display reference number --- */}
                   {financials.downPayment.referenceNumber && (
@@ -325,7 +340,7 @@ const OrderActions: React.FC<OrderActionsProps> = ({
                 <div className="mb-2 pb-1 border-bottom">
                    <div className="d-flex justify-content-between small">
                     <span className="text-muted">Final Payment ({financials.finalPayment.referenceNumber ? 'GCash' : 'Cash'}):</span>
-                    <span className="fw-bold">₱{financials.finalPayment.amount.toFixed(2)}</span>
+                    <span className="fw-bold">₱{formatCurrency(financials.finalPayment.amount)}</span>
                   </div>
                    {/* --- NEW: Conditionally display reference number --- */}
                    {financials.finalPayment.referenceNumber && (
@@ -340,7 +355,7 @@ const OrderActions: React.FC<OrderActionsProps> = ({
               {/* --- Display Total Paid --- */}
               <div className="d-flex justify-content-between fw-bold mt-2">
                 <span>Total Paid:</span>
-                <span className="text-success">₱{totalPaid.toFixed(2)}</span>
+                <span className="text-success">₱{formatCurrency(totalPaid)}</span>
               </div>
             </div>
           </div>
@@ -349,7 +364,7 @@ const OrderActions: React.FC<OrderActionsProps> = ({
         {status === 'To Pickup' && !isFullyPaid && (
           <Alert variant="warning" className="text-center mt-3">
             <div className="fw-bold">Remaining Balance</div>
-            <div className="h4 mb-0">₱{remainingBalance.toFixed(2)}</div>
+            <div className="h4 mb-0">₱{formatCurrency(remainingBalance)}</div>
           </Alert>
         )}
 
@@ -372,10 +387,11 @@ const OrderActions: React.FC<OrderActionsProps> = ({
                 <Form.Control 
                   type="number" 
                   value={paymentAmount} 
-                  onChange={handlePaymentAmountChange} // Use the new handler
+                  onChange={handlePaymentAmountChange}
+                  onBlur={onPaymentAmountBlur}
                   min="0" // Don't allow negative numbers
                   max={remainingBalance > 0 ? remainingBalance.toFixed(2) : "0"} // Set the max attribute
-                  step="0.01" // Allow decimal inputs
+                  style={{ textAlign: 'right' }} 
                 />
               </InputGroup>
             </Form.Group>
@@ -398,8 +414,8 @@ const OrderActions: React.FC<OrderActionsProps> = ({
         )}
         
         <div className="d-grid gap-2 mt-4">
-          {status === 'To Process' && (<Button size="lg" onClick={onInitiateMoveToPickup } style={{ backgroundColor: '#8B0000', border: 'none', fontWeight: 'bold' }} disabled={!isPaid && parseFloat(paymentAmount) <= 0}>Move to Pickup</Button>)}
-          {status === 'To Pickup' && ( <Button variant="info" size="lg" onClick={onMarkAsPickedUp}>Mark as Picked Up</Button> )}
+          {status === 'To Process' && (<Button size="lg" onClick={onInitiateMoveToPickup } style={{ backgroundColor: '#8B0000', border: 'none', fontWeight: 'bold' }} disabled={shouldDisableButton}>Move to Pickup</Button>)}
+          {status === 'To Pickup' && ( <Button variant="info" size="lg" onClick={onMarkAsPickedUp} disabled={shouldDisableButton}>Mark as Picked Up</Button> )}
           {status === 'To Return' && ( <Button variant="warning" size="lg" onClick={() => onUpdateAndPay({ status: 'Returned' })}>Mark as Returned</Button> )}
           {status === 'Returned' && ( <Alert variant="success" className="text-center">This rental has been completed.</Alert> )}
           {status === 'Cancelled' && ( <Alert variant="danger" className="text-center">This rental was cancelled.</Alert> )}

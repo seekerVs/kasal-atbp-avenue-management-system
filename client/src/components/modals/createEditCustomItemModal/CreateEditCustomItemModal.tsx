@@ -2,9 +2,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Modal, Button, Form, Row, Col, InputGroup, Alert } from 'react-bootstrap';
 import { PlusCircleFill, Trash } from 'react-bootstrap-icons';
 import { CustomTailoringItem, MeasurementRef } from '../../../types';
+import { v4 as uuidv4 } from 'uuid';
 
 // A helper function to create a blank-slate item object for "create" mode
 const getInitialItem = (name: string): CustomTailoringItem => ({
+    _id: '', // Add a temporary, blank _id to satisfy the type
     name,
     price: 0,
     quantity: 1,
@@ -143,19 +145,25 @@ const CreateEditCustomItemModal: React.FC<CreateEditCustomItemModalProps> = ({
   
   const handleSaveChanges = () => {
     if (!validateForm()) {
-        return; // Stop if validation fails. The Alert will be displayed.
+        return;
     }
 
-    // If validation passes, construct the final data and save.
-    const finalData: CustomTailoringItem = {
+    const itemWithId = {
         ...formData,
-        outfitCategory: selectedCategory || formData.outfitCategory,
-        outfitType: selectedRef?.outfitName || formData.outfitType,
-        materials: formData.materials.filter(m => m.trim() !== ''),
-        referenceImages: formData.referenceImages.filter(r => r.trim() !== ''),
+        _id: formData._id || uuidv4(),
     };
+
+    // The rest of the function remains the same.
+    const finalData: CustomTailoringItem = {
+        ...itemWithId,
+        outfitCategory: selectedCategory || itemWithId.outfitCategory,
+        outfitType: selectedRef?.outfitName || itemWithId.outfitType,
+        materials: (itemWithId.materials || []).filter(m => m.trim() !== ''),
+        referenceImages: (itemWithId.referenceImages || []).filter(r => r.trim() !== ''),
+    };
+    
     onSave(finalData);
-    onHide(); // Close the modal only on success
+    onHide();
   };
 
   return (

@@ -1,5 +1,6 @@
 // client/src/types/index.ts
-
+export * from './aboutpage';
+export * from './homepage';
 // ===================================================================
 //
 //               CORE DATA MODELS (Inventory, Packages)
@@ -62,8 +63,8 @@ export interface Package {
 
 export type RentalStatus = 'To Process' | 'To Pickup' | 'To Return' | 'Returned' | 'Completed' | 'Cancelled';
 
-// --- Base for any item that is part of a rental order ---
-export interface SingleRentItem {
+export interface BaseRentItem {
+  _id: string;
   name: string;
   price: number;
   quantity: number;
@@ -71,8 +72,11 @@ export interface SingleRentItem {
   notes?: string;
 }
 
+// --- Base for any item that is part of a rental order ---
+export interface SingleRentItem extends BaseRentItem {}
+
 // --- For custom-made items, extends the base and adds tailoring details ---
-export interface CustomTailoringItem extends SingleRentItem {
+export interface CustomTailoringItem extends BaseRentItem {
   outfitCategory: string;
   outfitType: string;
   tailoringType: 'Tailored for Purchase' | 'Tailored for Rent-Back';
@@ -99,7 +103,7 @@ export interface PackageFulfillment {
 }
 
 // --- Represents a package once it has been added to a rental order ---
-export interface RentedPackage extends SingleRentItem {
+export interface RentedPackage extends BaseRentItem {
   packageFulfillment: PackageFulfillment[];
 }
 
@@ -188,34 +192,4 @@ export interface User {
   email: string;
   role: 'Admin' | 'User';
   createdAt: string;
-}
-
-// These should match the structure of your HomePageContent schema on the backend.
-export interface HeroData {
-  title: string;
-  searchPlaceholder: string;
-  imageUrl: string;
-}
-export interface FeatureData {
-  icon: string;
-  title: string;
-  description: string;
-}
-export interface ServiceData {
-  title: string;
-  text: string;
-  imageUrl: string;
-  path: string;
-}
-export interface QualityCTAData {
-  title: string;
-  points: string[];
-  buttonText: string;
-  imageUrl: string;
-}
-export interface HomePageContent {
-  hero: HeroData;
-  features: FeatureData[];
-  services: ServiceData[];
-  qualityCTA: QualityCTAData;
 }

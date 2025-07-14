@@ -42,8 +42,8 @@ export const sidebarItems: NavItem[] = [
     ],
   },
   {
-    title: "Reservations",
-    path: "/reservations",
+    title: "Bookings",
+    path: "/bookings",
     icon: CalendarCheck,
   },
   {

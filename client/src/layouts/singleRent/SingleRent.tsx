@@ -10,8 +10,6 @@ import {
   ListGroup,
   Spinner,
   InputGroup,
-  Toast,
-  ToastContainer,
   Modal,
   Alert,
 } from 'react-bootstrap';
@@ -23,11 +21,12 @@ import {
   ExclamationTriangleFill,
   Hash // Icon for quantity
 } from 'react-bootstrap-icons';
-import axios from 'axios';
+
 import { useNavigate } from 'react-router-dom';
 import CustomerDetailsCard from '../../components/CustomerDetailsCard';
 import { CustomerInfo, InventoryItem, RentalOrder } from '../../types';
 import api from '../../services/api';
+import { useAlert } from '../../contexts/AlertContext';
 
 const initialCustomerDetails: CustomerInfo = { name: '', phoneNumber: '', email: '', address: '' };
 
@@ -36,6 +35,7 @@ const initialCustomerDetails: CustomerInfo = { name: '', phoneNumber: '', email:
 // ===================================================================================
 function SingleRent() {
   const navigate = useNavigate();
+  const { addAlert } = useAlert();
 
   // State Management
   const [allProducts, setAllProducts] = useState<InventoryItem[]>([]);
@@ -52,9 +52,6 @@ function SingleRent() {
   // UI State
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showNotification, setShowNotification] = useState(false);
-  const [notificationMessage, setNotificationMessage] = useState('');
-  const [notificationType, setNotificationType] = useState<'success' | 'danger'>('success');
   const [showReminderModal, setShowReminderModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [modalData, setModalData] = useState({ rentalId: '', itemName: '', quantity: 0 });
@@ -63,12 +60,6 @@ function SingleRent() {
   const productSearchResultsRef = useRef<HTMLDivElement>(null);
   const productSearchInputRef = useRef<HTMLInputElement>(null);
 
-  const displayNotification = (message: string, type: 'success' | 'danger' = 'success', duration: number = 3000) => {
-    setNotificationMessage(message);
-    setNotificationType(type);
-    setShowNotification(true);
-    if (type === 'success' && duration > 0) setTimeout(() => setShowNotification(false), duration);
-  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -80,7 +71,7 @@ function SingleRent() {
         ]);
         setAllProducts(productsResponse.data || []);
         setAllRentals(rentalsResponse.data || []);
-      } catch (err) { displayNotification('Failed to load initial data.', 'danger', 0);
+      } catch (err) { addAlert('Failed to load initial data.', 'danger');
       } finally { setLoading(false); }
     };
     fetchData();
@@ -133,11 +124,11 @@ function SingleRent() {
   };
   
   const validateForm = () => {
-    if (!selectedProduct || !currentSelectedVariation) { displayNotification('Please select a product and its variation.', 'danger'); return false; }
-    if (quantity <= 0) { displayNotification('Quantity must be at least 1.', 'danger'); return false; }
-    if (currentSelectedVariation.quantity < quantity) { displayNotification('Requested quantity exceeds available stock.', 'danger'); return false; }
+    if (!selectedProduct || !currentSelectedVariation) { addAlert('Please select a product and its variation.', 'danger'); return false; }
+    if (quantity <= 0) { addAlert('Quantity must be at least 1.', 'danger'); return false; }
+    if (currentSelectedVariation.quantity < quantity) { addAlert('Requested quantity exceeds available stock.', 'danger'); return false; }
     if (!customerDetails.name.trim() || !customerDetails.phoneNumber.trim() || !customerDetails.address.trim()) {
-      displayNotification('Please fill all required customer fields (*).', 'danger');
+      addAlert('Please fill all required customer fields (*).', 'danger');
       return false;
     }
     return true;
@@ -181,12 +172,12 @@ function SingleRent() {
       // Now the payload matches the backend's expected structure.
       const response = await api.post('/rentals', rentalPayload);
       
-      displayNotification('New rental created successfully! Redirecting...', 'success');
+      addAlert('New rental created successfully! Redirecting...', 'success');
       setTimeout(() => navigate(`/rentals/${response.data._id}`), 1500);
 
     } catch (apiError: any) {
       const errorMessage = apiError.response?.data?.message || "Failed to create rental.";
-      displayNotification(errorMessage, 'danger', 0);
+      addAlert(errorMessage, 'danger');
     } finally {
       setIsSubmitting(false);
     }
@@ -227,7 +218,7 @@ function SingleRent() {
 
     } catch (apiError: any) {
       const errorMessage = apiError.response?.data?.message || "Failed to add item.";
-      displayNotification(errorMessage, 'danger', 0);
+      addAlert(errorMessage, 'danger');
     } finally {
       setIsSubmitting(false);
     }
@@ -235,12 +226,6 @@ function SingleRent() {
 
   return (
     <Container fluid>
-      <ToastContainer position="top-end" className="p-3" style={{ zIndex: 1056 }}>
-        <Toast onClose={() => setShowNotification(false)} show={showNotification} delay={3000} autohide={notificationType === 'success'} bg={notificationType} className="text-white">
-          <Toast.Header><strong className="me-auto text-capitalize">{notificationType}</strong></Toast.Header>
-          <Toast.Body>{notificationMessage}</Toast.Body>
-        </Toast>
-      </ToastContainer>
       <h2 className="mb-4">Single Item Rent</h2>
       {loading ? ( <div className="text-center py-5"><Spinner /></div> ) : (
       <Row className="g-4">

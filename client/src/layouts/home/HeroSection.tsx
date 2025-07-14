@@ -4,13 +4,13 @@ import React, { useState, useEffect } from 'react';
 import { Image, Form, Button } from 'react-bootstrap';
 import OutfitRecommendationModal from '../../components/modals/outfitRecommendationModal/OutfitRecommendationModal';
 import CustomButton1 from '../../components/customButton1/CustomButton1';
-import { HeroData } from "../../types";
+import { HomeHeroData } from "../../types";
 
 const PLACEHOLDER_IMAGE = 'https://placehold.co/1920x1080/8B0000/FFFFFF?text=Hero+Image';
 
 
 interface HeroSectionProps {
-  data: HeroData;
+  data: HomeHeroData;
 }
 
 export function HeroSection({ data }: HeroSectionProps) {

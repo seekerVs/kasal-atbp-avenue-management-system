@@ -10,26 +10,6 @@
     max-width: 400px;
 }
 
-.home-page-container {
-  /* 
-    Base margin for mobile devices. 
-    The mobile navbar is typically shorter.
-    Adjust this value to match your mobile navbar's height.
-  */
-  margin-top: 70px; 
-}
-
-/* 
-  When the screen is 992px or wider (Bootstrap's 'lg' breakpoint),
-  apply a larger margin to account for the taller desktop navbar.
-*/
-@media (min-width: 992px) {
-  .home-page-container {
-    /* Adjust this value to match your desktop navbar's height. */
-    margin-top: 80px; 
-  }
-}
-
 /* In home.css */
 
 /* --- Hero Section --- */

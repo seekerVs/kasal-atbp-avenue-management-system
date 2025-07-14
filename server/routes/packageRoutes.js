@@ -7,7 +7,7 @@ const router = express.Router();
 
 // GET /api/packages/
 router.get('/', asyncHandler(async (req, res) => {
-  const packages = await PackageModel.find({}).sort({ price: 1 }).lean();
+  const packages = await PackageModel.find({}).sort({ price: 1 });
   res.status(200).json(packages);
 }));
 
