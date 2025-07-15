@@ -25,6 +25,35 @@ api.interceptors.request.use(config => {
   return Promise.reject(error);
 });
 
+// 5. (Highly Recommended) Add a response interceptor for global error handling
+// This will automatically log the user out if the server returns a 401 Unauthorized error.
+api.interceptors.response.use(
+  // If the response is successful (status 2xx), just return it
+  (response) => response,
+  
+  // If the response has an error
+  (error) => {
+    // Check if the error is due to an expired or invalid token (status 401)
+    if (error.response && error.response.status === 401) {
+      // 1. Remove the invalid token from local storage
+      localStorage.removeItem('authToken');
+      
+      // 2. Redirect the user to the sign-in page.
+      // We use window.location.replace to do a full page reload, which
+      // is the cleanest way to reset all application state.
+      if (window.location.pathname !== '/signIn') {
+        window.location.replace('/signIn');
+      }
+      
+      // You could also show an alert here if you have a non-hook way to do so.
+      // For example: alert('Your session has expired. Please log in again.');
+    }
+    
+    // For all other errors, just pass them along to be handled by the component that made the call.
+    return Promise.reject(error);
+  }
+);
+
 /**
  * Uploads a file to the backend server.
  * @param file The File object to upload.

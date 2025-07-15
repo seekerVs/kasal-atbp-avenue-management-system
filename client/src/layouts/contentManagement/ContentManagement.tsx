@@ -1,11 +1,11 @@
 // src/layouts/contentManagement/ContentManagement.tsx
 
 import React, { useState, useEffect } from 'react';
-import { Container, Card, Form, Button, Row, Col, Spinner, Alert, Accordion, Nav, InputGroup } from 'react-bootstrap';
+import { Container, Card, Form, Button, Row, Col, Spinner, Alert, Accordion, Nav } from 'react-bootstrap';
 import { Book, Image as ImageIcon, CardChecklist, Gear, Star, HandThumbsUp, Save, QuestionCircle, Trash, PlusCircle } from 'react-bootstrap-icons';
 import api from '../../services/api';
 
-import { HomePageContent, AboutPageData, Feature, FaqItem } from "../../types"; // Import all needed types
+import { HomePageContent, AboutPageData } from "../../types"; // Import all needed types
 import { ImageDropzone } from '../../components/imageDropzone/ImageDropzone';
 import { ComponentPreview } from '../../components/componentPreview/ComponentPreview';
 import Home from '../home/Home';

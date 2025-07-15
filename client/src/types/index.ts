@@ -22,7 +22,7 @@ export interface InventoryItem {
   price: number;
   category: string;
   description?: string;
-  composition: string;
+  composition: string[];
   features: string[];
   variations: ItemVariation[];
 }
@@ -131,6 +131,7 @@ export interface Financials {
   // Stored values
   shopDiscount: number;
   depositAmount: number;
+  depositReimbursed?: number; 
   downPayment?: PaymentDetail;
   finalPayment?: PaymentDetail;
   // Calculated values (from backend)

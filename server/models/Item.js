@@ -16,9 +16,9 @@ const ItemSchema = new mongoose.Schema({
   category: { type: String, required: true, trim: true },
   description: { type: String, trim: true },
   features: { type: [String] },
-  composition: { type: String, trim: true },
+  composition: { type: [String] },
   variations: { type: [VariationSchema], required: true },
-}, {
+}, {  
   timestamps: true,
 });
 

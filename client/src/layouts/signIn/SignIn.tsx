@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Form, Button, Card, InputGroup, Alert } from "react-bootstrap"; // Import Alert for error messages
 import { Eye, EyeSlash } from "react-bootstrap-icons";
 import CustomFooter from "../../components/customFooter/CustomFooter"; // Assuming this path is correct
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import api from "../../services/api";
 
 interface SignInProps {
@@ -11,6 +11,8 @@ interface SignInProps {
 
 function SignIn({ setNavbarType }: SignInProps) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const wasLoggedOutForInactivity = location.state?.from === 'inactivity';
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
@@ -73,6 +75,12 @@ function SignIn({ setNavbarType }: SignInProps) {
           {errorMessage && (
             <Alert variant="danger" className="mb-3">
               {errorMessage}
+            </Alert>
+          )}
+
+          {wasLoggedOutForInactivity && (
+            <Alert variant="info" className="mb-4">
+              Your session expired due to inactivity. Please sign in again.
             </Alert>
           )}
 

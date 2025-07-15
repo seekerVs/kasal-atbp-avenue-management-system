@@ -357,6 +357,10 @@ useEffect(() => {
             // Check if it's a fully-formed custom item from the modal
             if (assigned && 'outfitCategory' in assigned) {
 
+              if (!(assigned as CustomTailoringItem)._id) {
+                (assigned as CustomTailoringItem)._id = uuidv4();
+              }
+
               customItemsForRental.push(assigned as CustomTailoringItem);
 
               return {

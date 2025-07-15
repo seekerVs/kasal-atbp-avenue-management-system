@@ -7,6 +7,7 @@ import CustomerDetailsCard from "../../components/CustomerDetailsCard";
 import { MeasurementRef, CustomerInfo, RentalOrder, MeasurementValues, CustomTailoringItem } from '../../types';
 import api from "../../services/api";
 import { useAlert } from "../../contexts/AlertContext";
+import { v4 as uuidv4 } from 'uuid';
 
 // --- TYPE DEFINITIONS (Specific to this component's state) ---
 export type InitialCustomTailoringData = Omit<CustomTailoringItem, '_id' | 'measurements' | 'outfitCategory' | 'outfitType'>;
@@ -51,7 +52,6 @@ function CustomRent() {
 
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showNotification, setShowNotification] = useState(false);
   
   // --- Data Fetching Effect ---
   useEffect(() => {
@@ -154,6 +154,7 @@ function CustomRent() {
     return {
       customerInfo: [customer], // Always include customer info now
       customTailoring: [{ 
+           _id: uuidv4(),
           ...tailoring, 
           measurements: measurements, 
           materials: tailoring.materials.filter(m => m.trim() !== ''),

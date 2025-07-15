@@ -39,10 +39,13 @@ import PackageItems from "./layouts/packageItems/PackageItems";
 import CustomRent from "./layouts/customRent/CustomRent";
 import Accounts from "./layouts/accounts/Accounts";
 import ContentManagement from "./layouts/contentManagement/ContentManagement";
-import Appointments from "./layouts/appointments/Appointments";
-import Reservations from "./layouts/reservations/Reservations";
+import { useInactivityTimeout } from "./hooks/useInactivityTimeout";
 
-// Import the responsive Sidebar component
+
+const InactivityManager = () => {
+  useInactivityTimeout();
+  return null; // This component renders nothing
+};
 
 function App() {
   // Initialize navbarType based on whether an authToken exists in localStorage.
@@ -84,6 +87,7 @@ function App() {
         <Router>
           <NotificationContainer />
           <AlertContainer />
+          {navbarType === 'alt' && <InactivityManager />}
           {navbarType === "main" ? (
             // --- Layout for Signed Out users (Custom_navbar1 and public routes) ---
             <>
@@ -202,22 +206,6 @@ function App() {
                     element={
                       <ProtectedRoute>
                         <ContentManagement />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/appointments"
-                    element={
-                      <ProtectedRoute>
-                        <Appointments />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/reservations"
-                    element={
-                      <ProtectedRoute>
-                        <Reservations />
                       </ProtectedRoute>
                     }
                   />

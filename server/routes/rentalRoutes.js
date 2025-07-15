@@ -182,6 +182,7 @@ router.put('/:id/process', asyncHandler(async (req, res) => {
         rentalEndDate,
         shopDiscount,
         depositAmount,
+        depositReimbursed,
         payment
     } = req.body;
 
@@ -200,6 +201,13 @@ router.put('/:id/process', asyncHandler(async (req, res) => {
         // Check if the status is changing TO 'Returned' from a non-returned state
         if (status === 'Returned' && originalStatus !== 'Returned') {
             const stockUpdateOperations = [];
+
+            if (depositReimbursed !== undefined) {
+                if (parseFloat(depositReimbursed) > rental.financials.depositAmount) {
+                     throw new Error(`Reimbursement amount of ${depositReimbursed} exceeds the paid deposit of ${rental.financials.depositAmount}.`);
+                }
+                rental.financials.depositReimbursed = parseFloat(depositReimbursed);
+            }
 
             // 1. Restore stock for singleRents
             if (rental.singleRents?.length > 0) {
@@ -304,7 +312,19 @@ router.put('/:id/process', asyncHandler(async (req, res) => {
         const updatedRental = await rental.save({ session });
 
         await session.commitTransaction();
-        res.status(200).json(updatedRental);
+        const calculatedFinancials = calculateFinancials(updatedRental.toObject());
+        
+        const rentBackItems = (status === 'Returned') 
+            ? updatedRental.customTailoring.filter(item => item.tailoringType === 'Tailored for Rent-Back') 
+        : [];
+
+        const finalResponse = {
+            ...updatedRental.toObject(),
+            financials: calculatedFinancials,
+            rentBackItems: rentBackItems,
+        };
+
+        res.status(200).json(finalResponse);
 
     } catch (error) {
         await session.abortTransaction();
@@ -424,7 +444,13 @@ router.put('/:id/addItem', asyncHandler(async (req, res) => {
         const updatedRental = await rental.save({ session });
         
         await session.commitTransaction();
-        res.status(200).json(updatedRental);
+        const calculatedFinancials = calculateFinancials(updatedRental.toObject());
+        const finalResponse = {
+            ...updatedRental.toObject(),
+            financials: calculatedFinancials,
+        };
+
+        res.status(200).json(finalResponse);
 
     } catch (error) {
         await session.abortTransaction();
@@ -742,57 +768,57 @@ router.delete('/:rentalId/packages/:packageId', asyncHandler(async (req, res) =>
 
 
 // PUT to update a custom tailoring item in a rental
-// router.put('/:rentalId/custom-items/:itemId', asyncHandler(async (req, res) => {
-//     const { rentalId, itemId } = req.params;
-//     const updatedItemData = req.body;
+router.put('/:rentalId/custom-items/:itemId', asyncHandler(async (req, res) => {
+    const { rentalId, itemId } = req.params;
+    const updatedItemData = req.body;
 
-//     // Basic validation on the incoming data
-//     if (!updatedItemData || !updatedItemData.name) {
-//         res.status(400);
-//         throw new Error("Invalid custom item data provided.");
-//     }
+    // Basic validation on the incoming data
+    if (!updatedItemData || !updatedItemData.name) {
+        res.status(400);
+        throw new Error("Invalid custom item data provided.");
+    }
 
-//     const session = await mongoose.startSession();
-//     session.startTransaction();
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-//     try {
-//         // 1. Find the rental document
-//         const rental = await RentalModel.findById(rentalId).session(session);
-//         if (!rental) {
-//             res.status(404);
-//             throw new Error("Rental not found.");
-//         }
+    try {
+        // 1. Find the rental document
+        const rental = await RentalModel.findById(rentalId).session(session);
+        if (!rental) {
+            res.status(404);
+            throw new Error("Rental not found.");
+        }
 
-//         // 2. Find the specific custom item sub-document by its unique _id
-//         const itemToUpdate = rental.customTailoring.id(itemId);
-//         if (!itemToUpdate) {
-//             res.status(404);
-//             throw new Error("Custom item not found in this rental.");
-//         }
+        // 2. Find the specific custom item sub-document by its unique _id
+        const itemToUpdate = rental.customTailoring.id(itemId);
+        if (!itemToUpdate) {
+            res.status(404);
+            throw new Error("Custom item not found in this rental.");
+        }
 
-//         // 3. Update the fields of the found sub-document.
-//         // Object.assign is a clean way to merge the new data into the existing item.
-//         // We exclude _id from the update to prevent it from being accidentally changed.
-//         const { _id, ...dataToUpdate } = updatedItemData;
-//         Object.assign(itemToUpdate, dataToUpdate);
+        // 3. Update the fields of the found sub-document.
+        // Object.assign is a clean way to merge the new data into the existing item.
+        // We exclude _id from the update to prevent it from being accidentally changed.
+        const { _id, ...dataToUpdate } = updatedItemData;
+        Object.assign(itemToUpdate, dataToUpdate);
 
-//         // 4. Save the changes to the parent rental document
-//         await rental.save({ session });
+        // 4. Save the changes to the parent rental document
+        await rental.save({ session });
 
-//         // 5. Commit the transaction
-//         await session.commitTransaction();
+        // 5. Commit the transaction
+        await session.commitTransaction();
 
-//         // 6. Recalculate financials and send the final, updated rental object
-//         const updatedRentalWithFinancials = calculateFinancials(rental.toObject());
-//         res.status(200).json({ ...rental.toObject(), financials: updatedRentalWithFinancials });
+        // 6. Recalculate financials and send the final, updated rental object
+        const updatedRentalWithFinancials = calculateFinancials(rental.toObject());
+        res.status(200).json({ ...rental.toObject(), financials: updatedRentalWithFinancials });
 
-//     } catch (error) {
-//         await session.abortTransaction();
-//         throw error;
-//     } finally {
-//         session.endSession();
-//     }
-// }));
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
+    }
+}));
 
 // DELETE a custom item from a rental
 router.delete('/:rentalId/custom-items/:itemId', asyncHandler(async (req, res) => {

@@ -37,6 +37,8 @@ import {
   Package
 } from '../../types';
 import api from '../../services/api';
+import { formatCurrency } from '../../utils/formatters';
+import AddItemFromCustomModal from '../../components/modals/addItemFromCustomModal/AddItemFromCustomModal';
 
 // ===================================================================================
 // --- MAIN COMPONENT ---
@@ -63,8 +65,10 @@ function RentalViewer() {
   const [paymentAmount, setPaymentAmount] = useState('0');
   const [gcashRef, setGcashRef] = useState('');
   const [editableDeposit, setEditableDeposit] = useState('0');
+  const [reimburseAmount, setReimburseAmount] = useState('0');
+  const [showReturnConfirmModal, setShowReturnConfirmModal] = useState(false);
 
-  // State for modals and notifications
+  // State for modals
   const [showDeleteItemModal, setShowDeleteItemModal] = useState(false);
   const [showEditItemModal, setShowEditItemModal] = useState(false);
   const [itemToModify, setItemToModify] = useState<SingleRentItem | null>(null);
@@ -80,6 +84,10 @@ function RentalViewer() {
   const [allPackages, setAllPackages] = useState<Package[]>([]);
   const [packageHasCustomItems, setPackageHasCustomItems] = useState(false);
   const [canProceedWithWarnings, setCanProceedWithWarnings] = useState(false);
+  const [showPickupConfirmModal, setShowPickupConfirmModal] = useState(false);
+  const [showMarkAsPickedUpConfirmModal, setShowMarkAsPickedUpConfirmModal] = useState(false);
+  const [showRentBackModal, setShowRentBackModal] = useState(false);
+  const [itemToRentBack, setItemToRentBack] = useState<CustomTailoringItem | null>(null);
   
   // --- DATA FETCHING & SYNCING ---
   useEffect(() => {
@@ -123,7 +131,42 @@ function RentalViewer() {
   }, [rental]); 
 
   // --- EVENT HANDLERS ---
-  const handleUpdateAndPay = async (payload: { status?: RentalStatus; rentalStartDate?: string; rentalEndDate?: string; shopDiscount?: number; depositAmount?: number; payment?: { amount: number; referenceNumber: string | null; } }) => {
+  const handleInitiatePickup = () => {
+    // You can perform any pre-modal checks here if needed in the future
+    setShowPickupConfirmModal(true);
+  };
+
+  const handleInitiateMarkAsPickedUp = () => {
+    // This will trigger the confirmation before calling the main logic
+    setShowMarkAsPickedUpConfirmModal(true);
+  };
+
+  const handleConfirmReturn = async () => {
+    setShowReturnConfirmModal(false);
+    
+    try {
+      const response = await api.put(`/rentals/${rental?._id}/process`, {
+          status: 'Returned',
+          depositReimbursed: parseFloat(reimburseAmount) || 0,
+      });
+
+      // The API now returns the updated rental AND any rent-back items
+      const { rentBackItems, ...updatedRental } = response.data;
+      
+      setRental(updatedRental);
+      addAlert('Rental successfully marked as returned!', 'success');
+      
+      // If there are items to process, open the modal with the first one
+      if (rentBackItems && rentBackItems.length > 0) {
+          setItemToRentBack(rentBackItems[0]); // For now, we process one at a time
+          setShowRentBackModal(true);
+      }
+    } catch (err: any) {
+      addAlert(err.response?.data?.message || "Failed to mark as returned.", 'danger');
+    }
+  };
+
+  const handleUpdateAndPay = async (payload: { status?: RentalStatus; rentalStartDate?: string; rentalEndDate?: string; shopDiscount?: number; depositAmount?: number; depositReimbursed?: number; payment?: { amount: number; referenceNumber: string | null; } }) => {
     if (!rental) return;
 
     // --- NEW: Validate the deposit amount before sending ---
@@ -148,7 +191,8 @@ function RentalViewer() {
   };
 
   // --- NEW: Validation and Pickup Flow ---
-  const initiateMoveToPickup = async () => {
+  const handleConfirmPickup = async () => {
+    setShowPickupConfirmModal(false);
     if (!rental) return;
 
     try {
@@ -216,31 +260,21 @@ function RentalViewer() {
 
 
   // --- NEW HANDLER FOR THE COMBINED ACTION ---
-  const handleMarkAsPickedUp = () => {
+  const handleConfirmMarkAsPickedUp = () => {
+    setShowMarkAsPickedUpConfirmModal(false);
     if (!rental) return;
 
-    // 1. Get all financial data directly from the server-provided rental object
-    const grandTotal = rental.financials.grandTotal || 0;
-    const totalPaid = rental.financials.totalPaid || 0;
+    // The validation is now handled in the OrderActions component.
+    // We can proceed directly to building the payload.
+    
     const finalPaymentInput = parseFloat(paymentAmount) || 0;
 
-    // 2. Validate if the new payment covers the remaining balance
-    // The total paid SO FAR plus the payment being made now must be >= the grand total.
-    if ((totalPaid + finalPaymentInput) < grandTotal) {
-        const remainingNeeded = grandTotal - totalPaid;
-        addAlert(`Payment is insufficient. Remaining balance of ₱${remainingNeeded.toFixed(2)} is required.`, 'danger');
-        return; // Stop the process
-    }
-    
-    // 3. Build the payload for the update
     const payload: Parameters<typeof handleUpdateAndPay>[0] = {
         status: 'To Return', // The target status
-        // We also send the current discount/deposit values in case they were edited
         shopDiscount: parseFloat(editableDiscount) || 0,
         depositAmount: parseFloat(editableDeposit) || 0,
     };
 
-    // If a final payment amount was entered, include it in the payload.
     if (finalPaymentInput > 0) {
       payload.payment = {
         amount: finalPaymentInput,
@@ -248,9 +282,8 @@ function RentalViewer() {
       };
     }
 
-    // 4. Call the central update function
     handleUpdateAndPay(payload);
-  };
+};
 
   const handleSaveChanges = async () => {
     if (!editableCustomer || !id) return;
@@ -433,7 +466,9 @@ function RentalViewer() {
   const handleDiscountChange = (value: string) => {
     // 1. Safely get the maximum possible discount (the total value of all items).
     // The `itemsTotal` is calculated by the backend and is the perfect value for this.
-    const maxDiscount = rental?.financials?.itemsTotal;
+    const subtotal = rental?.financials?.itemsTotal ?? 0;
+    const deposit = parseFloat(editableDeposit) || 0; // Use the current deposit from state
+    const maxDiscount = subtotal + deposit;
 
     // 2. If we don't have a max value to compare against, just update the input.
     if (maxDiscount === undefined || maxDiscount === null) {
@@ -517,6 +552,47 @@ function RentalViewer() {
     }
   };
 
+  const handleReimburseDeposit = async (amount: number) => {
+    if (!rental) return;
+
+    try {
+      const response = await api.put(`/rentals/${rental._id}/reimburse`, { amount });
+      setRental(response.data); // Update the state with the final, "Completed" rental object
+      addAlert('Order completed and deposit reimbursement recorded!', 'success');
+    } catch (err: any) {
+      addAlert(err.response?.data?.message || "Failed to process reimbursement.", 'danger');
+    }
+  };
+
+  const handleReimburseAmountChange = (value: string) => {
+    const numValue = parseFloat(value);
+    const deposit = rental?.financials.depositAmount || 0;
+
+    if (isNaN(numValue) || numValue < 0) {
+      setReimburseAmount('0');
+    } else if (numValue > deposit) {
+      setReimburseAmount(String(deposit));
+    } else {
+      setReimburseAmount(value);
+    }
+  };
+
+  const handleInitiateReturn = (customItems: CustomTailoringItem[]) => {
+    // Find rent-back items
+    const rentBackItems = customItems.filter(
+      (item) => item.tailoringType === 'Tailored for Rent-Back'
+    );
+
+    if (rentBackItems.length > 0) {
+      // If rent-back items exist, open the inventory modal first.
+      setItemToRentBack(rentBackItems[0]); // For now, handle one at a time
+      setShowRentBackModal(true);
+    } else {
+      // Otherwise, go directly to the final confirmation modal.
+      setShowReturnConfirmModal(true);
+    }
+  };
+
   if (loading) { return <Container className="text-center py-5"><Spinner /></Container>; }
   if (!rental || !editableCustomer) { return <Container><Alert variant="info">Rental data could not be displayed.</Alert></Container>; }
   
@@ -565,7 +641,6 @@ function RentalViewer() {
 
         <Col md={4}>
           <OrderActions
-            onInitiateMoveToPickup={initiateMoveToPickup}
             rental={rental}
             status={rental.status}
             financials={rental.financials}
@@ -585,14 +660,40 @@ function RentalViewer() {
             onPaymentAmountBlur={handlePaymentAmountBlur}
             gcashRef={gcashRef}
             onGcashRefChange={setGcashRef}
-            onUpdateAndPay={handleUpdateAndPay}
-            onMarkAsPickedUp={handleMarkAsPickedUp}
             editableDeposit={editableDeposit}
             onDepositChange={handleDepositChange}
             onDepositBlur={handleDepositBlur}
+            onReimburseDeposit={handleReimburseDeposit}
+            reimburseAmount={reimburseAmount}
+            onReimburseAmountChange={handleReimburseAmountChange}
+            onInitiateReturn={handleInitiateReturn}
+            onInitiatePickup={handleInitiatePickup}
+            onInitiateMarkAsPickedUp={handleInitiateMarkAsPickedUp} 
           />
         </Col>
       </Row>
+
+      <Modal show={showReturnConfirmModal} onHide={() => setShowReturnConfirmModal(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>
+            <ExclamationTriangleFill className="me-2 text-warning" />
+            Confirm Return
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          You are about to mark this rental as returned.
+          <br/><br/>
+          Paid Deposit: <strong>₱{formatCurrency(rental.financials.depositAmount)}</strong>
+          <br/>
+          Amount to be Reimbursed: <strong>₱{formatCurrency(parseFloat(reimburseAmount) || 0)}</strong>
+          <br/><br/>
+          This action will restore item stock and cannot be undone. Are you sure you want to proceed?
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowReturnConfirmModal(false)}>Cancel</Button>
+          <Button variant="warning" onClick={handleConfirmReturn}>Yes, Mark as Returned</Button>
+        </Modal.Footer>
+      </Modal>
 
       <Modal show={showDeleteItemModal} onHide={() => setShowDeleteItemModal(false)} centered>
         <Modal.Header closeButton><Modal.Title>Confirm Deletion</Modal.Title></Modal.Header>
@@ -677,6 +778,39 @@ function RentalViewer() {
         </Modal.Footer>
       </Modal>
 
+      <Modal show={showPickupConfirmModal} onHide={() => setShowPickupConfirmModal(false)} centered>
+    <Modal.Header closeButton>
+      <Modal.Title>
+        <ExclamationTriangleFill className="me-2 text-info" />
+        Confirm Action
+      </Modal.Title>
+    </Modal.Header>
+    <Modal.Body>
+      Are you sure you want to move this rental to the "To Pickup" stage?
+    </Modal.Body>
+    <Modal.Footer>
+      <Button variant="secondary" onClick={() => setShowPickupConfirmModal(false)}>Cancel</Button>
+      <Button variant="primary" onClick={handleConfirmPickup}>Yes, Move to Pickup</Button>
+    </Modal.Footer>
+  </Modal>
+
+  {/* Confirmation for Mark as Picked Up */}
+  <Modal show={showMarkAsPickedUpConfirmModal} onHide={() => setShowMarkAsPickedUpConfirmModal(false)} centered>
+    <Modal.Header closeButton>
+      <Modal.Title>
+        <ExclamationTriangleFill className="me-2 text-info" />
+        Confirm Pickup
+      </Modal.Title>
+    </Modal.Header>
+    <Modal.Body>
+      Are you sure you want to mark this rental as "Picked Up"? This will finalize the payment and move the rental to the "To Return" stage.
+    </Modal.Body>
+    <Modal.Footer>
+      <Button variant="secondary" onClick={() => setShowMarkAsPickedUpConfirmModal(false)}>Cancel</Button>
+      <Button variant="info" onClick={handleConfirmMarkAsPickedUp}>Yes, Mark as Picked Up</Button>
+    </Modal.Footer>
+  </Modal>
+
       {showEditItemModal && itemToModify && (
         <EditItemModal 
           show={showEditItemModal} 
@@ -696,6 +830,21 @@ function RentalViewer() {
           allPackages={allPackages}
           customItems={rental.customTailoring || []} 
         />
+      )}
+
+      {itemToRentBack && (
+          <AddItemFromCustomModal 
+              show={showRentBackModal}
+              onHide={() => { // <-- ADD THIS onHide PROP
+                  setShowRentBackModal(false);
+                  setShowReturnConfirmModal(true);
+              }}
+              onFinished={() => {
+                  setShowRentBackModal(false);
+                  setShowReturnConfirmModal(true);
+              }}
+              itemToProcess={itemToRentBack}
+          />
       )}
 
       {showEditCustomItemModal && customItemToModify && (

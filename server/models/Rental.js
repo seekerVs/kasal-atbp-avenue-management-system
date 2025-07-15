@@ -72,6 +72,7 @@ const FinancialsSchema = new mongoose.Schema({
   depositAmount: { type: Number, default: 0 },
   downPayment: { type: PaymentDetailSchema },
   finalPayment: { type: PaymentDetailSchema },
+  depositReimbursed: { type: Number, default: 0 },
 }, { _id: false });
 
 // --- MAIN RENTAL SCHEMA ---

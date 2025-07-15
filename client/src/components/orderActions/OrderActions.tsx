@@ -1,6 +1,6 @@
 // client/src/components/rentalViewer/OrderActions.tsx
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Row, Col, Card, Badge, Button, Form, InputGroup, Alert, Accordion, ListGroup } from 'react-bootstrap';
 import {
   CalendarCheck,
@@ -10,9 +10,11 @@ import {
   HourglassSplit,
   XCircleFill,
   CashCoin,
+  CashStack,
 } from 'react-bootstrap-icons';
-import { RentalStatus, Financials, RentalOrder } from '../../types'; // Import from centralized types
+import { RentalStatus, Financials, RentalOrder, CustomTailoringItem } from '../../types'; // Import from centralized types
 import { formatCurrency } from '../../utils/formatters';
+import { useAlert } from '../../contexts/AlertContext';
 
 // --- HELPER FUNCTIONS ---
 const getStatusIcon = (status: RentalStatus) => {
@@ -47,18 +49,15 @@ interface OrderActionsProps {
   onPaymentAmountBlur: () => void;
   gcashRef: string;
   onGcashRefChange: (value: string) => void;
-  onMarkAsPickedUp: () => void;
   editableDeposit: string;
   onDepositChange: (value: string) => void;
   onDepositBlur: () => void;
-  onUpdateAndPay: (payload: { 
-    status?: RentalStatus; 
-    rentalStartDate?: string; 
-    rentalEndDate?: string; 
-    shopDiscount?: number;
-    payment?: { amount: number; referenceNumber: string | null; }
-  }) => void;
-  onInitiateMoveToPickup: () => void;
+  onReimburseDeposit: (amount: number) => void;
+  reimburseAmount: string;
+  onReimburseAmountChange: (value: string) => void;
+  onInitiateReturn: (rentBackItems: CustomTailoringItem[]) => void;
+  onInitiatePickup: () => void;
+  onInitiateMarkAsPickedUp: () => void;
 }
 
 // ===================================================================================
@@ -84,14 +83,16 @@ const OrderActions: React.FC<OrderActionsProps> = ({
   onPaymentAmountBlur,
   gcashRef,
   onGcashRefChange,
-  onUpdateAndPay,
-  onMarkAsPickedUp,
   editableDeposit,
   onDepositChange,
   onDepositBlur,
-  onInitiateMoveToPickup,
+  reimburseAmount, // <-- Destructure
+  onReimburseAmountChange, // <-- Destructure
+  onInitiateReturn,
+  onInitiateMarkAsPickedUp,
+  onInitiatePickup,
 }) => {
-
+  const { addAlert } = useAlert();
   const discountAmount = parseFloat(editableDiscount) || 0;
   const depositAmount = parseFloat(editableDeposit) || 0;
   const isStandardDeposit = parseFloat(editableDeposit) === (financials.requiredDeposit || 0);
@@ -351,12 +352,6 @@ const OrderActions: React.FC<OrderActionsProps> = ({
                   )}
                 </div>
               )}
-
-              {/* --- Display Total Paid --- */}
-              <div className="d-flex justify-content-between fw-bold mt-2">
-                <span>Total Paid:</span>
-                <span className="text-success">₱{formatCurrency(totalPaid)}</span>
-              </div>
             </div>
           </div>
         )}
@@ -414,9 +409,68 @@ const OrderActions: React.FC<OrderActionsProps> = ({
         )}
         
         <div className="d-grid gap-2 mt-4">
-          {status === 'To Process' && (<Button size="lg" onClick={onInitiateMoveToPickup } style={{ backgroundColor: '#8B0000', border: 'none', fontWeight: 'bold' }} disabled={shouldDisableButton}>Move to Pickup</Button>)}
-          {status === 'To Pickup' && ( <Button variant="info" size="lg" onClick={onMarkAsPickedUp} disabled={shouldDisableButton}>Mark as Picked Up</Button> )}
-          {status === 'To Return' && ( <Button variant="warning" size="lg" onClick={() => onUpdateAndPay({ status: 'Returned' })}>Mark as Returned</Button> )}
+          {status === 'To Process' && (<Button size="lg" onClick={onInitiatePickup} style={{ backgroundColor: '#8B0000', border: 'none', fontWeight: 'bold' }} disabled={shouldDisableButton}>Move to Pickup</Button>)}
+          {status === 'To Pickup' && (
+            <Button
+              variant="info"
+              size="lg"
+              onClick={() => {
+                // --- THIS IS THE NEW VALIDATION LOGIC ---
+                const finalPaymentInput = parseFloat(paymentAmount) || 0;
+                // Use the server-calculated remaining balance with a fallback to 0.
+                const remainingBalance = financials.remainingBalance ?? 0; // <-- THE FIX
+
+                if (remainingBalance > finalPaymentInput) {
+                  addAlert(
+                    `Payment is insufficient. Remaining balance of ₱${formatCurrency(remainingBalance)} must be paid.`,
+                    'danger'
+                  );
+                  return; // Stop the process
+                }         
+                // If validation passes, call the original handler from the parent.
+                onInitiateMarkAsPickedUp();
+              }}
+              disabled={shouldDisableButton}
+            >
+              Mark as Picked Up
+            </Button>
+          )}
+          {status === 'To Return' && (
+            <>
+              <Form.Group className="mb-2">
+                  <Form.Label className="small text-muted">Amount to Reimburse</Form.Label>
+                  <InputGroup>
+                      <InputGroup.Text>₱</InputGroup.Text>
+                      <Form.Control
+                          type="number"
+                          value={reimburseAmount}
+                          onChange={(e) => onReimburseAmountChange(e.target.value)}
+                          min="0"
+                          max={financials.depositAmount}
+                          style={{ textAlign: 'right' }}
+                      />
+                  </InputGroup>
+              </Form.Group>
+              <Button variant="warning" size="lg" onClick={() => onInitiateReturn(rental.customTailoring)}>
+                  <ArrowCounterclockwise className="me-2" />
+                  Mark as Returned
+              </Button>
+            </>
+          )}
+
+          {status === 'Returned' && (
+            <Alert variant="success" className="text-center">
+                <p className="fw-bold mb-1">Return Processed</p>
+                <p className="small mb-0">Reimbursed Amount: ₱{formatCurrency(financials.depositReimbursed)}</p>
+            </Alert>
+          )}
+
+          {status === 'Completed' && ( // <-- NEW: Final state display
+              <Alert variant="success" className="text-center">
+                  <CheckCircleFill className="me-2"/>
+                  This rental has been completed.
+              </Alert>
+          )}
           {status === 'Returned' && ( <Alert variant="success" className="text-center">This rental has been completed.</Alert> )}
           {status === 'Cancelled' && ( <Alert variant="danger" className="text-center">This rental was cancelled.</Alert> )}
         </div>

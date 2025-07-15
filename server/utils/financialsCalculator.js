@@ -93,6 +93,7 @@ function calculateFinancials(rentalData) {
         // Carry over existing payment details if they exist.
         downPayment: rentalData.financials?.downPayment,
         finalPayment: rentalData.financials?.finalPayment,
+        depositReimbursed: rentalData.financials?.depositReimbursed || 0,
     };
 }
 
