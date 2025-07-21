@@ -1,18 +1,23 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Modal, Button, Form, Row, Col, ListGroup, Badge } from 'react-bootstrap';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Modal, Button, Form, Row, Col, ListGroup, Badge, Alert } from 'react-bootstrap';
 import { RentedPackage, PackageFulfillment, InventoryItem, FulfillmentItem, CustomTailoringItem, MeasurementRef, Package } from '../../../types';
 import AssignmentSubModal from '../assignmentSubModal/AssignmentSubModal';
 import CreateEditCustomItemModal from '../createEditCustomItemModal/CreateEditCustomItemModal'; 
-import { PencilSquare, PlusCircle, Trash } from 'react-bootstrap-icons';
+import { ExclamationTriangleFill, PencilSquare, PlusCircle, Trash } from 'react-bootstrap-icons';
 import api from '../../../services/api';
+
+interface StagedFile {
+  file: File;
+  placeholder: string; // e.g., "placeholder_image.png"
+}
 
 interface EditPackageModalProps {
   show: boolean;
   onHide: () => void;
-  pkg: RentedPackage;             // Use the new RentedPackage type
-  inventory: InventoryItem[];       // Use the correct InventoryItem type
-  onSave: (updatedFulfillment: PackageFulfillment[], updatedCustomItems: CustomTailoringItem[]) => void;
-  allPackages: Package[];           // Use the global Package type for the templates
+  pkg: RentedPackage;
+  inventory: InventoryItem[];
+  onSave: (updatedFulfillment: PackageFulfillment[], updatedCustomItems: CustomTailoringItem[], customItemIdsToDelete: string[], imageUrlsToDelete: string[]) => void;
+  allPackages: Package[];
   customItems: CustomTailoringItem[];
 }
 
@@ -21,12 +26,16 @@ const EditPackageModal: React.FC<EditPackageModalProps> = ({ show, onHide, pkg, 
   // State for the inventory assignment sub-modal
   const [showAssignmentModal, setShowAssignmentModal] = useState(false);
   const [invAssignmentIndex, setInvAssignmentIndex] = useState<number | null>(null);
+  const [customItemIdsToDelete, setCustomItemIdsToDelete] = useState<string[]>([]);
   
   // --- NEW STATE for the custom item creation/edit flow ---
   const [measurementRefs, setMeasurementRefs] = useState<MeasurementRef[]>([]);
   const [showCustomItemModal, setShowCustomItemModal] = useState(false);
   const [customItemContext, setCustomItemContext] = useState<{ index: number; item: CustomTailoringItem | null; itemName: string } | null>(null);
+  const [stagedFiles, setStagedFiles] = useState<StagedFile[]>([]);
+  const [isSaving, setIsSaving] = useState(false); 
   
+  const initialFulfillmentRef = useRef<PackageFulfillment[]>([]);
 
   useEffect(() => {
     const fetchMeasurementRefs = async () => {
@@ -89,6 +98,7 @@ const EditPackageModal: React.FC<EditPackageModalProps> = ({ show, onHide, pkg, 
 
       // 4. Set the component's state with this fully enriched data.
       setFulfillment(enrichedFulfillment);
+      initialFulfillmentRef.current = JSON.parse(JSON.stringify(enrichedFulfillment));
     }
   }, [pkg, customItems, inventory]); // IMPORTANT: Add inventory to the dependency array
 
@@ -142,68 +152,129 @@ const EditPackageModal: React.FC<EditPackageModalProps> = ({ show, onHide, pkg, 
     setShowCustomItemModal(true);
   };
 
-  const handleSaveCustomItem = (updatedItem: CustomTailoringItem) => {
+  const handleSaveCustomItem = (stagedItem: CustomTailoringItem, pendingFiles?: File[]) => {
     if (customItemContext === null) return;
     const { index } = customItemContext;
 
     const newFulfillmentData = [...fulfillment];
-    // Place the entire gathered custom item object into the assignedItem slot
-    newFulfillmentData[index].assignedItem = updatedItem;
+    newFulfillmentData[index].assignedItem = stagedItem;
     setFulfillment(newFulfillmentData);
     
+    if (pendingFiles && pendingFiles.length > 0) {
+        const newStagedFiles: StagedFile[] = pendingFiles.map(file => ({
+            file: file,
+            placeholder: `placeholder_${file.name}`,
+        }));
+        setStagedFiles(prev => [...prev, ...newStagedFiles]);
+    }
   };
 
+  const handleSaveChanges = async () => {
+    setIsSaving(true);
+    try {
+        // --- UPLOAD STAGED FILES ---
+        const uploadPromises = stagedFiles.map(async (stagedFile) => {
+            // This is the correct way to upload a single file
+            const formData = new FormData();
+            formData.append('file', stagedFile.file);
 
-  const handleSaveChanges = () => {
-    // 1. GATHER ALL MODIFIED CUSTOM ITEMS
-    // Create an array to hold the full data of any custom items that were edited.
-    const updatedCustomItems: CustomTailoringItem[] = [];
-    
-    // Iterate through the modal's current fulfillment state.
-    fulfillment.forEach(fulfillItem => {
-        const assigned = fulfillItem.assignedItem;
-        
-        // Find any role that is custom AND has a full CustomTailoringItem object attached.
-        // This object would have been placed here by the CreateEditCustomItemModal's onSave handler.
-        if (fulfillItem.isCustom && assigned && 'outfitCategory' in assigned) {
-            // Add the full custom item object to our list.
-            updatedCustomItems.push(assigned as CustomTailoringItem);
-        }
-    });
+            // Use the api instance we already have for authenticated requests
+            const response = await api.post('/upload', formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                },
+            });
 
-    // 2. "CLEAN" THE FULFILLMENT DATA FOR THE DATABASE
-    // Create the database-ready fulfillment array that uses ID references.
-    const cleanedFulfillment = fulfillment.map(fulfillItem => {
-        const assigned = fulfillItem.assignedItem;
-
-        // Find the same custom items we identified above.
-        if (fulfillItem.isCustom && assigned && 'outfitCategory' in assigned) {
-            // Transform the enriched object back into a simple ID reference.
             return {
-                ...fulfillItem,
-                assignedItem: {
-                    itemId: (assigned as CustomTailoringItem)._id 
-                }
+                placeholder: stagedFile.placeholder,
+                url: response.data.url, // Get the URL from the response
             };
-        }
-        
-        // If it's a standard inventory item or an unassigned role, its structure is already correct.
-        return fulfillItem;
-    });
+        });
 
-    // 3. SEND BOTH PIECES OF DATA TO THE PARENT COMPONENT
-    // The onSave prop now expects two arguments as per our updated interface.
-    onSave(cleanedFulfillment, updatedCustomItems);
-    
-    // Close the modal.
-    onHide();
+        const uploadedMappings = await Promise.all(uploadPromises);
+        const urlMap = new Map(uploadedMappings.map(u => [u.placeholder, u.url]));
+        
+        // --- PREPARE FINAL PAYLOAD ---
+        const updatedCustomItems: CustomTailoringItem[] = [];
+        const finalFulfillment = [...fulfillment]; // Create a mutable copy
+
+        finalFulfillment.forEach((fulfillItem, index) => {
+            const assigned = fulfillItem.assignedItem;
+            if (fulfillItem.isCustom && assigned && 'outfitCategory' in assigned) {
+                // Replace placeholders with real URLs
+                const finalImages = (assigned.referenceImages || []).map(ref => 
+                    urlMap.get(ref) || ref
+                ).filter(url => url && !url.startsWith('placeholder_')); // Also filter out any leftover placeholders
+                
+                const finalCustomItem = {
+                    ...(assigned as CustomTailoringItem),
+                    referenceImages: finalImages,
+                };
+                
+                updatedCustomItems.push(finalCustomItem);
+
+                // Update the fulfillment reference to use the final object ID
+                // Ensure assignedItem is updated to be the simple reference object
+                finalFulfillment[index] = {
+                    ...fulfillItem,
+                    assignedItem: { itemId: finalCustomItem._id }
+                };
+            }
+        });
+
+        // --- NEW DELETION LOGIC ---
+        // A. Get all initial custom image URLs
+        const initialImageUrls = new Set(
+            initialFulfillmentRef.current.flatMap(fulfill => {
+                const assigned = fulfill.assignedItem;
+                if (fulfill.isCustom && assigned && 'outfitCategory' in assigned) {
+                    return assigned.referenceImages || [];
+                }
+                return [];
+            })
+        );
+
+        // B. Get all final custom image URLs
+        const finalImageUrls = new Set(
+            updatedCustomItems.flatMap(item => item.referenceImages || [])
+        );
+
+        // C. Find the difference: URLs that were in the initial set but not in the final set
+        const imageUrlsToDelete: string[] = [];
+        initialImageUrls.forEach(url => {
+            if (!finalImageUrls.has(url)) {
+                imageUrlsToDelete.push(url);
+            }
+        });
+        // --- END OF NEW DELETION LOGIC ---
+
+        // D. Call the parent's onSave with all four pieces of data.
+        onSave(finalFulfillment, updatedCustomItems, customItemIdsToDelete, imageUrlsToDelete);
+
+        onHide();
+
+    } catch (error) {
+        console.error("Save process failed in EditPackageModal:", error);
+        alert("Failed to save changes. An error occurred during file upload.");
+    } finally {
+        setIsSaving(false);
+    }
   };
 
   const handleClearAssignment = (index: number) => {
     const updatedFulfillment = [...fulfillment];
-    if (!updatedFulfillment[index]) return;
+    const fulfillItem = updatedFulfillment[index];
+    if (!fulfillItem) return;
 
-    // Reset the assignedItem to an empty object
+    const assigned = fulfillItem.assignedItem;
+
+    // If it's a custom item, add its ID to our "to-delete" list.
+    if (assigned && 'outfitCategory' in assigned) {
+        setCustomItemIdsToDelete(prev => [...prev, assigned._id]);
+    }
+    
+    // For ALL items (custom or inventory), just clear the assignment in the local state.
+    // This makes the UI update instantly without a permanent DB change.
     updatedFulfillment[index].assignedItem = {};
     setFulfillment(updatedFulfillment);
   };
@@ -314,7 +385,7 @@ const EditPackageModal: React.FC<EditPackageModalProps> = ({ show, onHide, pkg, 
                               </Col>
                               <Col md="auto" className="text-end d-flex gap-2">
                                 {/* This button appears only if an item is assigned */}
-                                {isLinkedToItem && (
+                                {(isLinkedToItem || hasCustomData) && (
                                     <Button
                                         variant="outline-danger"
                                         size="sm"
@@ -349,7 +420,9 @@ const EditPackageModal: React.FC<EditPackageModalProps> = ({ show, onHide, pkg, 
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={onHide}>Cancel</Button>
-          <Button variant="primary" onClick={handleSaveChanges}>Save Changes</Button>
+          <Button variant="primary" onClick={handleSaveChanges} disabled={isSaving}>
+              {isSaving ? 'Saving...' : 'Save Changes'}
+          </Button>
         </Modal.Footer>
       </Modal>
 
@@ -364,6 +437,7 @@ const EditPackageModal: React.FC<EditPackageModalProps> = ({ show, onHide, pkg, 
                 itemName={customItemContext.itemName}
                 measurementRefs={measurementRefs}
                 onSave={handleSaveCustomItem}
+                isForPackage={true}
             />
         )}
 
@@ -375,6 +449,7 @@ const EditPackageModal: React.FC<EditPackageModalProps> = ({ show, onHide, pkg, 
         preselectedItemId={preselectedItemIdForModal}
         preselectedVariation={preselectedVariationForModal}
       />
+
     </>
   );
 };

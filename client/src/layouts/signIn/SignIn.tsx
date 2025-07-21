@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Form, Button, Card, InputGroup, Alert } from "react-bootstrap"; // Import Alert for error messages
 import { Eye, EyeSlash } from "react-bootstrap-icons";
 import CustomFooter from "../../components/customFooter/CustomFooter"; // Assuming this path is correct
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import api from "../../services/api";
 
 interface SignInProps {
@@ -11,13 +11,16 @@ interface SignInProps {
 
 function SignIn({ setNavbarType }: SignInProps) {
   const navigate = useNavigate();
-  const location = useLocation();
-  const wasLoggedOutForInactivity = location.state?.from === 'inactivity';
+
+  const [searchParams] = useSearchParams();
+  const wasLoggedOutForInactivity = searchParams.get('reason') === 'inactivity';
+
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false); // State for loading
   const [errorMessage, setErrorMessage] = useState<string | null>(null); // State for error messages
+  
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,8 +94,9 @@ function SignIn({ setNavbarType }: SignInProps) {
                 placeholder="Email"
                 value={email}
                 required
+                name="signin_email"
                 onChange={(e) => setEmail(e.target.value)}
-                disabled={isLoading} // Disable input while loading
+                disabled={isLoading}
               />
             </Form.Group>
 
@@ -103,13 +107,18 @@ function SignIn({ setNavbarType }: SignInProps) {
                   placeholder="Password"
                   value={password}
                   required
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={isLoading} // Disable input while loading
+                  name="signin_password"
+                  onChange={(e) => {
+                    if (showPassword) setShowPassword(false); // Auto-hide password
+                    setPassword(e.target.value);
+                  }}
+                  disabled={isLoading}
                 />
                 <Button
                   variant="outline-secondary"
                   onClick={() => setShowPassword((prev) => !prev)}
-                  disabled={isLoading} // Disable button while loading
+                  disabled={isLoading}
+                  tabIndex={-1} // Optional: prevent focus if clicking the icon
                 >
                   {showPassword ? <EyeSlash /> : <Eye />}
                 </Button>

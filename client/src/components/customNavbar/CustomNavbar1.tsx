@@ -39,11 +39,11 @@ function Custom_navbar1() {
               <Nav.Link as={NavLink} to="/" end>
                 Home
               </Nav.Link>
-              <Nav.Link as={NavLink} to="/services">
-                Services
+              <Nav.Link as={NavLink} to="/book-now">
+                Book Now
               </Nav.Link>
               <Nav.Link as={NavLink} to="/products">
-                Products
+                Outfits
               </Nav.Link>
               <Nav.Link as={NavLink} to="/about">
                 About

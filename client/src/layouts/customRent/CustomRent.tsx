@@ -1,13 +1,16 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Container, Row, Col, Form, Button, Card, Spinner, InputGroup, Modal, ToastContainer, Toast } from 'react-bootstrap';
 import { ClipboardCheck, Palette, Gem, Camera, Pen, ExclamationTriangleFill, Trash, PlusCircleFill } from 'react-bootstrap-icons';
 import { useNavigate } from "react-router-dom";
 
 import CustomerDetailsCard from "../../components/CustomerDetailsCard";
 import { MeasurementRef, CustomerInfo, RentalOrder, MeasurementValues, CustomTailoringItem } from '../../types';
+
+import { MultiImageDropzone, MultiImageDropzoneRef } from "../../components/multiImageDropzone/MultiImageDropzone";
 import api from "../../services/api";
 import { useAlert } from "../../contexts/AlertContext";
 import { v4 as uuidv4 } from 'uuid';
+import ConfirmationModal from "../../components/modals/confirmationModal/ConfirmationModal";
 
 // --- TYPE DEFINITIONS (Specific to this component's state) ---
 export type InitialCustomTailoringData = Omit<CustomTailoringItem, '_id' | 'measurements' | 'outfitCategory' | 'outfitType'>;
@@ -22,7 +25,7 @@ const initialTailoringData: InitialCustomTailoringData = {
   tailoringType: 'Tailored for Purchase',
   materials: [''],
   designSpecifications: '', 
-  referenceImages: ['']
+  referenceImages: []
 };
 
 // ===================================================================================
@@ -48,10 +51,15 @@ function CustomRent() {
   const [existingOpenRental, setExistingOpenRental] = useState<RentalOrder | null>(null);
   const [selectedRentalForDisplay, setSelectedRentalForDisplay] = useState<RentalOrder | null>(null);
   const [showZeroPriceModal, setShowZeroPriceModal] = useState(false);
-  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+  const [showWarningModal, setShowWarningModal] = useState(false);
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [pendingAction, setPendingAction] = useState<'create' | 'add' | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const dropzoneRef = useRef<MultiImageDropzoneRef>(null);
+
+  
   
   // --- Data Fetching Effect ---
   useEffect(() => {
@@ -136,74 +144,130 @@ function CustomRent() {
     setFormData(prev => ({ ...prev, tailoring: { ...prev.tailoring, [listType]: newList } }));
   };
 
-  const validateForm = () => {
+  // client/src/layouts/customRent/CustomRent.tsx
+
+const checkForIssues = () => {
+    const errors = [];
+    const warnings = [];
+
+    // --- Hard Validations (Errors) ---
     if (!formData.customer.name || !formData.customer.phoneNumber || !formData.customer.address) { 
-      addAlert("Please fill in all required customer details (*).", 'danger'); return false; 
+        errors.push("Please fill in all required customer details (*).");
     }
-    if (!selectedCategory) { addAlert("Please select an Outfit Category.", 'danger'); return false; }
-    if (!selectedRefId || !selectedRef) { addAlert("Please select an Outfit Type.", 'danger'); return false; }
-    if (!formData.tailoring.name.trim()) { addAlert("Custom Item Name cannot be empty.", 'danger'); return false; }
-    for (const measurement of selectedRef.measurements) { if (!formData.measurements[measurement]) { addAlert(`Please fill in the "${measurement}" measurement.`, 'danger'); return false; } }
-    if (formData.tailoring.materials.every(m => m.trim() === '')) { addAlert("Materials field cannot be empty.", 'danger'); return false; }
-    if (!formData.tailoring.designSpecifications.trim()) { addAlert("Design Specifications field cannot be empty.", 'danger'); return false; }
-    return true;
+    if (!selectedCategory) { errors.push("Please select an Outfit Category."); }
+    if (!selectedRefId || !selectedRef) { errors.push("Please select an Outfit Type."); }
+    if (!formData.tailoring.name.trim()) { errors.push("Custom Item Name cannot be empty."); }
+    
+    // --- The measurement check has been REMOVED from the hard validations ---
+
+
+    // --- Soft Validations (Warnings) ---
+    if (formData.tailoring.materials.every(m => m.trim() === '')) { 
+        warnings.push("Materials"); 
+    }
+    if (!formData.tailoring.designSpecifications.trim()) { 
+        warnings.push("Design Specifications"); 
+    }
+    const hasImages = (dropzoneRef.current?.getFiles() ?? []).length > 0;
+    if (!hasImages) { 
+        warnings.push("Reference Images"); 
+    }
+
+    // --- THIS IS THE NEW MEASUREMENT CHECK ---
+    let anyMeasurementMissing = false;
+    if (selectedRef) { // Only check if an outfit type is selected
+        for (const measurement of selectedRef.measurements) {
+            const value = formData.measurements[measurement];
+            // A measurement is considered missing if it's not provided or is an empty string.
+            if (value === undefined || value === null || String(value).trim() === '') {
+                anyMeasurementMissing = true;
+                break; // Found one, no need to check the rest for the warning.
+            }
+        }
+    }
+    if (anyMeasurementMissing) {
+        warnings.push("Measurements");
+    }
+    // --- END OF NEW MEASUREMENT CHECK ---
+
+
+    // Display hard errors immediately
+    if (errors.length > 0) {
+        addAlert(errors.join(' '), 'danger');
+    }
+
+    return { hasErrors: errors.length > 0, warnings };
   };
 
-    const buildPayload = () => {
+  const buildPayload = async () => {
     const { customer, tailoring, measurements } = formData;
+    
+    // --- Trigger uploads and wait for URLs ---
+    const uploadedUrls = await dropzoneRef.current?.uploadAll();
+
     return {
-      customerInfo: [customer], // Always include customer info now
+      customerInfo: [customer],
       customTailoring: [{ 
-           _id: uuidv4(),
+          _id: uuidv4(),
           ...tailoring, 
           measurements: measurements, 
           materials: tailoring.materials.filter(m => m.trim() !== ''),
-          referenceImages: tailoring.referenceImages.filter(r => r.trim() !== ''),
+          referenceImages: uploadedUrls || [], // Use the new URLs
           outfitCategory: selectedCategory, 
           outfitType: selectedRef?.outfitName || '' 
       }]
     };
   };
 
-  const createNewRental = async () => {
-    if (!validateForm()) { setIsSubmitting(false); return; }
-    setIsSubmitting(true);
-    try {
-      const payload = buildPayload();
-      const response = await api.post('/rentals', payload);
-      addAlert("Custom rental created successfully! Redirecting...","success");
-      setTimeout(() => { navigate(`/rentals/${response.data._id}`); }, 1500);
-    } catch (err: any) { 
-      addAlert(err.response?.data?.message || "Failed to create request.", 'danger'); 
-      setIsSubmitting(false);
-    } 
-  };
+  const handleFormSubmission = (action: 'create' | 'add') => {
+    const { hasErrors, warnings: newWarnings } = checkForIssues();
 
-  const addItemToExistingRental = async () => {
-    const rentalId = existingOpenRental?._id;
-    if (!rentalId || !validateForm()) { setIsSubmitting(false); return; }
-    setIsSubmitting(true);
-    try {
-        const payload = buildPayload();
-        await api.put(`/rentals/${rentalId}/addItem`, payload);
-        addAlert("Custom item added successfully! Redirecting...","success");
-        setTimeout(() => navigate(`/rentals/${rentalId}`), 1500);
-    } catch (err: any) { 
-        addAlert(err.response?.data?.message || "Failed to add to rental.", 'danger');
-        setIsSubmitting(false);
+    // 1. Stop if there are hard validation errors.
+    if (hasErrors) {
+        return;
     }
-  };
 
-  const handleFormSubmission = () => {
-    const action = existingOpenRental ? addItemToExistingRental : createNewRental;
-    if (!validateForm()) return;
+    // Store the action ('create' or 'add') that we want to perform.
+    setPendingAction(action);
+
+    // 2. Check for optional field warnings first.
+    if (newWarnings.length > 0) {
+        setWarnings(newWarnings);
+        setShowWarningModal(true); // Show the warning modal and stop.
+        return; // The flow will continue from the modal's "Proceed" button.
+    }
+    
+    // 3. If there were NO warnings, check for the zero price next.
     if (formData.tailoring.price <= 0) {
-        setPendingAction(() => action);
-        setShowZeroPriceModal(true);
-    } else {
-        action();
+        setShowZeroPriceModal(true); // Show the zero price modal and stop.
+        return; // The flow will continue from this modal's "Proceed" button.
     }
+
+    // 4. If there were no warnings AND the price is not zero, execute immediately.
+    executeSubmission(action);
   };
+
+  // We create a new helper function for the actual API call logic
+  // to avoid duplicating it.
+  const executeSubmission = async (action: 'create' | 'add') => {
+      setIsSubmitting(true);
+      try {
+          const payload = await buildPayload();
+          if (action === 'add' && existingOpenRental?._id) {
+              await api.put(`/rentals/${existingOpenRental._id}/addItem`, payload);
+              addAlert("Custom item added successfully! Redirecting...", "success");
+              setTimeout(() => navigate(`/rentals/${existingOpenRental._id}`), 1500);
+          } else {
+              const response = await api.post('/rentals', payload);
+              addAlert("Custom rental created successfully! Redirecting...", "success");
+              setTimeout(() => navigate(`/rentals/${response.data._id}`), 1500);
+          }
+      } catch (err: any) {
+          addAlert(err.response?.data?.message || "Failed to process request.", 'danger');
+      } finally {
+          setIsSubmitting(false);
+      }
+  }
 
   if (loading) return <div className="text-center py-5"><Spinner /></div>;
 
@@ -243,10 +307,11 @@ function CustomRent() {
                         </Form.Group>
                         <Form.Group className="mb-3"><Form.Label><Gem className="me-2"/>Design Specifications <span className="text-danger">*</span></Form.Label><Form.Control name="designSpecifications" value={formData.tailoring.designSpecifications} onChange={handleInputChange} as="textarea" rows={3} required /></Form.Group>
                         <Form.Group className="mb-3">
-                            <Form.Label><Camera className="me-2"/>Reference Image URLs</Form.Label>
-                            {formData.tailoring.referenceImages.map((image, index) => (
-                                <InputGroup key={index} className="mb-2"><Form.Control placeholder="https://..." value={image} onChange={(e) => handleDynamicListChange('referenceImages', index, e.target.value)} />{formData.tailoring.referenceImages.length > 1 && (<Button variant="outline-danger" onClick={() => removeDynamicListItem('referenceImages', index)}><Trash/></Button>)}</InputGroup>
-                            ))}<Button variant="outline-secondary" size="sm" onClick={() => addDynamicListItem('referenceImages')}><PlusCircleFill className="me-1"/>Add Image URL</Button>
+                            <Form.Label><Camera className="me-2"/>Reference Images</Form.Label>
+                            <MultiImageDropzone
+                                existingImageUrls={formData.tailoring.referenceImages || []}
+                                ref={dropzoneRef}
+                            />
                         </Form.Group>
                         <Form.Group className="mb-3"><Form.Label><Pen className="me-2"/>Additional Notes</Form.Label><Form.Control name="notes" value={formData.tailoring.notes} onChange={handleInputChange} as="textarea" rows={2} /></Form.Group>
                         
@@ -277,9 +342,34 @@ function CustomRent() {
         <Modal.Body>The price for this item is set to ₱0.00. Are you sure you want to proceed with this price?</Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowZeroPriceModal(false)}>Cancel</Button>
-          <Button variant="primary" onClick={() => { setShowZeroPriceModal(false); if(pendingAction) pendingAction(); }}>Yes, Proceed</Button>
+          <Button variant="primary" onClick={() => { 
+            setShowZeroPriceModal(false); 
+            if (pendingAction) {
+              // Call the new helper function with the stored action string
+              executeSubmission(pendingAction); 
+            }
+          }}>
+            Yes, Proceed
+          </Button>
         </Modal.Footer>
       </Modal>
+
+      <ConfirmationModal
+        show={showWarningModal}
+        onHide={() => setShowWarningModal(false)}
+        onConfirm={() => {
+            setShowWarningModal(false); // Hide the current modal.
+            if (!pendingAction) return;
+            // The user has approved the warnings, now check for zero price.
+            if (formData.tailoring.price <= 0) {
+                setShowZeroPriceModal(true); // Show the next modal in the sequence.
+            } else {
+                executeSubmission(pendingAction); // No more checks needed, execute.
+            }
+        }}
+        title="Missing Optional Details"
+        warnings={warnings}
+      />
 
     </Container>
   );

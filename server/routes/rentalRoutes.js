@@ -6,6 +6,7 @@ const RentalModel = require('../models/Rental.js');
 const ItemModel = require('../models/Item.js');
 const PackageModel = require('../models/Package.js');
 const { calculateFinancials } = require('../utils/financialsCalculator');
+const { del } = require('@vercel/blob');
 
 const router = express.Router();
 
@@ -313,15 +314,10 @@ router.put('/:id/process', asyncHandler(async (req, res) => {
 
         await session.commitTransaction();
         const calculatedFinancials = calculateFinancials(updatedRental.toObject());
-        
-        const rentBackItems = (status === 'Returned') 
-            ? updatedRental.customTailoring.filter(item => item.tailoringType === 'Tailored for Rent-Back') 
-        : [];
 
         const finalResponse = {
             ...updatedRental.toObject(),
             financials: calculatedFinancials,
-            rentBackItems: rentBackItems,
         };
 
         res.status(200).json(finalResponse);
@@ -466,50 +462,114 @@ router.put('/:id/addItem', asyncHandler(async (req, res) => {
 // This section includes the robust item name parsing and transaction fixes
 
 // PUT to update a single item within a rental
-router.put('/:rentalId/items/:itemId ', asyncHandler(async (req, res) => {
+router.put('/:rentalId/items/:itemId', asyncHandler(async (req, res) => {
     const { rentalId, itemId } = req.params;
     const { quantity, newVariation } = req.body;
-    if (!quantity || quantity < 1) throw new Error("Invalid quantity provided.");
+
+    // --- 1. VALIDATE INPUT ---
+    if (!quantity || quantity < 1) {
+        throw new Error("Invalid quantity provided. Must be at least 1.");
+    }
+    if (!newVariation || !newVariation.color || !newVariation.size) {
+        throw new Error("Invalid new variation data provided.");
+    }
+
     const session = await mongoose.startSession();
     session.startTransaction();
+
     try {
+        // --- 2. FIND THE RENTAL AND THE SPECIFIC ITEM TO UPDATE ---
         const rental = await RentalModel.findById(rentalId).session(session);
-        if (!rental) throw new Error("Rental not found.");
-        const itemIndex = rental.singleRents.findIndex(item => item.name === itemName);
-        if (itemIndex === -1) throw new Error("Item not found in this rental.");
-        const originalItem = rental.singleRents[itemIndex];
-        const nameParts = originalItem.name.split(',');
-        if (nameParts.length < 3) throw new Error(`Invalid item name format: ${originalItem.name}`);
+        if (!rental) {
+            throw new Error("Rental not found.");
+        }
+
+        const itemToUpdate = rental.singleRents.id(itemId); // Using .id() to find the subdocument
+        if (!itemToUpdate) {
+            res.status(404);
+            throw new Error("Item not found in this rental.");
+        }
+
+        // --- 3. PARSE DETAILS OF THE ORIGINAL ITEM ---
+        const originalQuantity = itemToUpdate.quantity;
+        const nameParts = itemToUpdate.name.split(',');
+        if (nameParts.length < 3) throw new Error(`Invalid item name format: ${itemToUpdate.name}`);
+        
         const originalSize = nameParts.pop().trim();
         const originalColor = nameParts.pop().trim();
-        const productName = nameParts.join(',').trim();
+        const productName = nameParts.join(',').trim(); // Rejoin if product name had commas
+
+        // Find the base product in the inventory
         const product = await ItemModel.findOne({ name: productName }).session(session);
-        if (!product) throw new Error(`Base product "${productName}" not found.`);
-        const hasVariationChanged = newVariation && (newVariation.color !== originalColor || newVariation.size !== originalSize);
-        if (hasVariationChanged) {
-            const newVarDetails = product.variations.find(v => v.color === newVariation.color && v.size === newVariation.size);
-            if (!newVarDetails || newVarDetails.quantity < quantity) throw new Error(`Insufficient stock for new variation.`);
-            await ItemModel.updateOne({ _id: product._id, "variations.color": originalColor, "variations.size": originalSize }, { $inc: { "variations.$.quantity": originalItem.quantity } }, { session });
-            await ItemModel.updateOne({ _id: product._id, "variations.color": newVariation.color, "variations.size": newVariation.size }, { $inc: { "variations.$.quantity": -quantity } }, { session });
-            rental.singleRents[itemIndex].name = `${productName},${newVariation.color},${newVariation.size}`;
-            rental.singleRents[itemIndex].imageUrl = newVarDetails.imageUrl;
-        } else {
-            const currentVarDetails = product.variations.find(v => v.color === originalColor && v.size === originalSize);
-            if (!currentVarDetails) throw new Error("Current variation not found in inventory.");
-            const qtyDiff = quantity - originalItem.quantity;
-            if (qtyDiff > 0 && currentVarDetails.quantity < qtyDiff) throw new Error(`Insufficient stock. Only ${currentVarDetails.quantity} more available.`);
-            if (qtyDiff !== 0) await ItemModel.updateOne({ _id: product._id, "variations.color": originalColor, "variations.size": originalSize }, { $inc: { "variations.$.quantity": -qtyDiff } }, { session });
+        if (!product) {
+            throw new Error(`Base product "${productName}" not found in inventory.`);
         }
-        rental.singleRents[itemIndex].quantity = quantity;
-        await rental.save({ session });
-        await session.commitTransaction();
-        const updatedRental = await RentalModel.findById(rentalId).lean();
-        res.status(200).json(updatedRental);
+        
+        const hasVariationChanged = newVariation.color !== originalColor || newVariation.size !== originalSize;
+        
+        // --- 4. HANDLE STOCK ADJUSTMENTS ATOMICALLY ---
+        if (hasVariationChanged) {
+            // The variation is changing completely.
+            // A) Check if there is enough stock for the NEW variation.
+            const newVarDetails = product.variations.find(v => v.color === newVariation.color && v.size === newVariation.size);
+            if (!newVarDetails || newVarDetails.quantity < quantity) {
+                throw new Error(`Insufficient stock for new variation ${newVariation.color}/${newVariation.size}. Only ${newVarDetails?.quantity || 0} available.`);
+            }
+            // B) Restore stock for the OLD variation.
+            await ItemModel.updateOne(
+                { _id: product._id, "variations.color": originalColor, "variations.size": originalSize }, 
+                { $inc: { "variations.$.quantity": originalQuantity } }, // Add original quantity back
+                { session }
+            );
+            // C) Decrement stock for the NEW variation.
+            await ItemModel.updateOne(
+                { _id: product._id, "variations.color": newVariation.color, "variations.size": newVariation.size }, 
+                { $inc: { "variations.$.quantity": -quantity } }, // Subtract new quantity
+                { session }
+            );
+            
+            // D) Update the item's details in the rental document.
+            itemToUpdate.name = `${productName},${newVariation.color},${newVariation.size}`;
+            itemToUpdate.imageUrl = newVarDetails.imageUrl;
+
+        } else {
+            // The variation is the same, only the quantity is changing.
+            const currentVarDetails = product.variations.find(v => v.color === originalColor && v.size === originalSize);
+            if (!currentVarDetails) throw new Error("Current variation details not found in inventory.");
+            
+            const quantityDifference = quantity - originalQuantity; // Positive if increasing, negative if decreasing
+            
+            // If we need MORE items (positive difference), check if there's enough stock.
+            if (quantityDifference > 0 && currentVarDetails.quantity < quantityDifference) {
+                throw new Error(`Insufficient stock. Only ${currentVarDetails.quantity} more available.`);
+            }
+
+            // Adjust stock by the difference. (e.g., if diff is -2, it will INC stock by 2)
+            if (quantityDifference !== 0) {
+                await ItemModel.updateOne(
+                    { _id: product._id, "variations.color": originalColor, "variations.size": originalSize }, 
+                    { $inc: { "variations.$.quantity": -quantityDifference } }, // Subtract the difference
+                    { session }
+                );
+            }
+        }
+
+        // --- 5. UPDATE THE ITEM'S QUANTITY AND SAVE RENTAL DOCUMENT ---
+        itemToUpdate.quantity = quantity;
+        await rental.save({ session }); // Save changes to the rental document
+        await session.commitTransaction(); // Commit all changes to the database
+
+        // --- 6. RETURN THE FULLY UPDATED RENTAL WITH CALCULATED FINANCIALS ---
+        // Fetch the updated rental document to ensure the client has the latest state
+        const finalRental = await RentalModel.findById(rentalId).lean();
+        const calculatedFinancials = calculateFinancials(finalRental);
+        res.status(200).json({ ...finalRental, financials: calculatedFinancials });
+
     } catch (error) {
-        await session.abortTransaction();
-        throw error;
+        await session.abortTransaction(); // Rollback all changes if any error occurs
+        throw error; // Let the global error handler manage the response
     } finally {
-        session.endSession();
+        session.endSession(); // End the session regardless of success or failure
     }
 }));
 
@@ -828,32 +888,37 @@ router.delete('/:rentalId/custom-items/:itemId', asyncHandler(async (req, res) =
     session.startTransaction();
 
     try {
-        // 1. Find the rental document
         const rental = await RentalModel.findById(rentalId).session(session);
         if (!rental) {
             res.status(404);
             throw new Error("Rental not found.");
         }
 
-        // 2. Verify the item exists before attempting to pull it.
-        // This allows us to send a more specific 404 error if the item is already gone.
-        const itemExists = rental.customTailoring.id(itemId);
-        if (!itemExists) {
+        // --- NEW LOGIC: Find the item and its images BEFORE deleting ---
+        const itemToRemove = rental.customTailoring.id(itemId);
+        if (!itemToRemove) {
             res.status(404);
             throw new Error("Custom item not found in this rental.");
         }
 
-        // 3. Atomically remove the custom item sub-document from the array using its _id.
-        // The .pull() method is the correct and efficient way to do this.
+        const urlsToDelete = itemToRemove.referenceImages;
+        
+        // --- NEW LOGIC: Delete from Vercel Blob if there are images ---
+        if (urlsToDelete && urlsToDelete.length > 0) {
+            await del(urlsToDelete);
+            console.log(`Deleted ${urlsToDelete.length} image(s) from Vercel Blob for item ${itemId}.`);
+        }
+        
+        // Atomically remove the custom item sub-document from the array.
         rental.customTailoring.pull(itemId);
         
-        // 4. Save the changes to the parent rental document
+        // Save the changes to the parent rental document
         await rental.save({ session });
         
-        // 5. Commit the transaction
+        // Commit the transaction
         await session.commitTransaction();
 
-        // 6. Recalculate financials and send the final, updated rental object back
+        // Recalculate financials and send the final, updated rental object back
         const updatedRentalWithFinancials = calculateFinancials(rental.toObject());
         res.status(200).json({ ...rental.toObject(), financials: updatedRentalWithFinancials });
 
@@ -1049,13 +1114,14 @@ router.get('/:id/pre-pickup-validation', asyncHandler(async (req, res) => {
 //     }
 // }));
 
-router.put('/:rentalId/packages/:packageId/consolidated', asyncHandler(async (req, res) => {
-    const { rentalId, packageId } = req.params;
-    const { packageFulfillment, customItems } = req.body;
 
-    if (!packageFulfillment || !customItems) {
+router.put('/:rentalId/packages/:packageId/consolidated-update', asyncHandler(async (req, res) => {
+    const { rentalId, packageId } = req.params;
+    const { packageFulfillment, customItems, customItemIdsToDelete, imageUrlsToDelete } = req.body; 
+
+    if (!packageFulfillment) {
         res.status(400);
-        throw new Error("Missing required fulfillment or custom item data.");
+        throw new Error("Missing packageFulfillment data.");
     }
 
     const session = await mongoose.startSession();
@@ -1068,34 +1134,106 @@ router.put('/:rentalId/packages/:packageId/consolidated', asyncHandler(async (re
             throw new Error("Rental not found.");
         }
 
-        // 1. Update the package fulfillment structure
         const packageToUpdate = rental.packageRents.id(packageId);
         if (!packageToUpdate) {
             res.status(404);
             throw new Error(`Package with ID "${packageId}" not found in this rental.`);
         }
-        // (Stock adjustment logic for changed inventory items would go here if needed)
-        packageToUpdate.packageFulfillment = packageFulfillment;
+        
+        // --- NEW: INTELLIGENT STOCK ADJUSTMENT LOGIC ---
+        
+        // Helper function to count items from a fulfillment array
+        const countItems = (fulfillmentArr) => {
+            const counts = new Map();
+            for (const fulfill of fulfillmentArr) {
+                const item = fulfill.assignedItem;
+                // Only count standard inventory items with a valid assignment
+                if (!fulfill.isCustom && item && item.itemId && item.variation) {
+                    const key = `${item.itemId}/${item.variation}`;
+                    counts.set(key, (counts.get(key) || 0) + 1);
+                }
+            }
+            return counts;
+        };
 
+        // 1. Get the "before" and "after" counts
+        const oldItemCounts = countItems(packageToUpdate.packageFulfillment);
+        const newItemCounts = countItems(packageFulfillment); // from req.body
 
-        // 2. Process the custom items (update existing or add new)
-        for (const updatedItem of customItems) {
-            // Try to find an existing item by its ID
-            const existingItem = rental.customTailoring.id(updatedItem._id);
-            if (existingItem) {
-                // If it exists, update it.
-                Object.assign(existingItem, updatedItem);
-            } else {
-                // If it doesn't exist, it's a NEW item. Add it to the array.
-                rental.customTailoring.push(updatedItem);
+        const stockUpdateOperations = [];
+        const allItemKeys = new Set([...oldItemCounts.keys(), ...newItemCounts.keys()]);
+        
+        // 2. Calculate the difference for each item
+        for (const key of allItemKeys) {
+            const [itemId, variation] = key.split('/');
+            const [color, size] = variation.split(',').map(s => s.trim());
+            
+            const oldCount = oldItemCounts.get(key) || 0;
+            const newCount = newItemCounts.get(key) || 0;
+            const diff = newCount - oldCount;
+
+            if (diff !== 0) {
+                // If diff > 0, we've added items (so DECREMENT stock)
+                // If diff < 0, we've removed items (so INCREMENT stock)
+                stockUpdateOperations.push({
+                    updateOne: {
+                        filter: { _id: itemId, "variations.color": color, "variations.size": size },
+                        update: { $inc: { "variations.$.quantity": -diff } }
+                    }
+                });
             }
         }
         
+        // 3. Execute all stock updates if any are needed
+        if (stockUpdateOperations.length > 0) {
+            await ItemModel.bulkWrite(stockUpdateOperations, { session });
+        }
+        // --- END OF STOCK ADJUSTMENT LOGIC ---
+
+
+        // --- Existing Deletion/Update Logic (Now part of the same transaction) ---
+        if (customItemIdsToDelete && customItemIdsToDelete.length > 0) {
+            const itemsBeingDeleted = rental.customTailoring.filter(
+                item => customItemIdsToDelete.includes(item._id.toString())
+            );
+            const urlsFromDeletedItems = itemsBeingDeleted.flatMap(item => item.referenceImages || []);
+            
+            const allUrlsToDelete = new Set([...urlsFromDeletedItems, ...(imageUrlsToDelete || [])]);
+            
+            if (allUrlsToDelete.size > 0) {
+                await del(Array.from(allUrlsToDelete));
+            }
+            
+            await RentalModel.updateOne(
+                { _id: rentalId },
+                { $pull: { customTailoring: { _id: { $in: customItemIdsToDelete } } } },
+                { session }
+            );
+        } 
+        else if (imageUrlsToDelete && imageUrlsToDelete.length > 0) {
+            await del(imageUrlsToDelete);
+        }
+
+        if (customItems && customItems.length > 0) {
+            for (const updatedItem of customItems) {
+                const existingItem = rental.customTailoring.id(updatedItem._id);
+                if (existingItem) {
+                    Object.assign(existingItem, updatedItem);
+                } else {
+                    rental.customTailoring.push(updatedItem);
+                }
+            }
+        }
+        
+        // Finally, update the fulfillment data on the rental document
+        packageToUpdate.packageFulfillment = packageFulfillment;
+        
         await rental.save({ session });
         await session.commitTransaction();
-
-        const updatedRentalWithFinancials = calculateFinancials(rental.toObject());
-        res.status(200).json({ ...rental.toObject(), financials: updatedRentalWithFinancials });
+        
+        const finalRental = await RentalModel.findById(rentalId).lean();
+        const finalData = { ...finalRental, financials: calculateFinancials(finalRental) };
+        res.status(200).json(finalData);
 
     } catch (error) {
         await session.abortTransaction();
@@ -1104,6 +1242,66 @@ router.put('/:rentalId/packages/:packageId/consolidated', asyncHandler(async (re
         session.endSession();
     }
 }));
+
+
+router.post('/from-booking', asyncHandler(async (req, res) => {
+    const { bookingId, customTailoring } = req.body;
+
+    if (!customTailoring || !Array.isArray(customTailoring) || customTailoring.length === 0) {
+        res.status(400);
+        throw new Error('Processed custom tailoring data is required to create a rental.');
+    }
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        // Find the original booking to get customer info and dates
+        const booking = await BookingModel.findOne({ "appointments.appointmentId": bookingId }).session(session);
+        if (!booking) {
+            res.status(404);
+            throw new Error('Source booking for the appointment could not be found.');
+        }
+
+        const newRentalId = `rent_${nanoid(8)}`;
+
+        const rentalData = {
+            _id: newRentalId,
+            customerInfo: booking.customerInfo,
+            customTailoring: customTailoring, // Add the item from the request
+            financials: { shopDiscount: 0, depositAmount: 0 },
+            rentalStartDate: booking.rentalStartDate,
+            rentalEndDate: booking.rentalEndDate,
+            status: "To Process",
+        };
+
+        const newRental = new RentalModel(rentalData);
+        await newRental.save({ session });
+
+        // Update the booking to link it to the new rental and mark it complete
+        await BookingModel.updateOne(
+            { _id: booking._id, "appointments.appointmentId": bookingId },
+            { 
+              $set: { 
+                status: 'Completed',
+                rentalId: newRentalId,
+                "appointments.$.status": 'Completed'
+              }
+            },
+            { session }
+        );
+
+        await session.commitTransaction();
+        res.status(201).json(newRental);
+
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
+    }
+}));
+
 
 
 module.exports = router;

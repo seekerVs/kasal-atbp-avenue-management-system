@@ -1,0 +1,81 @@
+.progress-bar-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
+  margin-bottom: 2.5rem; /* Space below the progress bar */
+}
+
+/* The main line connecting the steps */
+.progress-bar-container::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background-color: #e9ecef; /* Light grey for the track */
+  transform: translateY(-50%);
+  z-index: 1;
+}
+
+/* The colored line showing progress */
+.progress-line {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  height: 4px;
+  background-color: var(--bs-primary); /* Use your theme's primary color */
+  transform: translateY(-50%);
+  z-index: 2;
+  transition: width 0.4s ease;
+}
+
+.progress-step {
+  position: relative;
+  z-index: 3;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background-color: #fff;
+  border: 3px solid #e9ecef; /* Default border color */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  color: #adb5bd; /* Default text color */
+  transition: all 0.4s ease;
+}
+
+/* Styling for a step that is active */
+.progress-step.active {
+  border-color: var(--bs-primary);
+  background-color: var(--bs-primary);
+  color: #fff;
+}
+
+/* Styling for a step that is completed */
+.progress-step.completed {
+  border-color: var(--bs-primary);
+  background-color: #fff;
+  color: var(--bs-primary);
+}
+
+.step-label {
+  position: absolute;
+  top: 130%; /* Position the label below the circle */
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.85rem;
+  color: #6c757d; /* Muted text color */
+  white-space: nowrap;
+}
+
+.progress-step.active .step-label {
+  font-weight: bold;
+  color: var(--bs-primary);
+}
+
+.progress-step.completed .step-label {
+  color: #212529; /* Darker text for completed steps */
+}

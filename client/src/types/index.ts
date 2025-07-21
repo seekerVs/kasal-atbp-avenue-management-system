@@ -194,3 +194,115 @@ export interface User {
   role: 'Admin' | 'User';
   createdAt: string;
 }
+
+// ===================================================================
+//
+//               BOOKING & RESERVATION TYPES
+//
+// ===================================================================
+
+export interface Address {
+  province: string;
+  city: string;
+  barangay: string;
+  street: string;
+}
+
+export interface BookingCustomerInfo {
+  name: string;
+  email?: string;
+  phoneNumber: string;
+  address: Address;
+}
+
+export interface Payment {
+  amount: number;
+  date: string | Date;
+  method: 'Cash' | 'GCash' | 'Bank Transfer';
+  referenceNumber?: string;
+}
+
+export interface BookingFinancials {
+  shopDiscount?: number;
+  depositAmount?: number;
+  payments?: Payment[];
+}
+
+export interface ItemReservation {
+  reservationId: string;
+  status: 'Reserved' | 'Confirmed' | 'Cancelled';
+  statusNote?: string;
+  itemId: string;
+  itemName: string;
+  variation: {
+    color: string;
+    size: string;
+  };
+  quantity: number;
+  price: number;
+}
+
+export interface FulfillmentPreview {
+  role: string;
+  wearerName?: string;
+  isCustom: boolean;
+  assignedItemId?: string;
+  variation?: string;
+}
+
+export interface PackageReservation {
+  packageReservationId: string;
+  status: 'Reserved' | 'Confirmed' | 'Cancelled';
+  statusNote?: string;
+  packageId: string;
+  packageName: string;
+  motifName?: string;
+  price: number;
+  fulfillmentPreview: FulfillmentPreview[];
+}
+
+export interface AppointmentFor {
+  sourcePackageReservationId?: string;
+  role: string;
+}
+
+export interface Appointment {
+  appointmentId: string;
+  status: 'Pending' | 'Scheduled' | 'Completed' | 'Cancelled';
+  statusNote?: string;
+  appointmentFor: AppointmentFor;
+  appointmentDate?: string | Date | null;
+  processedItemData?: CustomTailoringItem | null; // Reuse existing type
+}
+
+export interface Booking {
+  _id: string;
+  customerInfo: BookingCustomerInfo;
+  eventDate: string | Date;
+  rentalStartDate: string | Date;
+  rentalEndDate: string | Date;
+  rentalId?: string | null;
+  financials: BookingFinancials;
+  itemReservations: ItemReservation[];
+  packageReservations: PackageReservation[];
+  appointments: Appointment[];
+  status: 'Pending' | 'Confirmed' | 'Completed' | 'Cancelled';
+  createdAt: string | Date;
+  updatedAt: string | Date;
+}
+
+export type FormErrors = {
+  customerInfo?: {
+    name?: string;
+    phoneNumber?: string;
+    email?: string;
+    address?: {
+      province?: string;
+      city?: string;
+      barangay?: string;
+      street?: string;
+    };
+  };
+  eventDate?: string;
+  reservations?: string; // For a general error like "at least one item is required"
+};

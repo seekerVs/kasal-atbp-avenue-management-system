@@ -1,7 +1,7 @@
 // server/routes/uploadRoutes.js
 
 const express = require('express');
-const { put } = require('@vercel/blob');
+const { put, del } = require('@vercel/blob');
 const multer = require('multer');
 const asyncHandler = require('../utils/asyncHandler');
 const { protect } = require('../middleware/authMiddleware'); // Protect the upload route
@@ -35,6 +35,34 @@ router.post('/', protect, upload.single('file'), asyncHandler(async (req, res) =
 
   // Return the blob object, which contains the public URL
   res.status(200).json(blob);
+}));
+
+router.delete('/', protect, asyncHandler(async (req, res) => {
+    const { url } = req.body;
+
+    if (!url) {
+        res.status(400);
+        throw new Error('File URL is required for deletion.');
+    }
+
+    // The 'del' function from @vercel/blob handles the deletion.
+    await del(url);
+
+    res.status(200).json({ success: true, message: 'File deleted successfully.' });
+}));
+
+router.delete('/bulk', protect, asyncHandler(async (req, res) => {
+    const { urls } = req.body;
+
+    if (!urls || !Array.isArray(urls) || urls.length === 0) {
+        res.status(400);
+        throw new Error('An array of URLs is required for bulk deletion.');
+    }
+
+    // The 'del' function from @vercel/blob can accept an array of URLs.
+    await del(urls);
+
+    res.status(200).json({ success: true, message: `${urls.length} file(s) deleted successfully.` });
 }));
 
 module.exports = router;

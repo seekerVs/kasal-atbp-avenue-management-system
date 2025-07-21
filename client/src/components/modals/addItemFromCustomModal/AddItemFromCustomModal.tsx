@@ -110,8 +110,8 @@ const AddItemFromCustomModal: React.FC<AddItemFromCustomModalProps> = ({ show, o
         addAlert('Product Name is required.', 'warning');
         return;
         }
-        if (!newVariation.color.trim() || !newVariation.size.trim() || !newVariation.imageUrl.trim()) {
-        addAlert('Please fill in all variation fields: Color, Size, and Image URL.', 'warning');
+        if (!newVariation.color.trim()) {
+        addAlert('Please provide a Color for the new product.', 'warning');
         return;
         }
 
@@ -130,8 +130,8 @@ const AddItemFromCustomModal: React.FC<AddItemFromCustomModalProps> = ({ show, o
         addAlert('Please select an existing product to add the variation to.', 'warning');
         return;
         }
-        if (!variationData.color.trim() || !variationData.size.trim() || !variationData.imageUrl.trim()) {
-        addAlert('Please fill in all variation fields: Color, Size, and Image URL.', 'warning');
+        if (!variationData.color.trim()) { // <-- We removed the size check
+        addAlert('Please provide a Color for the new variation.', 'warning'); // <-- Updated message
         return;
         }
         

@@ -625,6 +625,7 @@ useEffect(() => {
           itemName={customItemContext.itemName}
           measurementRefs={measurementRefs}
           onSave={handleSaveCustomItem}
+          isForPackage={true}
         />
       )}
 

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Container, Card, Form, Button, Row, Col, Spinner, Alert, Accordion, Nav } from 'react-bootstrap';
-import { Book, Image as ImageIcon, CardChecklist, Gear, Star, HandThumbsUp, Save, QuestionCircle, Trash, PlusCircle } from 'react-bootstrap-icons';
+import { Book, Image as ImageIcon, CardChecklist, Gear, Star, HandThumbsUp, Save, QuestionCircle, Trash, PlusCircle, EyeSlash, Eye } from 'react-bootstrap-icons';
 import api from '../../services/api';
 
 import { HomePageContent, AboutPageData } from "../../types"; // Import all needed types
@@ -26,6 +26,7 @@ function ContentManagement() {
   const [error, setError] = useState<string | null>(null);
   const [previewVersion, setPreviewVersion] = useState(0);
   const [activeKey, setActiveKey] = useState<string | null>('0');
+  const [isPreviewVisible, setIsPreviewVisible] = useState(true);
 
   // --- 2. DATA FETCHING ---
   useEffect(() => {
@@ -203,21 +204,27 @@ function ContentManagement() {
 
   return (
     <Container fluid className="d-flex flex-column" style={{ height: '100%' }}>
+      <div className="d-flex justify-content-between align-items-center mb-4" style={{ flexShrink: 0 }}>
+        <h2>Page Content Management</h2>
+        <div className="d-flex align-items-center gap-2">
+          {/* --- The Toggle Button --- */}
+          <Button 
+            variant="outline-secondary" 
+            onClick={() => setIsPreviewVisible(prev => !prev)}
+            title={isPreviewVisible ? "Hide Preview" : "Show Preview"}
+          >
+            {isPreviewVisible ? <EyeSlash /> : <Eye />}
+          </Button>
+          <Button variant="primary" onClick={handleSave} disabled={saving}>
+              {saving ? <Spinner as="span" size="sm" /> : <Save className="me-2" />}
+              Save {activePage === 'home' ? 'Home Page' : 'About Page'}
+          </Button>
+        </div>
+      </div>  
+
       <Row className="flex-grow-1" style={{ minHeight: 0 }}>
-        {/* === LEFT COLUMN: FORMS (takes up 5/12 of the width on large screens) === */}
-        <Col lg={5} className="d-flex flex-column h-100">
-        
-          {/* All of your existing header, Nav, and Accordion code goes here.
-              I have included it for you. */}
-
-          <div className="d-flex justify-content-between align-items-center mb-4" style={{ flexShrink: 0 }}>
-            <h2>Page Content Management</h2>
-            <Button variant="primary" onClick={handleSave} disabled={saving}>
-                {saving ? <Spinner as="span" size="sm" /> : <Save className="me-2" />}
-                Save {activePage === 'home' ? 'Home Page' : 'About Page'}
-            </Button>
-          </div>  
-
+        {/* === LEFT COLUMN: FORMS (Dynamic Width) === */}
+        <Col lg={isPreviewVisible ? 5 : 12} className="d-flex flex-column h-100">
           <Nav variant="tabs" activeKey={activePage} onSelect={(k) => setActivePage(k as 'home' | 'about')} className="mb-3" style={{ flexShrink: 0 }}>
             <Nav.Item><Nav.Link eventKey="home">Home Page</Nav.Link></Nav.Item>
             <Nav.Item><Nav.Link eventKey="about">About Us Page</Nav.Link></Nav.Item>
@@ -396,20 +403,25 @@ function ContentManagement() {
           </div>
         </Col>
 
-        {/* === RIGHT COLUMN: PREVIEW (takes up 7/12 of the width on large screens) === */}
-        <Col lg={7} className="d-flex flex-column h-100">
-          <ComponentPreview title="Live Page Preview">
-            {activePage === 'home' ? (
-              // The `key` prop forces a re-mount when its value changes
-              <Home key={`home-preview-${previewVersion}`} />
-            ) : (
-              <About key={`about-preview-${previewVersion}`} />
-            )}
-          </ComponentPreview>
-        </Col>
+        {/* === RIGHT COLUMN: PREVIEW (Conditional) === */}
+        {isPreviewVisible && (
+          <Col lg={7} className="d-flex flex-column h-100">
+            <ComponentPreview title="Live Page Preview">
+              {activePage === 'home' ? (
+                <Home key={`home-preview-${previewVersion}`} />
+              ) : (
+                <About key={`about-preview-${previewVersion}`} />
+              )}
+            </ComponentPreview>
+          </Col>
+        )}
       </Row>
     </Container>
   );
 }
 
 export default ContentManagement;
+
+
+
+

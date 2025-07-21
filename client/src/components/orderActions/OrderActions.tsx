@@ -15,6 +15,7 @@ import {
 import { RentalStatus, Financials, RentalOrder, CustomTailoringItem } from '../../types'; // Import from centralized types
 import { formatCurrency } from '../../utils/formatters';
 import { useAlert } from '../../contexts/AlertContext';
+import './orderActions.css'
 
 // --- HELPER FUNCTIONS ---
 const getStatusIcon = (status: RentalStatus) => {
@@ -173,6 +174,11 @@ const OrderActions: React.FC<OrderActionsProps> = ({
 
   if (!rental) return null; // Add a guard clause in case rental is null
 
+  const hasDepositBreakdown = 
+    (rental.singleRents && rental.singleRents.length > 0) ||
+    (rental.packageRents && rental.packageRents.length > 0) ||
+    (rental.customTailoring && rental.customTailoring.some(item => item.tailoringType === 'Tailored for Rent-Back'));
+
   return (
     <Card className="shadow-sm">
       <Card.Header as="h5">Order Status & Actions</Card.Header>
@@ -209,7 +215,7 @@ const OrderActions: React.FC<OrderActionsProps> = ({
         <hr />
         <div className="d-flex justify-content-between align-items-center mb-2">
           <span className="text-muted">Subtotal</span>
-          <span>₱{formatCurrency(financials.itemsTotal || 0)}</span>
+          <span>₱{formatCurrency(financials.subtotal || 0)}</span>
         </div>
         <Form.Group as={Row} className="align-items-center mb-2">
           <Form.Label column sm={6} className="text-muted">Shop Discount</Form.Label>
@@ -223,8 +229,8 @@ const OrderActions: React.FC<OrderActionsProps> = ({
 
         {/* --- NEW: DEPOSIT INPUT SECTION --- */}
         <div className="mb-2"> {/* Use a simple div as the main wrapper */}
-          <Form.Group as={Row} className="align-items-center mb-2">
-          <Form.Label column sm={6} className="text-muted">Security Deposit</Form.Label>
+          <Form.Group as={Row} className="align-items-center ">
+          <Form.Label column sm={6} className="text-muted mb-0 pb-0">Security Deposit</Form.Label>
           <Col sm={6}>
             <InputGroup>
               <InputGroup.Text>₱</InputGroup.Text>
@@ -242,13 +248,13 @@ const OrderActions: React.FC<OrderActionsProps> = ({
         </Form.Group>
 
         {/* Conditionally Rendered Deposit Breakdown */}
-        {isStandardDeposit && canEditDetails && (
-          <Row>
-            <Col sm={{ span: 6, offset: 6 }}> {/* Indent the accordion */}
-              <Accordion flush className="mt-1">
+        {isStandardDeposit && canEditDetails && hasDepositBreakdown && (
+          <Row >
+            <Col > {/* Indent the accordion */}
+              <Accordion flush className="mt-0 mb-2 w-100 ">
                 <Accordion.Item eventKey="0">
-                  <Accordion.Header as="div" className="p-0">
-                    <span className="small text-primary fst-italic text-decoration-underline" style={{cursor: 'pointer'}}>
+                  <Accordion.Header as="div">
+                    <span className="small text-primary fst-italic text-end" style={{cursor: 'pointer'}}>
                       View deposit breakdown
                     </span>
                   </Accordion.Header>
@@ -291,7 +297,7 @@ const OrderActions: React.FC<OrderActionsProps> = ({
 
         {!isStandardDeposit && canEditDetails && (
           <Row>
-            <Col sm={{ span: 6, offset: 6 }}>
+            <Col className="mt-0 mb-2 w-100 text-end">
               <Button
                 variant="link"
                 size="sm"

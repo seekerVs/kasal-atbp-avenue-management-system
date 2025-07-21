@@ -21,7 +21,6 @@ import RentalItemsList from '../../components/rentalItemsList/RentalItemsList';
 import OrderActions from '../../components/orderActions/OrderActions';
 import EditItemModal from '../../components/modals/editItemModal/EditItemModal';
 import EditPackageModal from '../../components/modals/editPackageModal/EditPackageModal';
-import EditCustomItemModal from '../../components/modals/editCustomItemModal/EditCustomItemModal'; // Import the new modal
 import { useAlert } from '../../contexts/AlertContext';
 
 // Import Centralized Types
@@ -39,6 +38,7 @@ import {
 import api from '../../services/api';
 import { formatCurrency } from '../../utils/formatters';
 import AddItemFromCustomModal from '../../components/modals/addItemFromCustomModal/AddItemFromCustomModal';
+import CreateEditCustomItemModal from '../../components/modals/createEditCustomItemModal/CreateEditCustomItemModal';
 
 // ===================================================================================
 // --- MAIN COMPONENT ---
@@ -59,6 +59,7 @@ function RentalViewer() {
   const [editableDiscount, setEditableDiscount] = useState('0');
   const [editableStartDate, setEditableStartDate] = useState('');
   const [editableEndDate, setEditableEndDate] = useState('');
+  const [rentBackQueue, setRentBackQueue] = useState<CustomTailoringItem[]>([]);
   
   // State for payment section
   const [paymentUiMode, setPaymentUiMode] = useState<'Cash' | 'Gcash'>('Cash');
@@ -88,7 +89,8 @@ function RentalViewer() {
   const [showMarkAsPickedUpConfirmModal, setShowMarkAsPickedUpConfirmModal] = useState(false);
   const [showRentBackModal, setShowRentBackModal] = useState(false);
   const [itemToRentBack, setItemToRentBack] = useState<CustomTailoringItem | null>(null);
-  
+  const [isEditingItemForPackage, setIsEditingItemForPackage] = useState(false);
+
   // --- DATA FETCHING & SYNCING ---
   useEffect(() => {
     if (!id) { addAlert("No rental ID provided.", 'danger'); setLoading(false); return; }
@@ -141,28 +143,37 @@ function RentalViewer() {
     setShowMarkAsPickedUpConfirmModal(true);
   };
 
+  // REPLACE THIS FUNCTION
   const handleConfirmReturn = async () => {
     setShowReturnConfirmModal(false);
+    if (!rental) return;
     
     try {
       const response = await api.put(`/rentals/${rental?._id}/process`, {
           status: 'Returned',
           depositReimbursed: parseFloat(reimburseAmount) || 0,
       });
-
-      // The API now returns the updated rental AND any rent-back items
-      const { rentBackItems, ...updatedRental } = response.data;
       
-      setRental(updatedRental);
+      setRental(response.data);
       addAlert('Rental successfully marked as returned!', 'success');
       
-      // If there are items to process, open the modal with the first one
-      if (rentBackItems && rentBackItems.length > 0) {
-          setItemToRentBack(rentBackItems[0]); // For now, we process one at a time
-          setShowRentBackModal(true);
-      }
+      // Since the process is complete, ensure the queue is empty.
+      setRentBackQueue([]);
+
     } catch (err: any) {
       addAlert(err.response?.data?.message || "Failed to mark as returned.", 'danger');
+    }
+  };
+
+  const processNextInQueue = (queue: CustomTailoringItem[]) => {
+    if (queue.length > 0) {
+      // If there are items left, open the modal for the next one.
+      setItemToRentBack(queue[0]);
+      setShowRentBackModal(true);
+    } else {
+      // If the queue is empty, all items are processed.
+      // Now it's safe to show the final confirmation modal.
+      setShowReturnConfirmModal(true);
     }
   };
 
@@ -386,55 +397,143 @@ function RentalViewer() {
   
   const handleSavePackageChanges = async (
     updatedFulfillment: PackageFulfillment[], 
-    updatedCustomItems: CustomTailoringItem[]
+    updatedCustomItems: CustomTailoringItem[],
+    customItemIdsToDelete: string[], // <-- Receive the new list
+    imageUrlsToDelete: string[]
   ) => {
-      // 1. Check for necessary state variables.
       if (!rental || !packageToModify) {
           addAlert("Cannot save package, rental data is missing.", "danger");
           return;
       }
 
       try {
+          // We will call a new, more powerful backend endpoint
           const response = await api.put(
-              `/rentals/${rental._id}/packages/${packageToModify._id}/consolidated`, 
+              `/rentals/${rental._id}/packages/${packageToModify._id}/consolidated-update`, 
               {
-                  packageFulfillment: updatedFulfillment, // The cleaned fulfillment references
-                  customItems: updatedCustomItems,       // The full data for new or edited custom items
+                  packageFulfillment: updatedFulfillment,
+                  customItems: updatedCustomItems,
+                  customItemIdsToDelete: customItemIdsToDelete, // <-- Send the list to the backend
+                  imageUrlsToDelete: imageUrlsToDelete,
               }
           );
 
-          // The API now returns the fully updated rental, so we can set it directly.
           setRental(response.data);
           addAlert('Package details updated successfully!', 'success');
           
       } catch (err: any) { 
-          // Handle any errors from the API calls.
           const errorMessage = err.response?.data?.message || "Failed to update package details.";
           addAlert(errorMessage, 'danger'); 
       } finally { 
-          // Always close the modal and reset the state.
           setShowEditPackageModal(false); 
           setPackageToModify(null); 
       }
   };
-    const handleDeletePackage = async () => {
-      if (!packageToModify || !rental) return;
-      try {
-        const response = await api.delete(`/rentals/${rental._id}/packages/${packageToModify._id}`);
+  
+  const handleDeletePackage = async () => {
+    if (!packageToModify || !rental) return;
+    try {
+      const response = await api.delete(`/rentals/${rental._id}/packages/${packageToModify._id}`);
+    
+      const wasCleanedUp = checkAndCleanupIfEmpty(response.data);
+      if (wasCleanedUp) return;
       
+      setRental(response.data);
+      addAlert('Package removed successfully!', 'success');
+    } catch (err: any) {  
+      addAlert("Failed to remove package.", 'danger'); 
+    }
+    finally { setShowDeletePackageModal(false); setPackageToModify(null); }
+  };
+
+  const handleOpenEditCustomItemModal = (itemToEdit: CustomTailoringItem) => {
+    if (!rental) return;
+
+    // --- NEW LOGIC: Check if this item is part of any package ---
+    const isFromPackage = rental.packageRents.some(pkg => 
+        pkg.packageFulfillment.some(fulfill => {
+            // If it's not a custom slot, it can't match.
+            if (!fulfill.isCustom) return false;
+
+            const assigned = fulfill.assignedItem;
+
+            // --- THIS IS THE TYPE GUARD ---
+            // Check that 'assigned' exists and has the 'itemId' property before using it.
+            if (assigned && 'itemId' in assigned) {
+                return assigned.itemId === itemToEdit._id;
+            }
+
+            return false;
+        })
+    );
+
+    // Set both state variables needed for the modal
+    setCustomItemToModify(itemToEdit);
+    setIsEditingItemForPackage(isFromPackage); // Set our new context flag
+    setShowEditCustomItemModal(true);
+  };
+  const handleOpenDeleteCustomItemModal = (item: CustomTailoringItem) => { 
+    setCustomItemToModify(item); 
+    setShowDeleteCustomItemModal(true); 
+  };
+
+  const handleDeleteCustomItem = async () => {
+    if (!customItemToModify || !rental) return;
+
+    const itemIdToDelete = customItemToModify._id;
+    let packageContext = null;
+
+    // --- Step 1: Search for the item's ID within package fulfillments ---
+    for (const pkg of rental.packageRents) {
+        const targetFulfillment = pkg.packageFulfillment.find((fulfill) => {
+            if (!fulfill.isCustom) return false;
+            const assigned = fulfill.assignedItem;
+            if (assigned && 'itemId' in assigned) {
+                return assigned.itemId === itemIdToDelete;
+            }
+            return false;
+        });
+
+        if (targetFulfillment) {
+            packageContext = {
+                packageId: pkg._id,
+                role: targetFulfillment.role,
+            };
+            break;
+        }
+    }
+
+    try {
+        let response;
+        // --- Step 2: Call the appropriate permanent deletion route ---
+        if (packageContext) {
+            // Use the route that clears assignment AND deletes the item
+            addAlert(`Deleting item and clearing assignment for role: ${packageContext.role}...`, 'info');
+            response = await api.delete(
+                `/rentals/${rental._id}/packages/${packageContext.packageId}/custom-items/${itemIdToDelete}`
+            );
+        } else {
+            // Use the route that just deletes a standalone custom item
+            response = await api.delete(
+                `/rentals/${rental._id}/custom-items/${itemIdToDelete}`
+            );
+        }
+
+        // --- Step 3: Process the response ---
         const wasCleanedUp = checkAndCleanupIfEmpty(response.data);
         if (wasCleanedUp) return;
-        
-        setRental(response.data);
-        addAlert('Package removed successfully!', 'success');
-      } catch (err: any) {  
-        addAlert("Failed to remove package.", 'danger'); 
-      }
-      finally { setShowDeletePackageModal(false); setPackageToModify(null); }
-    };
 
-  const handleOpenEditCustomItemModal = (item: CustomTailoringItem) => { setCustomItemToModify(item); setShowEditCustomItemModal(true); };
-  const handleOpenDeleteCustomItemModal = (item: CustomTailoringItem) => { setCustomItemToModify(item); setShowDeleteCustomItemModal(true); };
+        setRental(response.data);
+        addAlert('Custom item removed successfully!', 'success');
+
+    } catch (err: any) {
+        addAlert(err.response?.data?.message || "Failed to remove custom item.", 'danger');
+    } finally {
+        // --- Step 4: Close the modal ---
+        setShowDeleteCustomItemModal(false);
+        setCustomItemToModify(null);
+    }
+  };
   const handleSaveCustomItemChanges = async (updatedItem: CustomTailoringItem) => {
     if (!rental) return;
     try {
@@ -442,26 +541,13 @@ function RentalViewer() {
         setRental(response.data);
         addAlert('Custom item updated successfully!', 'success');
     } catch (err: any) { 
-      addAlert("Failed to update custom item.", 'danger');
+        addAlert("Failed to update custom item.", 'danger');
     }
-    finally { setShowEditCustomItemModal(false); setCustomItemToModify(null); }
-  };
-
-  const handleDeleteCustomItem = async () => {
-    if (!customItemToModify || !rental) return;
-    try {
-        const response = await api.delete(`/rentals/${rental._id}/custom-items/${customItemToModify._id}`);
-
-        const wasCleanedUp = checkAndCleanupIfEmpty(response.data);
-        if (wasCleanedUp) return;
-        
-        setRental(response.data);
-        addAlert('Custom item removed successfully!', 'success')
-    } catch (err: any) { 
-      addAlert("Failed to remove custom item.", 'danger');
+    finally { 
+        setShowEditCustomItemModal(false); 
+        setCustomItemToModify(null); 
     }
-    finally { setShowDeleteCustomItemModal(false); setCustomItemToModify(null); }
-  };
+};
 
   const handleDiscountChange = (value: string) => {
     // 1. Safely get the maximum possible discount (the total value of all items).
@@ -578,25 +664,22 @@ function RentalViewer() {
   };
 
   const handleInitiateReturn = (customItems: CustomTailoringItem[]) => {
-    // Find rent-back items
-    const rentBackItems = customItems.filter(
+    // 1. Find all items that need to be processed.
+    const itemsToProcess = customItems.filter(
       (item) => item.tailoringType === 'Tailored for Rent-Back'
     );
+    
+    // 2. Populate our new client-side queue.
+    setRentBackQueue(itemsToProcess);
 
-    if (rentBackItems.length > 0) {
-      // If rent-back items exist, open the inventory modal first.
-      setItemToRentBack(rentBackItems[0]); // For now, handle one at a time
-      setShowRentBackModal(true);
-    } else {
-      // Otherwise, go directly to the final confirmation modal.
-      setShowReturnConfirmModal(true);
-    }
+    // 3. Start the processing flow with our new helper function.
+    processNextInQueue(itemsToProcess);
   };
 
   if (loading) { return <Container className="text-center py-5"><Spinner /></Container>; }
   if (!rental || !editableCustomer) { return <Container><Alert variant="info">Rental data could not be displayed.</Alert></Container>; }
   
-  const canEditDetails = rental.status === 'To Process';
+  const canEditDetails = rental.status === 'To Process' ;
 
   return (
     <Container fluid>
@@ -835,24 +918,33 @@ function RentalViewer() {
       {itemToRentBack && (
           <AddItemFromCustomModal 
               show={showRentBackModal}
-              onHide={() => { // <-- ADD THIS onHide PROP
-                  setShowRentBackModal(false);
-                  setShowReturnConfirmModal(true);
-              }}
+              onHide={() => { /* This can be left empty or also trigger the next step */ }}
               onFinished={() => {
                   setShowRentBackModal(false);
-                  setShowReturnConfirmModal(true);
+                  // Remove the item we just processed from the queue.
+                  const newQueue = rentBackQueue.slice(1);
+                  setRentBackQueue(newQueue);
+                  // Process the next item in the updated queue.
+                  processNextInQueue(newQueue);
               }}
               itemToProcess={itemToRentBack}
           />
       )}
 
       {showEditCustomItemModal && customItemToModify && (
-        <EditCustomItemModal
+        <CreateEditCustomItemModal
           show={showEditCustomItemModal}
           onHide={() => setShowEditCustomItemModal(false)}
           item={customItemToModify}
+          // The 'itemName' prop is mainly for creating new items, but passing the
+          // existing name here is good practice and satisfies the prop requirement.
+          itemName={customItemToModify.name}
+          // In 'edit' mode, this modal doesn't use the measurement refs, so we can
+          // safely pass an empty array to satisfy the prop requirement.
+          measurementRefs={[]}
           onSave={handleSaveCustomItemChanges}
+          isForPackage={isEditingItemForPackage}
+          uploadMode="immediate" 
         />
       )}
     </Container>

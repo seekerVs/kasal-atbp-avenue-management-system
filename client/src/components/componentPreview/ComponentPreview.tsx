@@ -28,7 +28,7 @@ export function ComponentPreview({
     const calculateAndSetScale = () => {
       if (frameRef.current) {
         // Get the actual rendered width of the preview frame.
-        const containerWidth = frameRef.current.offsetWidth;
+        const containerWidth = frameRef.current.offsetWidth-17;
         // Calculate the scale needed to fit the virtual width into the container.
         const newScale = containerWidth / viewportWidth;
         setDynamicScale(newScale);

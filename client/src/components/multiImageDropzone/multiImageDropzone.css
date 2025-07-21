@@ -1,0 +1,92 @@
+/* client/src/components/multiImageDropzone/multiImageDropzone.css */
+
+.multi-dropzone {
+  border: 2px dashed #dee2e6;
+  border-radius: 0.375rem;
+  padding: 1.5rem;
+  text-align: center;
+  color: #6c757d;
+  cursor: pointer;
+  transition: border-color 0.2s, background-color 0.2s;
+  background-color: #f8f9fa;
+}
+
+.multi-dropzone:hover, .multi-dropzone.active {
+  border-color: var(--bs-primary);
+  background-color: #f8f9fa; /* Keep background subtle on hover */
+}
+
+.file-list {
+  margin-top: 1rem;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 0.375rem;
+  background-color: #f8f9fa;
+  margin-bottom: 0.5rem;
+  border: 1px solid #e9ecef;
+}
+
+.file-icon {
+  flex-shrink: 0;
+  color: #6c757d;
+  font-size: 1.5rem; /* Slightly larger icon */
+}
+
+.file-details {
+  flex-grow: 1;
+  overflow: hidden; /* Prevents long filenames from breaking layout */
+}
+
+.file-name {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 0.25rem;
+  color: #495057;
+}
+
+.file-status {
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.file-actions {
+  flex-shrink: 0;
+}
+
+.remove-btn {
+  background: none;
+  border: none;
+  color: #adb5bd; /* Muted color for the 'x' */
+  cursor: pointer;
+  padding: 0.25rem;
+  line-height: 1;
+  border-radius: 50%;
+}
+
+.remove-btn:hover {
+  color: var(--bs-danger);
+  background-color: #f1f3f5;
+}
+
+.progress-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.progress-percentage {
+  font-size: 0.8rem;
+  color: #28a745;
+  font-weight: 500;
+  flex-shrink: 0;
+}
