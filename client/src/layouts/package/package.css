@@ -1,0 +1,23 @@
+/* client/src/layouts/package/package.css */
+
+.package-page-container {
+  max-width: 1400px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+.package-card-wrapper {
+  cursor: pointer;
+  height: 100%;
+}
+
+.package-card-wrapper .card {
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.package-card-wrapper:hover .card {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1) !important;
+}

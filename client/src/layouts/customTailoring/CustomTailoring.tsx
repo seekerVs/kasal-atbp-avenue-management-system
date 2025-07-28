@@ -1,186 +1,96 @@
-import React, { useState } from "react";
-import { Col, Row, Image, Stack, Form, Button } from "react-bootstrap";
-import { Tailoring_424x636 } from "../../assets/images";
-import { X } from "react-bootstrap-icons";
-import OutfitRecommendationModal from "../../components/modals/outfitRecommendationModal/OutfitRecommendationModal";
-import { useNavigate } from "react-router-dom";
+// client/src/layouts/customTailoring/CustomTailoring.tsx
+
+import React, { useState, useEffect } from 'react';
+import { Container, Row, Col, Button, Image, Spinner, Alert, Card } from 'react-bootstrap';
+import { useNavigate } from 'react-router-dom';
+import api from '../../services/api';
+import CustomFooter from '../../components/customFooter/CustomFooter';
+import { CustomTailoringPageContent } from '../../types';
+import './customTailoring.css';
 
 function CustomTailoring() {
   const navigate = useNavigate();
-  const [motif, setMotif] = useState("");
-  const [attire, setAttire] = useState("");
-  const [purchase, setPurchase] = useState(false);
-  const [rentBack, setRentBack] = useState(false);
-  const [note, setNote] = useState("");
-  const [price, setPrice] = useState("");
+  const [content, setContent] = useState<CustomTailoringPageContent | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const [showModal, setShowModal] = useState(false);
-  const [formValues, setFormValues] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const fetchContent = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await api.get('/content/custom-tailoring');
+        setContent(response.data);
+      } catch (err) {
+        setError('Could not load page content. Please try again later.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchContent();
+  }, []);
+
+  if (loading) return <div className="text-center py-5"><Spinner /></div>;
+  if (error) return <Alert variant="danger" className="m-5 text-center">{error}</Alert>;
+  if (!content) return <Alert variant="info" className="m-5 text-center">Page content is not available.</Alert>;
 
   return (
-    <div className="mx-4 mx-lg-5 mt-5 mt-lg-4 position-relative">
-      <OutfitRecommendationModal
-        show={showModal}
-        onHide={() => setShowModal(false)}
-        values={formValues}
-        onChange={(field, value) =>
-          setFormValues((prev) => ({ ...prev, [field]: value }))
-        }
-        onRecommend={() => console.log("recommend clicked", formValues)}
-      />
-
-      <Button
-        variant="link"
-        className="position-absolute top-0 end-0 m-0 p-0"
-        onClick={() => navigate(`/services`)}
-      >
-        <X size={28} color="dark" />
-      </Button>
-      <Row>
-        <Col sm={12} md={6}>
-          <div
-            className="d-inline-block oveflow-hidden shadow-sm"
-            style={{ maxWidth: "60%" }}
-          >
-            <Image
-              src={Tailoring_424x636}
-              fluid
-              style={{ maxHeight: "600px", objectFit: "cover" }}
-            />
-          </div>
-        </Col>
-        <Col sm={12} md={6}>
-          <Stack gap={3} className="text-start">
-            <div className="gap-5">
-              <h3 className="display-8 m-0">Custom Tailored Outfit</h3>
-              <p className="fst-normal m-0">
-                Tailored outfit design with personalized measurements and
-                premium fabric choices
-              </p>
-              <p className="fst-italic m-0">(price may vary)</p>
-            </div>
-            <div className="d-flex flex-column align-items-start">
-              {/* <div> */}
-              <Form className="w-100">
-                <Row className="mb-3">
-                  <Col md="auto">
-                    <Form.Group controlId="colorMotif">
-                      <Form.Label>
-                        Color Motif <span style={{ color: "red" }}>*</span>
-                      </Form.Label>
-                      <Form.Control
-                        type="text"
-                        placeholder="Event color motif"
-                        value={motif}
-                        onChange={(e) => setMotif(e.target.value)}
-                      />
-                    </Form.Group>
-                  </Col>
-                  <Col md="auto">
-                    <Form.Group controlId="garmentType">
-                      <Form.Label>
-                        Attire Type <span style={{ color: "red" }}>*</span>
-                      </Form.Label>
-                      <Form.Select
-                        value={attire}
-                        onChange={(e) => setAttire(e.target.value)}
+    <>
+      {/* --- NEW WRAPPER: A fluid container with a light background --- */}
+      <Container fluid className="py-5">
+        <Row className="justify-content-center">
+          <Col lg={11} xl={10}>
+            {/* --- NEW: The main content is now inside a single Card --- */}
+            <Card className="shadow-sm">
+              <Card.Body className="p-4 p-md-5">
+                
+                {/* The two-column layout now lives inside the card */}
+                <Row className="g-5 align-items-center">
+                  {/* --- LEFT COLUMN: HEADING & CALL TO ACTION --- */}
+                  <Col lg={5}>
+                    <div className="pe-lg-5">
+                      <h1 className="display-4 fw-bold lh-1">{content.heading}</h1>
+                      <p className="lead text-muted my-4">{content.subheading}</p>
+                      <Button
+                        variant="danger"
+                        size="lg"
+                        onClick={() => navigate('/appointments/new')}
+                        className="px-4 py-2"
                       >
-                        <option value="" disabled hidden>
-                          Select a Attire type
-                        </option>
-                        <option value="Casual Wear">Casual Wear</option>
-                        <option value="Formal Wear">Formal Wear</option>
-                        <option value="Wedding Attire">Wedding Attire</option>
-                        <option value="Business Wear">Business Wear</option>
-                        <option value="Traditional Attire">
-                          Traditional Attire
-                        </option>
-                        <option value="Themed Costume">Themed Costume</option>
-                      </Form.Select>
-                    </Form.Group>
+                        {content.buttonText}
+                      </Button>
+                    </div>
+                  </Col>
+
+                  {/* --- RIGHT COLUMN: IMAGE GALLERY --- */}
+                  <Col lg={7}>
+                    {content.galleryImages && content.galleryImages.length > 0 ? (
+                      <Row xs={2} sm={3} className="g-3">
+                        {content.galleryImages.slice(0, 6).map((img, index) => (
+                          <Col key={index}>
+                            <div className="gallery-item">
+                              <Image src={img.imageUrl} alt={img.altText} className="gallery-image" />
+                              {/* <p className="gallery-caption">{img.altText}</p> */}
+                            </div>
+                          </Col>
+                        ))}
+                      </Row>
+                    ) : (
+                      <p className="text-center text-muted">Gallery images are coming soon.</p>
+                    )}
                   </Col>
                 </Row>
 
-                <Form.Group className="mb-3" controlId="serviceType">
-                  <Form.Label>
-                    Tailoring Service Type
-                    <span style={{ color: "red" }}>*</span>
-                  </Form.Label>
-                  <div className="d-flex gap-3">
-                    <Form.Check
-                      type="radio"
-                      label="Tailored for Purchase"
-                      name="tailoringService"
-                      checked={purchase}
-                      onChange={() => {
-                        setPurchase(true);
-                        setRentBack(false);
-                      }}
-                    />
-                    <Form.Check
-                      type="radio"
-                      label="Tailored for Rent-Back"
-                      name="tailoringService"
-                      checked={rentBack}
-                      onChange={() => {
-                        setRentBack(true);
-                        setPurchase(false);
-                      }}
-                    />
-                  </div>
-                </Form.Group>
-
-                <Form.Group className="mb-3" controlId="note">
-                  <Form.Label>Note</Form.Label>
-                  <Form.Control
-                    as="textarea"
-                    placeholder="Add a note"
-                    rows={2}
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                    style={{
-                      height: "auto",
-                      minWidth: "300px",
-                      maxWidth: "100%",
-                      maxHeight: "300px",
-                      resize: "both",
-                      overflow: "auto",
-                    }}
-                  />
-                </Form.Group>
-
-                <Button className="mb-3" onClick={() => setShowModal(true)}>
-                  Get Sizes
-                </Button>
-
-                <Form.Group controlId="price">
-                  <Form.Label>
-                    Price <span style={{ color: "red" }}>*</span>
-                  </Form.Label>
-                  <Form.Control
-                    type="number"
-                    placeholder="Enter price in pesos"
-                    value={price}
-                    required
-                    onChange={(e) => setPrice(e.target.value)}
-                    style={{ width: "200px" }}
-                  />
-                </Form.Group>
-              </Form>
-              {/* </div> */}
-            </div>
-            <div className="d-flex flex-wrap gap-3 my-3">
-              <Button variant="secondary" size="lg" className="flex-fill">
-                Add to cart
-              </Button>
-              <Button size="lg" className="flex-fill">
-                Order now
-              </Button>
-            </div>
-          </Stack>
-        </Col>
-      </Row>
-    </div>
+              </Card.Body>
+            </Card>
+          </Col>
+        </Row>
+      </Container>
+      
+      <footer className="text-dark py-3 border-top">
+        <CustomFooter />
+      </footer>
+    </>
   );
 }
 

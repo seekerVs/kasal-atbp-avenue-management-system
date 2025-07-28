@@ -16,7 +16,17 @@ import ConfirmationModal from "../../components/modals/confirmationModal/Confirm
 export type InitialCustomTailoringData = Omit<CustomTailoringItem, '_id' | 'measurements' | 'outfitCategory' | 'outfitType'>;
 
 // --- INITIAL STATE & CONSTANTS ---
-const initialCustomerDetails: CustomerInfo = { name: '', phoneNumber: '', email: '', address: '' };
+const initialCustomerDetails: CustomerInfo = { 
+  name: '', 
+  phoneNumber: '', 
+  email: '', 
+  address: {
+    province: '',
+    city: '',
+    barangay: '',
+    street: ''
+  } 
+};
 const initialTailoringData: InitialCustomTailoringData = {
   name: '',
   price: 0,
@@ -58,6 +68,7 @@ function CustomRent() {
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const dropzoneRef = useRef<MultiImageDropzoneRef>(null);
+  const [customerDetails, setCustomerDetails] = useState<CustomerInfo>(initialCustomerDetails);
 
   
   
@@ -151,7 +162,7 @@ const checkForIssues = () => {
     const warnings = [];
 
     // --- Hard Validations (Errors) ---
-    if (!formData.customer.name || !formData.customer.phoneNumber || !formData.customer.address) { 
+    if (!formData.customer.name || !formData.customer.phoneNumber || !formData.customer.address.street.trim()) { 
         errors.push("Please fill in all required customer details (*).");
     }
     if (!selectedCategory) { errors.push("Please select an Outfit Category."); }
@@ -323,7 +334,7 @@ const checkForIssues = () => {
         <Col lg={5} xl={4}>
           <CustomerDetailsCard 
             customerDetails={formData.customer}
-            onCustomerDetailChange={handleCustomerDetailChange}
+            setCustomerDetails={setCustomerDetails}
             isNewCustomerMode={isNewCustomerMode}
             onSetIsNewCustomerMode={setIsNewCustomerMode}
             allRentals={allRentals}

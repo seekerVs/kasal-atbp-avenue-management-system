@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Row, Col } from 'react-bootstrap';
 import { Booking, FormErrors } from '../../types';
 import { ValidatedInput } from '../forms/ValidatedInput';
 import { AddressSelector } from '../addressSelector/AddressSelector';
+import { format, subDays } from 'date-fns';
 
 type BookingState = Omit<Booking, '_id' | 'createdAt' | 'updatedAt' | 'status'>;
 
@@ -31,9 +32,11 @@ export const CustomerAndDateInfo: React.FC<CustomerAndDateInfoProps> = ({ bookin
     }));
   };
 
-  const handleDateChange = (field: 'eventDate' | 'rentalStartDate' | 'rentalEndDate', value: string) => {
+  const handleDateChange = (field: 'eventDate' | 'reserveStartDate' | 'reserveEndDate', value: string) => {
     setBooking(prev => ({ ...prev, [field]: value }));
   };
+
+  const minRentalStartDate = format(subDays(new Date(booking.eventDate as string), 3), 'yyyy-MM-dd');
 
   return (
     <>
@@ -46,42 +49,59 @@ export const CustomerAndDateInfo: React.FC<CustomerAndDateInfoProps> = ({ bookin
         isRequired
         error={errors.customerInfo?.name}
       />
-      <ValidatedInput
-        label="Phone Number"
-        name="phoneNumber"
-        value={booking.customerInfo.phoneNumber}
-        onChange={(e) => handleCustomerChange('phoneNumber', e.target.value)}
-        placeholder="e.g., 09171234567"
-        isRequired
-        error={errors.customerInfo?.phoneNumber}
-      />
-      <ValidatedInput
-        label="Email Address"
-        name="email"
-        type="email"
-        value={booking.customerInfo.email || ''}
-        onChange={(e) => handleCustomerChange('email', e.target.value)}
-        placeholder="For booking confirmations (Optional)"
-        error={errors.customerInfo?.email}
-      />
+      <Row>
+        <Col md={6}>
+          <ValidatedInput
+            label="Phone Number"
+            name="phoneNumber"
+            value={booking.customerInfo.phoneNumber}
+            onChange={(e) => handleCustomerChange('phoneNumber', e.target.value)}
+            placeholder="e.g., 09171234567"
+            isRequired
+            error={errors.customerInfo?.phoneNumber}
+            type="tel"
+            maxLength={11}
+            pattern="09[0-9]{9}"
+          />
+        </Col>
+        <Col md={6}>
+          <ValidatedInput
+            label="Email Address"
+            name="email"
+            type="email"
+            value={booking.customerInfo.email || ''}
+            onChange={(e) => handleCustomerChange('email', e.target.value)}
+            placeholder="For booking confirmations (Optional)"
+            error={errors.customerInfo?.email}
+          />
+        </Col>
+      </Row>
       <hr />
       
-      <AddressSelector
-        value={booking.customerInfo.address}
-        onChange={handleAddressChange}
-        errors={errors.customerInfo?.address || {}}
-      />
+      <Row className="g-3 mb-3">
+        {/* AddressSelector now renders its 3 <Col>s directly inside this Row */}
+        <AddressSelector
+          value={booking.customerInfo.address}
+          onChange={handleAddressChange}
+          errors={errors.customerInfo?.address || {}}
+        />
 
-      <ValidatedInput
-        label="Street Name, Building, House No."
-        name="street"
-        as="textarea"
-        rows={2}
-        value={booking.customerInfo.address.street}
-        onChange={(e) => handleAddressChange('street', e.target.value)}
-        isRequired
-        error={errors.customerInfo?.address?.street}
-      />
+        {/* The Street input is now the 4th <Col> in the same Row */}
+        <Col xs={12} md={6} lg={3}>
+          <ValidatedInput
+            label="Street Name"
+            name="street"
+            as="textarea"
+            rows={1} // Adjusted rows to better fit a single line
+            value={booking.customerInfo.address.street}
+            onChange={(e) => handleAddressChange('street', e.target.value)}
+            isRequired
+            error={errors.customerInfo?.address?.street}
+            // Remove margin-bottom from the inner Form.Group
+            className="mb-0" 
+          />
+        </Col>
+      </Row>
       <hr />
 
       <ValidatedInput
@@ -96,21 +116,24 @@ export const CustomerAndDateInfo: React.FC<CustomerAndDateInfoProps> = ({ bookin
         <Col>
           <ValidatedInput
             label="Rental Start Date"
-            name="rentalStartDate"
+            name="reserveStartDate"
             type="date"
-            value={booking.rentalStartDate as string}
-            onChange={(e) => handleDateChange('rentalStartDate', e.target.value)}
+            value={booking.reserveStartDate as string}
+            onChange={(e) => handleDateChange('reserveStartDate', e.target.value)}
             isRequired
+            max={booking.eventDate as string}
+            min={minRentalStartDate}
           />
         </Col>
         <Col>
           <ValidatedInput
             label="Rental End Date"
-            name="rentalEndDate"
+            name="reserveEndDate"
             type="date"
-            value={booking.rentalEndDate as string}
-            onChange={(e) => handleDateChange('rentalEndDate', e.target.value)}
+            value={booking.reserveEndDate as string}
+            onChange={(e) => handleDateChange('reserveEndDate', e.target.value)}
             isRequired
+            min={booking.reserveStartDate as string}
           />
         </Col>
       </Row>

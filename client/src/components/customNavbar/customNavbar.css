@@ -45,8 +45,4 @@
   border-color: var(--bs-primary);
 }
 
-.navbar-spacer {
-  display: block; /* Make it a block element */
-  width:25rem; /* Adjust this width to match your logo/brand area */
-}
 

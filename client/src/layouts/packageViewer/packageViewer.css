@@ -1,0 +1,51 @@
+/* client/src/layouts/packageViewer/packageViewer.css */
+
+/* Main container for spacing */
+.package-viewer-container {
+  max-width: 1200px;
+  margin: 20rem auto 0;
+  padding-top: 3rem;
+}
+
+@media (min-width: 992px) {
+  .package-viewer-container {
+    padding-top: 2rem;
+  }
+}
+
+/* Main Package Title */
+.package-title {
+  font-weight: 600;
+  color: var(--bs-dark);
+}
+
+/* Price Styling */
+.package-price {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--bs-danger);
+}
+
+/* "Reserve this Package" Button Styling */
+.reserve-package-btn {
+  background-color: var(--bs-danger);
+  border-color: var(--bs-danger);
+  font-weight: 600;
+}
+.reserve-package-btn:hover {
+  filter: brightness(90%);
+}
+
+/* Inclusions List Styling */
+.inclusions-list {
+  padding-left: 1.2rem;
+}
+.inclusions-list li {
+  margin-bottom: 0.25rem;
+}
+
+/* --- Added from ProductViewer for consistent carousel alignment --- */
+.image-carousel-wrapper {
+  max-width: 85%;
+  margin: 0;
+}

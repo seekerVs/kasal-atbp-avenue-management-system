@@ -7,6 +7,8 @@ const ItemModel = require('../models/Item.js');
 const PackageModel = require('../models/Package.js');
 const { calculateFinancials } = require('../utils/financialsCalculator');
 const { del } = require('@vercel/blob');
+const ReservationModel = require('../models/Reservation.js');
+const { protect } = require('../middleware/authMiddleware.js');
 
 const router = express.Router();
 
@@ -642,108 +644,6 @@ router.delete('/:rentalId/items/:itemId', asyncHandler(async (req, res) => {
   }
 }));
 
-// PUT to update fulfillment of a package in a rental
-// router.put('/:rentalId/packages/:packageId', asyncHandler(async (req, res) => {
-//     const { rentalId, packageId } = req.params;
-//     const { packageFulfillment: newFulfillment } = req.body;
-
-//     if (!newFulfillment || !Array.isArray(newFulfillment)) {
-//         res.status(400);
-//         throw new Error("Invalid packageFulfillment data provided.");
-//     }
-    
-//     const session = await mongoose.startSession();
-//     session.startTransaction();
-
-//     try {
-//         // 1. Find the rental document
-//         const rental = await RentalModel.findById(rentalId).session(session);
-//         if (!rental) {
-//             res.status(404);
-//             throw new Error("Rental not found.");
-//         }
-
-//         // 2. Find the specific package sub-document by its _id
-//         const packageToUpdate = rental.packageRents.id(packageId);
-//         if (!packageToUpdate) {
-//             res.status(404);
-//             throw new Error(`Package with ID "${packageId}" not found in this rental.`);
-//         }
-
-//         // 3. --- INTELLIGENT STOCK ADJUSTMENT ---
-//         // This is the new logic to compare the old state with the new state.
-
-//         const oldItemCounts = {}; // Key: "itemId/variation", Value: count
-//         const newItemCounts = {}; // Key: "itemId/variation", Value: count
-
-//         // Count items in the *old* fulfillment (before the update)
-//         packageToUpdate.packageFulfillment.forEach(fulfill => {
-//             const item = fulfill.assignedItem;
-//             if (item && item.itemId && item.variation) {
-//                 const key = `${item.itemId}/${item.variation}`;
-//                 oldItemCounts[key] = (oldItemCounts[key] || 0) + 1;
-//             }
-//         });
-
-//         // Count items in the *new* fulfillment (from the request body)
-//         newFulfillment.forEach(fulfill => {
-//             const item = fulfill.assignedItem;
-//             if (item && item.itemId && item.variation) {
-//                 const key = `${item.itemId}/${item.variation}`;
-//                 newItemCounts[key] = (newItemCounts[key] || 0) + 1;
-//             }
-//         });
-        
-//         // 4. Calculate the difference and prepare stock update operations
-//         const stockUpdateOperations = [];
-//         const allItemKeys = new Set([...Object.keys(oldItemCounts), ...Object.keys(newItemCounts)]);
-
-//         for (const key of allItemKeys) {
-//             const [itemId, variation] = key.split('/');
-//             const [color, size] = variation.split(',').map(s => s.trim());
-            
-//             const oldCount = oldItemCounts[key] || 0;
-//             const newCount = newItemCounts[key] || 0;
-//             const diff = newCount - oldCount;
-
-//             if (diff !== 0) {
-//                 // If diff > 0, we need more items (decrement stock)
-//                 // If diff < 0, we are returning items (increment stock)
-//                 stockUpdateOperations.push({
-//                     updateOne: {
-//                         filter: { _id: itemId, "variations.color": color, "variations.size": size },
-//                         update: { $inc: { "variations.$.quantity": -diff } }
-//                     }
-//                 });
-//             }
-//         }
-        
-//         // 5. Execute stock updates if any are needed
-//         if (stockUpdateOperations.length > 0) {
-//             await ItemModel.bulkWrite(stockUpdateOperations, { session });
-//         }
-
-//         // 6. Update the fulfillment data on the sub-document
-//         packageToUpdate.packageFulfillment = newFulfillment;
-        
-//         // 7. Save the changes to the rental document
-//         await rental.save({ session });
-        
-//         // 8. Commit the transaction
-//         await session.commitTransaction();
-        
-//         // 9. Recalculate financials and send the final, updated rental object
-//         const updatedRentalWithFinancials = calculateFinancials(rental.toObject());
-//         res.status(200).json({ ...rental.toObject(), financials: updatedRentalWithFinancials });
-
-//     } catch (error) {
-//         await session.abortTransaction();
-//         throw error;
-//     } finally {
-//         session.endSession();
-//     }
-// }));
-
 // --- NEW: DELETE A PACKAGE FROM A RENTAL AND RESTORE STOCK ---
 router.delete('/:rentalId/packages/:packageId', asyncHandler(async (req, res) => {
     const { rentalId, packageId } = req.params; // Using packageId from the URL
@@ -1066,55 +966,6 @@ router.get('/:id/pre-pickup-validation', asyncHandler(async (req, res) => {
     res.status(200).json({ warnings });
 }));
 
-// router.put('/:rentalId/custom-items-bulk', asyncHandler(async (req, res) => {
-//     const { rentalId } = req.params;
-//     const { customItems } = req.body; // Expect an array of custom items
-
-//     if (!customItems || !Array.isArray(customItems)) {
-//         res.status(400);
-//         throw new Error("Invalid 'customItems' data provided. Expected an array.");
-//     }
-    
-//     const session = await mongoose.startSession();
-//     session.startTransaction();
-
-//     try {
-//         const rental = await RentalModel.findById(rentalId).session(session);
-//         if (!rental) {
-//             res.status(404);
-//             throw new Error("Rental not found.");
-//         }
-
-//         // Iterate through each updated item from the request
-//         for (const updatedItem of customItems) {
-//             // Find the corresponding item in the rental's array by its _id
-//             const itemToUpdate = rental.customTailoring.id(updatedItem._id);
-//             if (itemToUpdate) {
-//                 // If found, update its properties
-//                 Object.assign(itemToUpdate, updatedItem);
-//             } else {
-//                 // Optional: Handle case where an item might be new (if needed)
-//                 // For now, we assume we are only updating existing items.
-//                 console.warn(`Custom item with ID ${updatedItem._id} not found in rental ${rentalId}.`);
-//             }
-//         }
-        
-//         await rental.save({ session });
-//         await session.commitTransaction();
-
-//         // Send back the fully updated rental
-//         const updatedRentalWithFinancials = calculateFinancials(rental.toObject());
-//         res.status(200).json({ ...rental.toObject(), financials: updatedRentalWithFinancials });
-
-//     } catch (error) {
-//         await session.abortTransaction();
-//         throw error;
-//     } finally {
-//         session.endSession();
-//     }
-// }));
-
-
 router.put('/:rentalId/packages/:packageId/consolidated-update', asyncHandler(async (req, res) => {
     const { rentalId, packageId } = req.params;
     const { packageFulfillment, customItems, customItemIdsToDelete, imageUrlsToDelete } = req.body; 
@@ -1270,8 +1121,8 @@ router.post('/from-booking', asyncHandler(async (req, res) => {
             customerInfo: booking.customerInfo,
             customTailoring: customTailoring, // Add the item from the request
             financials: { shopDiscount: 0, depositAmount: 0 },
-            rentalStartDate: booking.rentalStartDate,
-            rentalEndDate: booking.rentalEndDate,
+            rentalStartDate: booking.reserveStartDate,
+            rentalEndDate: booking.reserveEndDate,
             status: "To Process",
         };
 
@@ -1302,6 +1153,89 @@ router.post('/from-booking', asyncHandler(async (req, res) => {
     }
 }));
 
+router.post('/from-reservation', protect, asyncHandler(async (req, res) => {
+  const { reservationId } = req.body;
+  if (!reservationId) {
+    res.status(400);
+    throw new Error('Reservation ID is required.');
+  }
 
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    // 1. Find the source reservation
+    const reservation = await ReservationModel.findById(reservationId).session(session);
+    if (!reservation) {
+      res.status(404);
+      throw new Error('Reservation not found.');
+    }
+    if (reservation.status === 'Completed' || reservation.status === 'Cancelled') {
+      res.status(400);
+      throw new Error(`Cannot create rental from a reservation with status "${reservation.status}".`);
+    }
+
+    // 2. Prepare stock updates and check availability
+    const stockUpdates = [];
+    // Check single items
+    for (const item of reservation.itemReservations) {
+      const productInDb = await ItemModel.findById(item.itemId).session(session);
+      if (!productInDb) throw new Error(`Item ${item.itemName} not found in inventory.`);
+      
+      const variationInDb = productInDb.variations.find(v => v.color === item.variation.color && v.size === item.variation.size);
+      if (!variationInDb || variationInDb.quantity < item.quantity) {
+        throw new Error(`Insufficient stock for ${item.itemName} (${item.variation.color}, ${item.variation.size}).`);
+      }
+      stockUpdates.push({
+        updateOne: {
+          filter: { _id: item.itemId, "variations.color": item.variation.color, "variations.size": item.variation.size },
+          update: { $inc: { "variations.$.quantity": -item.quantity } }
+        }
+      });
+    }
+    // (Add similar logic for package item stock checks if needed)
+
+    // 3. Execute all stock decrements
+    if (stockUpdates.length > 0) {
+      await ItemModel.bulkWrite(stockUpdates, { session });
+    }
+
+    // 4. Construct the new Rental document from reservation data
+    const newRental = new RentalModel({
+      _id: `rent_${nanoid(8)}`,
+      customerInfo: [reservation.customerInfo], // Rental expects an array
+      singleRents: reservation.itemReservations.map(item => ({
+        name: `${item.itemName},${item.variation.color},${item.variation.size}`,
+        price: item.price,
+        quantity: item.quantity,
+        // Find a representative imageUrl if needed
+      })),
+      packageRents: [], // Add logic to convert packageReservations if they exist
+      customTailoring: [], // Add logic to convert linked appointments if they exist
+      financials: reservation.financials,
+      rentalStartDate: reservation.reserveStartDate,
+      rentalEndDate: reservation.reserveEndDate,
+      status: "To Process",
+    });
+    
+    // 5. Update the reservation to mark it as completed
+    reservation.status = 'Completed';
+    reservation.rentalId = newRental._id;
+    
+    // 6. Save both documents
+    await newRental.save({ session });
+    await reservation.save({ session });
+    
+    // 7. Commit transaction and send response
+    await session.commitTransaction();
+    res.status(201).json(newRental);
+
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
+  }
+}));
 
 module.exports = router;

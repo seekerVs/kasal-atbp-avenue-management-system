@@ -1,0 +1,70 @@
+/* client/src/components/modals/singleItemSelectionModal.css */
+
+/* --- Copied and adapted from productViewer.css --- */
+
+.modal-product-category {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--bs-gray-600);
+  text-transform: uppercase;
+}
+
+.modal-product-title {
+  font-weight: 600;
+  color: var(--bs-dark);
+}
+
+.modal-product-price {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--bs-danger);
+}
+
+.modal-selector-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  color: var(--bs-dark);
+}
+
+.modal-color-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--bs-gray-300);
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+  padding: 0;
+}
+
+.modal-color-swatch:hover {
+  transform: scale(1.1);
+}
+
+.modal-color-swatch.active {
+  border-color: var(--bs-dark);
+  transform: scale(1.1);
+}
+
+.modal-quantity-selector button {
+  border-radius: 50% !important;
+  width: 32px;
+  height: 32px;
+  line-height: 1;
+}
+.modal-quantity-selector span {
+  min-width: 15px;
+  text-align: center;
+}
+
+.modal-product-accordion .accordion-button {
+  background-color: var(--bs-gray-100);
+  color: var(--bs-dark);
+  font-weight: 600;
+}
+
+.modal-product-accordion .accordion-button:not(.collapsed) {
+  background-color: var(--bs-gray-100);
+  box-shadow: none;
+}

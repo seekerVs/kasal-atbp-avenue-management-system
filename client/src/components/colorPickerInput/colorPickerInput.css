@@ -1,0 +1,32 @@
+.color-picker-input-group {
+  position: relative;
+}
+
+/* Wrapper for the color input to position it correctly */
+.color-picker-swatch-wrapper {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid #ced4da;
+}
+
+/* The actual <input type="color"> element */
+.color-picker-input {
+  width: 150%;
+  height: 150%;
+  padding: 0;
+  border: none;
+  /* Position it so the clickable area covers the wrapper */
+  transform: translate(-15%, -15%);
+  cursor: pointer;
+}
+
+.color-picker-readonly-input:read-only {
+  background-color: #fff; /* Keep the background white */
+  cursor: default; /* Change cursor to normal, not the text edit cursor */
+}

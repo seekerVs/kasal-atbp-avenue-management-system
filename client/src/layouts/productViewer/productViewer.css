@@ -1,0 +1,104 @@
+/* client/src/layouts/productViewer/productViewer.css */
+
+/* Main container for spacing */
+.product-viewer-container {
+  max-width: 1200px;
+  margin: 20rem auto 0;
+  padding-top: 3rem; /* Default padding for smaller screens */
+}
+
+@media (min-width: 992px) {
+  .product-viewer-container {
+    padding-top: 2rem; /* A bit more padding for larger screens */
+  }
+}
+
+/* Category Text Styling (e.g., "BALL GOWN") */
+.product-category {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--bs-gray-600); /* Using theme variable for muted gray */
+  text-transform: uppercase;
+}
+
+/* Main Product Title */
+.product-title {
+  font-weight: 600;
+  color: var(--bs-dark); /* Using theme variable for dark text */
+}
+
+/* Price Styling */
+.product-price {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--bs-danger); /* --- CORRECTED: Using theme variable for red --- */
+}
+
+/* Styling for selector group titles (e.g., "Color:") */
+.selector-label {
+  display: block;
+  margin-bottom: 0.2rem;
+  font-weight: 600;
+  color: var(--bs-dark);
+}
+
+/* Color Swatch Styling */
+.color-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--bs-gray-300); /* Using theme variable for light border */
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+  padding: 0;
+}
+
+.color-swatch:hover {
+  transform: scale(1.1);
+}
+
+.color-swatch.active {
+  border-color: var(--bs-dark); /* Using theme variable for active border */
+  transform: scale(1.1);
+}
+
+/* Quantity Selector Styling */
+.quantity-selector button {
+  border-radius: 50% !important;
+  width: 32px;
+  height: 32px;
+  line-height: 1;
+}
+.quantity-selector span {
+  min-width: 15px;
+  text-align: center;
+}
+
+/* "Add to Booking" Button Styling */
+.add-to-booking-btn {
+  background-color: var(--bs-danger); /* --- CORRECTED: Using theme variable --- */
+  border-color: var(--bs-danger);     /* --- CORRECTED: Using theme variable --- */
+  font-weight: 600;
+}
+.add-to-booking-btn:hover {
+  /* Creating a slightly darker shade of the danger color for hover */
+  filter: brightness(90%); 
+}
+
+/* Accordion Styling */
+.product-accordion .accordion-button {
+  background-color: var(--bs-gray-100); /* Using theme variable for light background */
+  color: var(--bs-dark);
+  font-weight: 600;
+}
+
+.product-accordion .accordion-button:not(.collapsed) {
+  background-color: var(--bs-gray-100);
+  box-shadow: none;
+}
+
+.image-carousel-wrapper {
+  max-width: 85%; /* Adjust this percentage to make the image smaller or larger */
+  margin: 0; /* This horizontally centers the carousel within its column */
+}

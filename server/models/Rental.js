@@ -1,12 +1,14 @@
 // backend/models/Rental.js
 const mongoose = require('mongoose');
+const { AddressSchema } = require('./schemas/sharedSchemas');
+
 
 // --- SUB-SCHEMAS ---
 const CustomerInfoSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String },
   phoneNumber: { type: String, required: true },
-  address: { type: String, required: true },
+  address: { type: AddressSchema, required: true },
 }, { _id: false });
 
 const SingleRentItemSchema = new mongoose.Schema({

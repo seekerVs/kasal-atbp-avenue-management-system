@@ -1,138 +1,80 @@
+// client/src/layouts/package/Package.tsx
+
 import React, { useEffect, useState } from "react";
-import { Alert, Button, Col, Row } from "react-bootstrap";
+import { Alert, Col, Row, Spinner, Container } from "react-bootstrap";
 import PackageCard from "../../components/packageCard/PackageCard";
 import CustomFooter from "../../components/customFooter/CustomFooter";
 import { useNavigate } from "react-router-dom";
 
-interface PackageItem {
-  title: string;
-  price: number;
-  note?: string;
-  items: string[];
-}
+import api from '../../services/api';
+import { Package as PackageType } from '../../types';
 
-const packages: PackageItem[] = [
-  {
-    title: "Package #1",
-    price: 6888,
-    note: "(in selected colors only)",
-    items: [
-      "Wedding Gown", "Groom (Barong, Tuxedo, B.tie)", "Best man (Barong, Tuxedo, B.tie)",
-      "Maid of Honor", "Abay Girls (4 Cocktail Dress)", "Abay Boys (4 Barong/Chaleco only w/o pants)",
-      "3 Flower Girls with Basket", "Ring Bearer (w/o pants)", "Bible Bearer (w/o pants)",
-      "FREE Bride's Parents (SET) & FREE ARAS",
-    ],
-  },
-  {
-    title: "Package #2",
-    price: 10888,
-    items: [
-      "Wedding Gown (RTW)", "Groom (Barong, Tuxedo, etc - RTW)", "Best man (Barong, Tuxedo, 1 set - RTW)",
-      "Maid of Honor (RTW)", "Abay Girls (5)", "Abay Boys (5 Barong/Tuxedo - RTW)",
-      "4 Flower Girls with Basket", "Ring Bearer (set - RTW)", "Bible Bearer (set - RTW)",
-      "FREE Bride's & Groom's Parents (SET) & FREE ARAS",
-    ],
-  },
-  {
-    title: "Package #3",
-    price: 15888,
-    items: [
-      "Wedding Gown (Tailored/Bride's own design)", "Groom (Barong, Tuxedo, etc - RTW)",
-      "Best man (Barong, Tuxedo, etc - RTW)", "Maid of Honor", "Abay Girls (5 - RTW)",
-      "Abay Boys (5 w/pants, long sleeve, B.tie - RTW)", "4 Flower Girls with Basket (RTW)",
-      "Ring Bearer (w/pants, long sleeve, B.tie - RTW)", "Bible Bearer (w/pants, long sleeve, B.tie - RTW)",
-      "FREE Bride's & Groom's Parents (SET-RTW) & FREE ARAS",
-    ],
-  },
-];
+import './package.css';
 
 function Package() {
   const navigate = useNavigate();
-  const [showAlert, setShowAlert] = useState(false);
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
-  // Auto-dismiss alert after 3 seconds
+  const [packages, setPackages] = useState<PackageType[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
-    if (showAlert) {
-      const timer = setTimeout(() => {
-        setShowAlert(false);
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [showAlert]);
-
-  const handleNextClick = () => {
-    // console.log("handleNextClick called. selectedIndex:", selectedIndex); // Debugging log
-
-    if (selectedIndex === null) {
-      // If no package is selected, show an alert and STOP navigation
-      setShowAlert(true);
-      return; // IMPORTANT: This stops the function from proceeding to navigate
-    }
-
-    // Get the selected package data
-    const selectedPackageData = packages[selectedIndex];
-    // console.log("Navigating with selected package:", selectedPackageData); // Debugging log
-
-    // Navigate to PackageViewer, passing the selected package data in the state
-    navigate(`/packageViewer`, { state: { packageData: selectedPackageData } });
-  };
+    const fetchPackages = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await api.get('/packages');
+        setPackages(response.data);
+      } catch (err) {
+        setError("Failed to load packages. Please try again later.");
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPackages();
+  }, []);
 
   return (
-    <div className="pt-3 pt-lg-4 px-4 justify-content-center">
-      <div className="w-100 d-flex justify-content-between px-0 px-lg-5">
-        <h3 className="display-7">Select a package offer </h3>
-        <Button
-          variant="primary"
-          size="sm"
-          className="px-3"
-          onClick={handleNextClick}
-        >
-          Next
-        </Button>
+    <>
+      <div className="package-page-container pt-3 pt-lg-4">
+        <div className="w-100 text-center mb-4">
+          <h2 className="display-6">Select a Package Offer</h2>
+          <p className="text-muted">Choose one of our curated packages for a complete and hassle-free experience.</p>
+        </div>
+
+        {loading ? (
+          <div className="text-center py-5"><Spinner animation="border" /><p className="mt-2">Loading Packages...</p></div>
+        ) : error ? (
+          <Alert variant="danger">{error}</Alert>
+        ) : (
+          <Row xs={1} md={2} xl={3} className="g-4 justify-content-center">
+            {packages.map((pkg, index) => (
+              <Col key={pkg._id}>
+                <div
+                  className="package-card-wrapper"
+                  onClick={() => navigate(`/packageViewer`, { state: { packageData: pkg } })}
+                >
+                  <PackageCard
+                    title={pkg.name}
+                    price={pkg.price}
+                    note={pkg.description}
+                    items={pkg.inclusions}
+                    imageUrls={pkg.imageUrls} // <-- This is the fix
+                    isFeatured={index === 1}
+                  />
+                </div>
+              </Col>
+            ))}
+          </Row>
+        )}
       </div>
-      {showAlert && (
-        <Alert
-          variant="warning"
-          onClose={() => setShowAlert(false)}
-          dismissible
-          className="position-fixed top-0 start-50 translate-middle-x mt-3 shadow"
-          style={{ zIndex: 1050, width: "100%", maxWidth: "500px" }}
-        >
-          Please select a package to continue. {/* Clear and concise message */}
-        </Alert>
-      )}
-      <div className="w-100 d-flex align-items-start justify-content-center gap-3">
-        <Row className="g-4 m-0">
-          {packages.map((pkg, idx) => (
-            <Col key={idx} md={4} style={{ width: "400px", maxWidth: "400px" }}>
-              <div
-                className="h-100"
-                // Ensure setSelectedIndex is correctly updating the state
-                onClick={() => {
-                    setSelectedIndex(idx);
-                    // console.log("PackageCard clicked. New selectedIndex:", idx); // Debugging log
-                }}
-                style={{ cursor: "pointer" }}
-              >
-                <PackageCard
-                  title={pkg.title}
-                  price={pkg.price}
-                  note={pkg.note}
-                  items={pkg.items}
-                  selected={idx === selectedIndex}
-                />
-              </div>
-            </Col>
-          ))}
-        </Row>
-      </div>
-      <footer className="text-dark py-3">
+
+      <footer className="text-dark py-3 mt-5 border-top">
         <CustomFooter />
       </footer>
-    </div>
+    </>
   );
 }
 
 export default Package;
-

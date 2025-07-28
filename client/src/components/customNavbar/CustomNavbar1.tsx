@@ -1,17 +1,15 @@
 // In CustomNavbar1.tsx
 
-import { Container, Nav, Navbar } from "react-bootstrap";
+import { Container, Nav, Navbar, NavDropdown } from "react-bootstrap";
 import { NavLink } from "react-router-dom";
 import "./customNavbar.css";
 import { Logo } from "../../assets/images";
-
 
 function Custom_navbar1() {
   return (
     <Container fluid className="bg-white shadow-sm px-0 w-100">
       <Navbar expand="lg" className="py-1 custom-container">
         <Container fluid>
-          {/* --- Improvement #3: Use NavLink for the brand for better semantics --- */}
           <Navbar.Brand
             as={NavLink}
             to="/"
@@ -31,26 +29,33 @@ function Custom_navbar1() {
           <Navbar.Toggle aria-controls="navbarResponsive" />
 
           <Navbar.Collapse id="navbarResponsive">
-            {/* The `mx-auto` class on the Nav component is the key.
-                It tells the navigation block to take up the necessary space for its
-                links and then add equal margin to its left and right, effectively
-                centering it within the available flex container space. */}
-            <Nav className="mx-auto gap-lg-4 text-center">
+            {/* --- THIS IS THE MODIFIED LINE --- */}
+            <Nav className="ms-auto gap-lg-3 text-center">
               <Nav.Link as={NavLink} to="/" end>
                 Home
-              </Nav.Link>
-              <Nav.Link as={NavLink} to="/book-now">
-                Book Now
               </Nav.Link>
               <Nav.Link as={NavLink} to="/products">
                 Outfits
               </Nav.Link>
+              <Nav.Link as={NavLink} to="/packages">
+                Packages
+              </Nav.Link>
+              <Nav.Link as={NavLink} to="/custom-tailoring">
+                Custom Tailoring
+              </Nav.Link>
+              <NavDropdown title="Book Now" id="book-now-dropdown" align="end">
+                <NavDropdown.Item as={NavLink} to="/reservations/new">
+                  Reserve Outfits/Packages
+                </NavDropdown.Item>
+                <NavDropdown.Item as={NavLink} to="/appointments/new">
+                  Custom Tailoring Appointment
+                </NavDropdown.Item>
+              </NavDropdown>
               <Nav.Link as={NavLink} to="/about">
                 About
               </Nav.Link>
             </Nav>
           </Navbar.Collapse>
-          <div className="navbar-spacer d-none d-lg-block"></div>
         </Container>
       </Navbar>
     </Container>

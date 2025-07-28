@@ -1,0 +1,19 @@
+/* client/src/components/modals/packageSelectionModal/packageSelectionModal.css */
+
+.package-selection-modal-grid .product-card {
+    /* We can reuse the product-card styling for a consistent look */
+    border: 1px solid #dee2e6;
+    margin-bottom: 0 !important; /* Override default card margins if any */
+}
+
+.package-selection-modal-grid .package-card-img {
+    height: 150px; /* A smaller image for the modal grid view */
+}
+
+/* Detail View Styling */
+.package-detail-view-img {
+    max-height: 400px;
+    width: 100%;
+    object-fit: cover;
+    border-radius: 0.375rem;
+}

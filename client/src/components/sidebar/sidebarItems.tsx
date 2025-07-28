@@ -7,6 +7,9 @@ import {
   BoxSeam,
   Images,
   PeopleFill,
+  JournalCheck,
+  CalendarHeart,
+  CalendarPlus,
 } from "react-bootstrap-icons";
 import { Icon } from "react-bootstrap-icons"; // Import the base Icon type
 
@@ -33,18 +36,25 @@ export const sidebarItems: NavItem[] = [
   {
     title: "Rentals",
     path: "#", // Parent path can be "#" if it only serves as a trigger
-    icon: ClipboardData,
+    icon: CalendarPlus,
     subItems: [
+      { title: "New Rental", path: "/new-rental" },
       { title: "Manage Rentals", path: "/manageRentals" },
-      { title: "Single Rent", path: "/singleRent" },
-      { title: "Package Rent", path: "/packageRent" },
-      { title: "Custom", path: "/customRent" },
     ],
   },
   {
-    title: "Bookings",
-    path: "/bookings",
-    icon: CalendarCheck,
+    title: "Reservations",
+    path: "/manage-reservations",
+    icon: JournalCheck, // A fitting icon for reservations
+  },
+  {
+    title: "Appointments",
+    path: "#", // 2. Make Appointments a collapsible parent
+    icon: CalendarHeart,
+    subItems: [ 
+      { title: "Manage Appointments", path: "/manage-appointments" },
+      { title: "Shop Unavailability", path: "/manage-unavailability" }, // 3. Add the new link
+    ],
   },
   {
     title: "Inventory",

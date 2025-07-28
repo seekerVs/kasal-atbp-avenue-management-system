@@ -1,13 +1,20 @@
 // backend/models/Package.js
 const mongoose = require('mongoose');
 
-const AssignmentSchema = new mongoose.Schema({
-    role: { type: String, required: true },
-    itemId: { type: mongoose.Schema.Types.ObjectId, ref: 'items' },
-    assignedItemName: { type: String },
-    variation: { type: String }, // e.g., "Color, Size"
-    imageUrl: { type: String },
+// NEW: Sub-schema for the new 'inclusions' array of objects
+const InclusionSchema = new mongoose.Schema({
+    wearerNum: { type: Number, required: true, min: 1 },
+    name: { type: String, required: true },
     isCustom: { type: Boolean, default: false },
+});
+
+const AssignmentSchema = new mongoose.Schema({
+    // It now links to a SINGLE inclusion.
+    inclusionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Package.inclusions', required: true },
+    // And can have MULTIPLE item IDs, one for each wearer in the inclusion.
+    // 'null' is a valid value for a custom slot.
+    itemIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'items', default: null }],
+
 }, { _id: false });
 
 const ColorMotifSchema = new mongoose.Schema({
@@ -15,12 +22,13 @@ const ColorMotifSchema = new mongoose.Schema({
     assignments: [AssignmentSchema]
 });
 
+// UPDATED: The main PackageSchema
 const PackageSchema = new mongoose.Schema({
     name: { type: String, required: true, unique: true },
     description: { type: String },
-    inclusions: [String],
+    inclusions: [InclusionSchema], // Use the new sub-schema
     price: { type: Number, required: true },
-    imageUrl: { type: String},
+    imageUrls: [String], // Changed from singular 'imageUrl' to plural array
     colorMotifs: [ColorMotifSchema]
 }, { timestamps: true });
 

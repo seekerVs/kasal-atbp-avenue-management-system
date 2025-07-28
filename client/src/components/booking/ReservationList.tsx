@@ -18,7 +18,7 @@ export const ReservationList: React.FC<ReservationListProps> = ({ itemReservatio
 
   return (
     <div>
-      <h6 className="mt-4 text-muted">Current Selections</h6>
+      <h6 className="text-muted">Current Selections</h6>
       <hr className="mt-1" />
       {hasReservations ? (
         <ListGroup variant="flush">

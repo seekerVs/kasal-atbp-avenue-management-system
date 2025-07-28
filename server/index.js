@@ -23,7 +23,12 @@ const dashboardRoutes = require('./routes/dashboardRoutes.js');
 const measurementRefRoutes = require('./routes/measurementRefRoutes.js');
 const contentRoutes = require('./routes/contentRoutes.js');
 const uploadRoutes = require('./routes/uploadRoutes');
-const bookingRoutes = require('./routes/bookingRoutes.js');
+const appointmentRoutes = require('./routes/appointmentRoutes.js');
+const reservationRoutes = require('./routes/reservationRoutes.js');
+const permissionRoutes = require('./routes/permissionRoutes.js');
+const roleRoutes = require('./routes/roleRoutes.js');
+const userRoutes = require('./routes/userRoutes.js');
+const unavailabilityRoutes = require('./routes/unavailabilityRoutes.js'); 
 
 // --- Route Definitions ---
 const API_PREFIX = '/api';
@@ -39,7 +44,12 @@ app.use(`${API_PREFIX}/dashboard`, dashboardRoutes);
 app.use(`${API_PREFIX}/measurementrefs`, measurementRefRoutes);
 app.use(`${API_PREFIX}/content`, contentRoutes);
 app.use(`${API_PREFIX}/upload`, uploadRoutes);
-app.use(`${API_PREFIX}/bookings`, bookingRoutes);
+app.use(`${API_PREFIX}/appointments`, appointmentRoutes);
+app.use(`${API_PREFIX}/reservations`, reservationRoutes);
+app.use(`${API_PREFIX}/permissions`, permissionRoutes);
+app.use(`${API_PREFIX}/roles`, roleRoutes);
+app.use(`${API_PREFIX}/users`, userRoutes);;
+app.use(`${API_PREFIX}/unavailability`, unavailabilityRoutes);
 
 // Sensor routes do not have the /api prefix as per original file
 app.use('/sensor', sensorRoutes);

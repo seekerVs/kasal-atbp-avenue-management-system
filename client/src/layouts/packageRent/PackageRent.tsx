@@ -33,14 +33,25 @@ import {
   RentalOrder,
   PackageFulfillment,
   MeasurementRef,
-  CustomTailoringItem
+  CustomTailoringItem,
+  FormErrors
 } from '../../types';
-import AssignmentSubModal from '../../components/modals/assignmentSubModal/AssignmentSubModal';
+import { SingleItemSelectionModal, SelectedItemData } from '../../components/modals/singleItemSelectionModal/SingleItemSelectionModal';
 import CreateEditCustomItemModal from '../../components/modals/createEditCustomItemModal/CreateEditCustomItemModal';
 import api from '../../services/api';
 import { useAlert } from '../../contexts/AlertContext';
 
-const initialCustomerDetails: CustomerInfo = { name: '', phoneNumber: '', email: '', address: '' };
+const initialCustomerDetails: CustomerInfo = { 
+  name: '', 
+  phoneNumber: '', 
+  email: '', 
+  address: {
+    province: 'Camarines Norte',
+    city: '',
+    barangay: '',
+    street: ''
+  } 
+};
 
 // ===================================================================================
 // --- MAIN COMPONENT ---
@@ -78,9 +89,11 @@ function PackageRent() {
   const [showAssignmentModal, setShowAssignmentModal] = useState(false);
   const [showIncompleteFulfillmentModal, setShowIncompleteFulfillmentModal] = useState(false);
   const [incompleteAction, setIncompleteAction] = useState<'create' | 'add' | null>(null);
+  const [errors, setErrors] = useState<FormErrors>({});
   
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
 
   const inventoryMap = useMemo(() => {
     return allInventory.reduce((map, item) => {
@@ -125,7 +138,7 @@ function PackageRent() {
           api.get('/measurementrefs'),
         ]);
         setAllPackages(packagesRes.data || []);
-        setAllInventory(inventoryRes.data || []);
+        setAllInventory(inventoryRes.data.items || []);
         setAllRentals(rentalsRes.data || []);
         setMeasurementRefs(refsRes.data || []);
       } catch (err) {
@@ -141,79 +154,75 @@ function PackageRent() {
   const selectedPackage = useMemo(() => allPackages.find(p => p._id === selectedPackageId), [selectedPackageId, allPackages]);
   const selectedMotif = useMemo(() => selectedPackage?.colorMotifs.find(m => m._id === selectedMotifId), [selectedPackage, selectedMotifId]);
 
-  // In PackageRent.tsx...
-
-useEffect(() => {
+  useEffect(() => {
     if (!selectedPackage) {
         setFulfillmentData([]);
         return;
     }
     
-    let initialFulfillment: PackageFulfillment[] = [];
-
-    // --- Path 1: A pre-defined Color Motif is selected ---
-    if (selectedMotif) {
-        initialFulfillment = selectedMotif.assignments.map(assignment => {
-            // Check the template from the database package definition
-            if (assignment.isCustom) {
-                // If the template marks it as custom, create a state object with isCustom: true
-                return {
-                    role: assignment.role,
-                    wearerName: '',
-                    assignedItem: { name: `${selectedPackage.name.split(',')[0]}: ${assignment.role}` },
-                    isCustom: true // Set the flag to true
-                };
-            } else {
-                // This is a standard inventory role defined in the motif
-                return {
-                    role: assignment.role,
-                    wearerName: '',
-                    assignedItem: assignment.itemId 
-                        ? { itemId: assignment.itemId, name: inventoryMap[assignment.itemId]?.name || 'Unknown Item' } 
-                        : {},
-                    isCustom: false // Explicitly set the flag to false
-                };
-            }
-        });
-    } 
-    // --- Path 2: No motif selected (Manual Assignment) ---
-    else {
-        // We assume that roles generated from the generic 'inclusions' list are NEVER custom.
-        initialFulfillment = selectedPackage.inclusions.flatMap(inclusion => {
-            const match = inclusion.match(/^(\d+)\s+(.*)$/);
-            if (match) {
-                const quantity = parseInt(match[1], 10);
-                const roleBase = match[2];
-                // For roles like "2 Bridesmaids", create multiple objects
-                return Array.from({ length: quantity }, (_, i) => ({ 
-                    role: `${roleBase} ${i + 1}`, 
-                    wearerName: '', 
-                    assignedItem: {},
-                    isCustom: false // CRITICAL: Explicitly set the flag to false
-                }));
-            }
-            // For roles like "1 Gown", create a single object
-            return { 
-                role: inclusion, 
-                wearerName: '', 
-                assignedItem: {}, 
-                isCustom: false // CRITICAL: Explicitly set the flag to false
+    // 1. Generate the base fulfillment list from the package's `inclusions` array.
+    const initialFulfillment = selectedPackage.inclusions.flatMap(inclusion => {
+        return Array.from({ length: inclusion.wearerNum }, (_, i) => {
+            const roleName = inclusion.wearerNum > 1 ? `${inclusion.name} ${i + 1}` : inclusion.name;
+            return {
+                role: roleName, wearerName: '',
+                isCustom: !!inclusion.isCustom,
+                assignedItem: {},
+                sourceInclusionId: inclusion._id,
             };
         });
+    });
+
+    // 2. If a motif is selected, override the assigned items.
+    if (selectedMotif) {
+      const inventoryMap = new Map(allInventory.map(item => [item._id, item]));
+
+      // For each assignment in the motif...
+      selectedMotif.assignments.forEach(assignment => {
+        // Find all the fulfillment slots that correspond to this inclusion.
+        const targetFulfillmentSlots = initialFulfillment.filter(
+          fulfill => fulfill.sourceInclusionId === assignment.inclusionId
+        );
+        
+        // Now, map the itemIds to these slots one-by-one.
+        assignment.itemIds.forEach((itemId, wearerIndex) => {
+          if (itemId && targetFulfillmentSlots[wearerIndex]) {
+            const itemDetails = inventoryMap.get(itemId);
+            if (itemDetails) {
+              // Note: We don't have variation info here yet, so we leave it blank for manual assignment.
+              // This part could be enhanced later if motifs also stored variation.
+              targetFulfillmentSlots[wearerIndex].assignedItem = {
+                itemId: itemId,
+                name: itemDetails.name,
+                variation: '', // To be filled by user
+                imageUrl: itemDetails.variations[0]?.imageUrl, // Use first image as preview
+              };
+            }
+          }
+        });
+      });
     }
 
     setFulfillmentData(initialFulfillment);
-  }, [selectedPackage, selectedMotif, inventoryMap]);
+  }, [selectedPackage, selectedMotif, allInventory]);
 
 
+  const validateCustomerDetails = (): boolean => {
+    const newErrors: FormErrors = { address: {} };
+    if (!customerDetails.name.trim()) newErrors.name = 'Customer Name is required.';
+    if (!/^09\d{9}$/.test(customerDetails.phoneNumber)) newErrors.phoneNumber = 'Phone number must be a valid 11-digit number starting with 09.';
+    if (!customerDetails.address.province) newErrors.address.province = 'Province is required.';
+    if (!customerDetails.address.city) newErrors.address.city = 'City/Municipality is required.';
+    if (!customerDetails.address.barangay) newErrors.address.barangay = 'Barangay is required.';
+    if (!customerDetails.address.street.trim()) newErrors.address.street = 'Street, House No. is required.';
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 1 && Object.keys(newErrors.address).length === 0;
+  };
+  
   const handlePackageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedPackageId(e.target.value);
     setSelectedMotifId('');
-  };
-
-  const handleCustomerDetailChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setCustomerDetails(prev => ({ ...prev, [name]: value }));
   };
 
   const handleOpenCustomItemModal = (index: number) => {
@@ -277,28 +286,31 @@ useEffect(() => {
     }
   };
 
+  
   const validateAndProceed = (action: 'create' | 'add') => {
     if (!selectedPackageId) {
         addAlert("Please select a package.", 'danger');
-        console.error("No package selected.");
         return;
     }
-    if (!customerDetails.name.trim() || !customerDetails.phoneNumber.trim()) {
-        addAlert("Customer Name and Phone Number are required.", 'danger');
-        console.error("Customer details are incomplete.");
+    if (!validateCustomerDetails()) {
+        addAlert("Please fill all required customer fields (*).", 'warning');
         return;
     }
 
-    // --- REVISED VALIDATION LOGIC ---
     const isFulfillmentIncomplete = fulfillmentData.some(fulfill => {
         const assigned = fulfill.assignedItem;
 
         if (assigned && 'outfitCategory' in assigned) {
             return false;
         }
+        
+        // A custom slot is considered "complete" for this check even if details aren't filled yet.
+        if (fulfill.isCustom) {
+            return false;
+        }
 
         if (!assigned || !assigned.itemId || !assigned.variation) {
-            return true; // This role IS incomplete.
+            return true;
         }
 
         return false;
@@ -328,7 +340,7 @@ useEffect(() => {
             name: `${selectedPackage.name},${selectedMotif?.motifName || 'Manual'}`,
             price: selectedPackage.price,
             quantity: 1, // Assuming quantity of 1 for packages for now
-            imageUrl: selectedPackage.imageUrl,
+            imageUrl: selectedPackage.imageUrls[0] || '',
             packageFulfillment: finalPackageFulfillment
         }],
         customTailoring: customItemsForRental
@@ -409,7 +421,7 @@ useEffect(() => {
             name: `${selectedPackage.name},${selectedMotif?.motifName || 'Manual'}`,
             price: selectedPackage.price,
             quantity: 1,
-            imageUrl: selectedPackage.imageUrl,
+            imageUrl: selectedPackage.imageUrls[0] || '',
             packageFulfillment: finalPackageFulfillment
         }],
         customTailoring: customItemsForRental
@@ -433,22 +445,22 @@ useEffect(() => {
 
   const handleOpenAssignmentModal = (fulfillmentIndex: number) => { setAssignmentContext({ fulfillmentIndex }); setShowAssignmentModal(true); };
   
-  const handleSaveAssignment = (data: { itemId: string; name: string; variation: string; imageUrl: string }) => {
+  const handleSaveAssignment = (selection: SelectedItemData) => {
     if (assignmentContext === null) return;
     const { fulfillmentIndex } = assignmentContext;
     const newFulfillmentData = [...fulfillmentData];
+    const { product, variation } = selection;
 
-    // The data object from the modal now contains everything we need.
     newFulfillmentData[fulfillmentIndex].assignedItem = {
-      itemId: data.itemId,
-      name: data.name,
-      variation: data.variation,
-      imageUrl: data.imageUrl
+      itemId: product._id,
+      name: product.name,
+      variation: `${variation.color}, ${variation.size}`,
+      imageUrl: variation.imageUrl
     };
 
     setFulfillmentData(newFulfillmentData);
     setShowAssignmentModal(false);
-};
+  };
   
   const handleWearerNameChange = (index: number, name: string) => {
     const newFulfillmentData = [...fulfillmentData];
@@ -480,7 +492,7 @@ useEffect(() => {
       {loading ? ( <div className="text-center py-5"><Spinner /></div> ) : (
       <Row className="g-4">
         {/* --- LEFT COLUMN --- */}
-        <Col lg={7} xl={8}>
+        <Col lg={6} xl={7}>
           <Card className="mb-4">
             <Card.Header as="h5"><BoxSeam className="me-2" />Select Package</Card.Header>
             <Card.Body>
@@ -524,7 +536,7 @@ useEffect(() => {
           </Card>
           <Card>
             <Card.Header as="h5">Fulfillment Details</Card.Header>
-              <ListGroup variant="flush" style={{ maxHeight: '80vh', overflowY: 'auto' }}>
+              <ListGroup variant="flush" style={{ height: '80vh', overflowY: 'auto' }}>
                 {fulfillmentData.map((fulfill, index) => {
                   
                   // --- THIS IS THE FIX (Type-Safe Variable Declarations) ---
@@ -599,10 +611,10 @@ useEffect(() => {
         </Col>
 
         {/* --- RIGHT COLUMN --- */}
-        <Col lg={5} xl={4}>
+        <Col lg={6} xl={5}>
             <CustomerDetailsCard
                 customerDetails={customerDetails}
-                onCustomerDetailChange={handleCustomerDetailChange}
+                setCustomerDetails={setCustomerDetails}
                 isNewCustomerMode={isNewCustomerMode}
                 onSetIsNewCustomerMode={setIsNewCustomerMode}
                 allRentals={allRentals}
@@ -612,6 +624,7 @@ useEffect(() => {
                 canSubmit={!!selectedPackageId && !!customerDetails.name}
                 existingOpenRental={existingOpenRental}
                 selectedRentalForDisplay={selectedRentalForDisplay}
+                errors={errors} 
             />
         </Col>
       </Row>
@@ -630,13 +643,14 @@ useEffect(() => {
       )}
 
       {assignmentContext !== null && 
-        <AssignmentSubModal // <-- Change name if you haven't already
-            show={showAssignmentModal}
-            onHide={() => setShowAssignmentModal(false)}
-            onAssign={handleSaveAssignment}
-            inventory={allInventory}
-            preselectedItemId={preselectedAssignment.itemId}
-            preselectedVariation={preselectedAssignment.variation}
+        <SingleItemSelectionModal
+          show={showAssignmentModal}
+          onHide={() => setShowAssignmentModal(false)}
+          mode="assignment"
+          onSelect={handleSaveAssignment}
+          addAlert={addAlert}
+          preselectedItemId={preselectedAssignment.itemId}
+          preselectedVariation={preselectedAssignment.variation}
         />
       }
 

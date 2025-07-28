@@ -1,6 +1,7 @@
 // client/src/types/index.ts
 export * from './aboutpage';
 export * from './homepage';
+export * from './custompage';
 // ===================================================================
 //
 //               CORE DATA MODELS (Inventory, Packages)
@@ -9,7 +10,10 @@ export * from './homepage';
 
 // --- Represents a single variation of an inventory item ---
 export interface ItemVariation {
-  color: string;
+  color: {
+    name: string;
+    hex: string;
+  };
   size: string;
   quantity: number;
   imageUrl: string;
@@ -25,16 +29,29 @@ export interface InventoryItem {
   composition: string[];
   features: string[];
   variations: ItemVariation[];
+  createdAt?: Date; // or Date
+  updatedAt?: Date; // or Date
+  ageGroup?: 'Adult' | 'Kids';
+  gender?: 'Male' | 'Female' | 'Unisex';
+  heartCount?: number;
 }
 
-// --- Defines the structure of a package assignment within a motif ---
-export interface PackageAssignment {
-  role: string;
-  itemId?: string; // Links to InventoryItem._id
-  assignedItemName?: string;
-  variation?: string;
-  imageUrl?: string;
+export interface InclusionItem {
+  _id: string;
+  wearerNum: number;
+  name: string;
   isCustom?: boolean;
+}
+
+// --- UPDATED: Redefine the package assignment to link by ID ---
+// It now reflects the new one-to-many relationship: one inclusion to many items.
+export interface PackageAssignment {
+  inclusionId: string;            // Was 'inclusionIds: string[]', now singular
+  itemIds: (string | null)[];   // Was 'itemId?: string', now a plural array that can contain nulls for custom slots
+  
+  // NOTE: assignedItemName, variation, and imageUrl are removed from this interface.
+  // Those details belong to the specific inventory item and will be looked up using the itemId.
+  // This enforces a cleaner data structure on the frontend.
 }
 
 // --- Defines a color motif with its specific item assignments ---
@@ -49,9 +66,9 @@ export interface Package {
   _id: string;
   name: string;
   description?: string;
-  inclusions: string[];
+  inclusions: InclusionItem[]; // Was string[], now an array of objects
   price: number;
-  imageUrl: string;
+  imageUrls: string[]; // Was imageUrl: string, now an array of strings
   colorMotifs: ColorMotif[];
 }
 
@@ -112,14 +129,6 @@ export interface RentedPackage extends BaseRentItem {
 //               MAIN RENTAL ORDER & FINANCIALS
 //
 // ===================================================================
-
-export interface CustomerInfo {
-  name: string;
-  email: string;
-  phoneNumber: string;
-  address: string;
-}
-
 export interface PaymentDetail {
   amount: number;
   date?: Date | string;
@@ -187,19 +196,41 @@ export interface SensorData {
   updatedAt: string;
 }
 
+// ===================================================================
+//
+//               USER & PERMISSION TYPES (NEW & UPDATED)
+//
+// ===================================================================
+
+export interface Permission {
+  _id: string;
+  description: string;
+}
+
+export interface Role {
+  _id: string;
+  name: string;
+  permissions: string[];
+  createdAt?: string; // Timestamps are good to have
+  updatedAt?: string;
+}
+
 export interface User {
   _id: string;
   name: string;
   email: string;
-  role: 'Admin' | 'User';
+  // UPDATED: 'role' is now a nested object, not a simple string
+  role: Role;
   createdAt: string;
 }
 
 // ===================================================================
 //
-//               BOOKING & RESERVATION TYPES
+//         NEW: APPOINTMENT & RESERVATION TYPES
 //
 // ===================================================================
+
+// --- SHARED SUB-TYPES ---
 
 export interface Address {
   province: string;
@@ -208,7 +239,8 @@ export interface Address {
   street: string;
 }
 
-export interface BookingCustomerInfo {
+// RENAMED from BookingCustomerInfo to be more generic
+export interface CustomerInfo {
   name: string;
   email?: string;
   phoneNumber: string;
@@ -222,7 +254,25 @@ export interface Payment {
   referenceNumber?: string;
 }
 
-export interface BookingFinancials {
+// --- APPOINTMENT TYPES ---
+
+export interface Appointment {
+  _id: string;
+  customerInfo: CustomerInfo;
+  appointmentDate: Date;
+  status: 'Pending' | 'Confirmed' | 'Completed' | 'Cancelled' | 'No Show';
+  statusNote?: string;
+  rentalId?: string | null;
+  processedItemData?: CustomTailoringItem | null;
+  sourceReservationId?: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// --- RESERVATION TYPES ---
+
+// RENAMED from BookingFinancials
+export interface ReservationFinancials {
   shopDiscount?: number;
   depositAmount?: number;
   payments?: Payment[];
@@ -230,8 +280,6 @@ export interface BookingFinancials {
 
 export interface ItemReservation {
   reservationId: string;
-  status: 'Reserved' | 'Confirmed' | 'Cancelled';
-  statusNote?: string;
   itemId: string;
   itemName: string;
   variation: {
@@ -242,18 +290,18 @@ export interface ItemReservation {
   price: number;
 }
 
+// UPDATED: Now includes a link to a potential appointment
 export interface FulfillmentPreview {
   role: string;
   wearerName?: string;
   isCustom: boolean;
   assignedItemId?: string;
   variation?: string;
+  linkedAppointmentId?: string; // <-- NEW
 }
 
 export interface PackageReservation {
   packageReservationId: string;
-  status: 'Reserved' | 'Confirmed' | 'Cancelled';
-  statusNote?: string;
   packageId: string;
   packageName: string;
   motifName?: string;
@@ -261,48 +309,21 @@ export interface PackageReservation {
   fulfillmentPreview: FulfillmentPreview[];
 }
 
-export interface AppointmentFor {
-  sourcePackageReservationId?: string;
-  role: string;
-}
-
-export interface Appointment {
-  appointmentId: string;
-  status: 'Pending' | 'Scheduled' | 'Completed' | 'Cancelled';
-  statusNote?: string;
-  appointmentFor: AppointmentFor;
-  appointmentDate?: string | Date | null;
-  processedItemData?: CustomTailoringItem | null; // Reuse existing type
-}
-
-export interface Booking {
+export interface Reservation {
   _id: string;
-  customerInfo: BookingCustomerInfo;
-  eventDate: string | Date;
-  rentalStartDate: string | Date;
-  rentalEndDate: string | Date;
+  customerInfo: CustomerInfo;
+  eventDate: Date;
+  reserveStartDate: Date;
+  reserveEndDate: Date;
+  status: 'Pending' | 'Confirmed' | 'Completed' | 'Cancelled';
   rentalId?: string | null;
-  financials: BookingFinancials;
+  financials: ReservationFinancials;
   itemReservations: ItemReservation[];
   packageReservations: PackageReservation[];
-  appointments: Appointment[];
-  status: 'Pending' | 'Confirmed' | 'Completed' | 'Cancelled';
-  createdAt: string | Date;
-  updatedAt: string | Date;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export type FormErrors = {
-  customerInfo?: {
-    name?: string;
-    phoneNumber?: string;
-    email?: string;
-    address?: {
-      province?: string;
-      city?: string;
-      barangay?: string;
-      street?: string;
-    };
-  };
-  eventDate?: string;
-  reservations?: string; // For a general error like "at least one item is required"
+  [key: string]: any;
 };

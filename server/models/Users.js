@@ -1,27 +1,45 @@
-// In server/models/User.js
+// In server/models/Users.js
 
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 const UserSchema = new mongoose.Schema({
+  // --- MODIFIED: Use a custom string _id ---
+  _id: {
+    type: String,
+    required: true,
+  },
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
-}, { timestamps: true });
+  passwordHash: { type: String, required: true },
+  roleId: { 
+    type: String, 
+    ref: 'Role', 
+    required: true 
+  },
+  // --- NEW: Add the status field ---
+  status: {
+    type: String,
+    enum: ['active', 'inactive', 'suspended'],
+    default: 'active',
+  },
+}, { 
+  timestamps: true,
+  _id: false // --- Crucial for using our custom string _id ---
+});
 
-// Mongoose "pre-save" hook to hash password before saving
+// Mongoose "pre-save" hook remains the same
 UserSchema.pre('save', async function(next) {
-  // Only hash the password if it has been modified (or is new)
-  if (!this.isModified('password')) {
+  if (!this.isModified('passwordHash')) {
     return next();
   }
   try {
     const salt = await bcrypt.genSalt(10);
-    this.password = await bcrypt.hash(this.password, salt);
+    this.passwordHash = await bcrypt.hash(this.passwordHash, salt);
     next();
   } catch (error) {
     next(error);
-_  }
+  }
 });
 
 const UserModel = mongoose.model("user", UserSchema);

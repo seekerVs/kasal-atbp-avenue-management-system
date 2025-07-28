@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Modal, Button, Form, Row, Col, ListGroup, Badge, Alert } from 'react-bootstrap';
 import { RentedPackage, PackageFulfillment, InventoryItem, FulfillmentItem, CustomTailoringItem, MeasurementRef, Package } from '../../../types';
-import AssignmentSubModal from '../assignmentSubModal/AssignmentSubModal';
 import CreateEditCustomItemModal from '../createEditCustomItemModal/CreateEditCustomItemModal'; 
+import { SingleItemSelectionModal, SelectedItemData } from '../singleItemSelectionModal/SingleItemSelectionModal';
 import { ExclamationTriangleFill, PencilSquare, PlusCircle, Trash } from 'react-bootstrap-icons';
 import api from '../../../services/api';
 
@@ -109,32 +109,25 @@ const EditPackageModal: React.FC<EditPackageModalProps> = ({ show, onHide, pkg, 
     setFulfillment(updatedFulfillment);
   };
 
-  const packageTemplate = useMemo(() => {
-        if (!allPackages || !pkg) return null;
-        // The pkg.name from the rental is like "Package Name,Motif Name"
-        const basePackageName = pkg.name.split(',')[0];
-        return allPackages.find(p => p.name === basePackageName);
-    }, [allPackages, pkg]);
-
   const handleOpenInventoryAssignment = (index: number) => {
     setInvAssignmentIndex(index);
     setShowAssignmentModal(true);
   };
 
-  const handleAssignFromInventory = (data: { itemId: string; name: string; variation: string; imageUrl: string }) => {
-    if (invAssignmentIndex  === null) return;
+  const handleAssignFromInventory = (selection: SelectedItemData) => {
+    if (invAssignmentIndex === null) return;
     
+    const { product, variation } = selection;
     const updatedFulfillment = [...fulfillment];
-    if (!updatedFulfillment[invAssignmentIndex ]) return;
+    if (!updatedFulfillment[invAssignmentIndex]) return;
     
-    const newAssignedItem: FulfillmentItem = {
-      itemId: data.itemId,
-      name: data.name,
-      variation: data.variation,
-      imageUrl: data.imageUrl,
+    updatedFulfillment[invAssignmentIndex].assignedItem = {
+      itemId: product._id,
+      name: product.name,
+      variation: `${variation.color}, ${variation.size}`,
+      imageUrl: variation.imageUrl,
     };
 
-    updatedFulfillment[invAssignmentIndex ].assignedItem = newAssignedItem;
     setFulfillment(updatedFulfillment);
     setShowAssignmentModal(false);
   };
@@ -308,52 +301,38 @@ const EditPackageModal: React.FC<EditPackageModalProps> = ({ show, onHide, pkg, 
           <div style={{ maxHeight: '55vh', overflowY: 'auto' }} className="pe-2">
             <ListGroup className="list-group-flush">
               {fulfillment.map((fulfillItem, index) => {
-                  // Find the original definition for this role in the package template.
-                  const roleInTemplate = packageTemplate?.colorMotifs
-                      .flatMap(m => m.assignments) // Get all assignments from all motifs
-                      .find(a => a.role === fulfillItem.role);
-                  // The source of truth is now the template, not the rental data.
-                  const isDesignatedAsCustom = roleInTemplate?.isCustom === true;
-                  // 1. --- THIS IS THE FIX: More granular flags ---
+                  // --- THIS IS THE REFACTORED SECTION ---
                   const assignedItem = fulfillItem.assignedItem;
-                  const isCustomSlot = fulfillItem.isCustom === true;
+                  
+                  // 1. The source of truth for 'isCustom' is now directly on the fulfillment item.
+                  const isDesignatedAsCustom = fulfillItem.isCustom === true;
+                  
+                  // 2. Determine the status based on the correct properties.
                   const hasWearerName = !!fulfillItem.wearerName?.trim();
-                  // Flag 1: Is an inventory item linked AT ALL (even without variation)?
                   const isLinkedToItem = assignedItem && 'itemId' in assignedItem && !!assignedItem.itemId;
-                  // Flag 2: Is the inventory item fully assigned WITH a variation?
                   const isFullyAssigned = isLinkedToItem && !!(assignedItem as any).variation;
-                  // Flag 3: Does a custom slot have its data filled out?
                   const hasCustomData = isDesignatedAsCustom && assignedItem && 'outfitCategory' in assignedItem;
-                  // 2. A helper function to determine the precise status based on the flags.
+                  
                   const getStatus = (): { text: string; variant: 'success' | 'info' | 'warning' | 'danger' } => {
-                    // Case 1: It's an inventory item slot.
-                    if (!isCustomSlot) {
-                      if (isFullyAssigned) {
-                        return hasWearerName ? { text: 'Complete', variant: 'success' } : { text: 'No Wearer Name', variant: 'warning' };
-                      }
-                      if (isLinkedToItem) {
-                        return { text: 'Needs Variation', variant: 'info' };
-                      }
+                    if (!isDesignatedAsCustom) {
+                      if (isFullyAssigned) return hasWearerName ? { text: 'Complete', variant: 'success' } : { text: 'No Wearer Name', variant: 'warning' };
+                      if (isLinkedToItem) return { text: 'Needs Variation', variant: 'info' };
                       return { text: 'No Assignment', variant: 'danger' };
                     }
-            
-                    // Case 2: It's a custom item slot.
-                    if (isCustomSlot) {
-                      if (hasCustomData) {
-                        return hasWearerName ? { text: 'Complete', variant: 'success' } : { text: 'No Wearer Name', variant: 'warning' };
-                      }
+                    if (isDesignatedAsCustom) {
+                      if (hasCustomData) return hasWearerName ? { text: 'Complete', variant: 'success' } : { text: 'No Wearer Name', variant: 'warning' };
                       return { text: 'No Custom Details', variant: 'info' };
                     }
-            
-                    // Fallback
                     return { text: 'No Assignment', variant: 'danger' };
                   };
-                  // 3. Get the final text and color for the badge.
+                  
                   const { text: statusText, variant: statusVariant } = getStatus();
+
                   return (
                       <ListGroup.Item key={index} className="py-3">
                           <Row className="align-items-center">
                               <Col>
+                                  {/* 3. The 'role' is also directly on the fulfillment item. */}
                                   <Form.Label htmlFor={`wearer-name-${index}`} className="fw-bold">{fulfillItem.role}</Form.Label>
                                   <Form.Control
                                       id={`wearer-name-${index}`}
@@ -368,8 +347,7 @@ const EditPackageModal: React.FC<EditPackageModalProps> = ({ show, onHide, pkg, 
                                       <Form.Label className="small text-muted mb-0">Assigned Item</Form.Label>
                                       <Badge bg={statusVariant} pill>{statusText}</Badge>
                                   </div>
-                                  {/* This JSX can now safely use the boolean flags */}
-                                  {isLinkedToItem && !isCustomSlot && assignedItem ? (
+                                  {isLinkedToItem && !isDesignatedAsCustom && assignedItem ? (
                                       <div>
                                           <p className="mb-0 fw-bold">{assignedItem.name}</p>
                                           <p className="small text-muted mb-0">{(assignedItem as any).variation || <i>No variation selected</i>}</p>
@@ -384,29 +362,17 @@ const EditPackageModal: React.FC<EditPackageModalProps> = ({ show, onHide, pkg, 
                                   )}
                               </Col>
                               <Col md="auto" className="text-end d-flex gap-2">
-                                {/* This button appears only if an item is assigned */}
                                 {(isLinkedToItem || hasCustomData) && (
-                                    <Button
-                                        variant="outline-danger"
-                                        size="sm"
-                                        onClick={() => handleClearAssignment(index)}
-                                    >
-                                        <Trash />
-                                    </Button>
+                                    <Button variant="outline-danger" size="sm" onClick={() => handleClearAssignment(index)}><Trash /></Button>
                                 )}
-
-                                {/* The main assign/change button remains */}
-                                <Button
-                                    variant="outline-primary"
-                                    size="sm"
-                                    onClick={() => {
-                                        if (isDesignatedAsCustom) {
-                                            handleOpenCustomItemModal(index);
-                                        } else {
-                                            handleOpenInventoryAssignment(index);
-                                        }
-                                    }}
-                                >
+                                <Button variant="outline-primary" size="sm" onClick={() => {
+                                  // 4. The logic for opening the correct modal now uses `isDesignatedAsCustom`.
+                                  if (isDesignatedAsCustom) {
+                                      handleOpenCustomItemModal(index);
+                                  } else {
+                                      handleOpenInventoryAssignment(index);
+                                  }
+                                }}>
                                     <PencilSquare className="me-1" />
                                     {(isLinkedToItem || hasCustomData) ? 'Change' : 'Assign'}
                                 </Button>
@@ -441,11 +407,12 @@ const EditPackageModal: React.FC<EditPackageModalProps> = ({ show, onHide, pkg, 
             />
         )}
 
-      <AssignmentSubModal
+      <SingleItemSelectionModal
         show={showAssignmentModal}
         onHide={() => setShowAssignmentModal(false)}
-        inventory={inventory}
-        onAssign={handleAssignFromInventory}
+        mode="assignment"
+        onSelect={handleAssignFromInventory}
+        addAlert={() => {}} // Can pass a no-op or the real alert function
         preselectedItemId={preselectedItemIdForModal}
         preselectedVariation={preselectedVariationForModal}
       />

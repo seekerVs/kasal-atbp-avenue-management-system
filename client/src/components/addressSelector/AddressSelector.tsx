@@ -15,24 +15,33 @@ interface AddressSelectorProps {
   value: Address;
   onChange: (field: keyof Address, value: string) => void;
   errors: Partial<Record<keyof Address, string>>;
+  layout?: 'horizontal' | 'vertical';
 }
 
-export const AddressSelector: React.FC<AddressSelectorProps> = ({ value, onChange, errors }) => {
-  // State now holds the full data objects, not just names
-  const [provinces, setProvinces] = useState<TProvince[]>([]);
+export const AddressSelector: React.FC<AddressSelectorProps> = ({ value, onChange, errors, layout = 'horizontal'  }) => {
+  // --- FIX #1: Get the province list immediately and store it. ---
+  // We use useState here so it's only called once per component lifecycle.
+  const [provinces] = useState<TProvince[]>(getAllProvinces());
+
   const [cities, setCities] = useState<TMunicipality[]>([]);
   const [barangays, setBarangays] = useState<TBarangay[]>([]);
 
-  // State to hold the selected CODES for fetching the next dropdown's data
-  const [selectedProvinceCode, setSelectedProvinceCode] = useState('');
+  // --- FIX #2: Initialize the state correctly. ---
+  // This now works because `provinces` has data right from the start.
+  const [selectedProvinceCode, setSelectedProvinceCode] = useState(() => {
+    if (value.province) {
+      const initialProvince = provinces.find(p => p.name === value.province);
+      return initialProvince ? initialProvince.psgcCode : '';
+    }
+    return '';
+  });
+
+  // This state is still needed for the City/Municipality dropdown.
   const [selectedCityCode, setSelectedCityCode] = useState('');
 
-  // 1. Fetch all provinces on initial component mount
-  useEffect(() => {
-    setProvinces(getAllProvinces());
-  }, []);
+  // --- FIX #3: Removed the redundant useEffect blocks. ---
 
-  // 2. When a province code is selected, fetch its cities/municipalities
+  // This effect correctly populates cities when a province is selected.
   useEffect(() => {
     if (selectedProvinceCode) {
       setCities(getMunicipalitiesByProvince(selectedProvinceCode));
@@ -41,7 +50,7 @@ export const AddressSelector: React.FC<AddressSelectorProps> = ({ value, onChang
     }
   }, [selectedProvinceCode]);
 
-  // 3. When a city code is selected, fetch its barangays
+  // This effect correctly populates barangays when a city is selected.
   useEffect(() => {
     if (selectedCityCode) {
       setBarangays(getBarangaysByMunicipality(selectedCityCode));
@@ -50,16 +59,12 @@ export const AddressSelector: React.FC<AddressSelectorProps> = ({ value, onChang
     }
   }, [selectedCityCode]);
 
-  // Handlers now manage both the code (for internal state) and the name (for parent state)
+  // Handlers can remain the same.
   const handleProvinceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const provinceCode = e.target.value;
     const province = provinces.find(p => p.psgcCode === provinceCode);
     setSelectedProvinceCode(provinceCode);
-
-    // Reset downstream selections
     setSelectedCityCode('');
-    
-    // Update parent component's state
     onChange('province', province ? province.name : '');
     onChange('city', '');
     onChange('barangay', '');
@@ -69,24 +74,23 @@ export const AddressSelector: React.FC<AddressSelectorProps> = ({ value, onChang
     const cityCode = e.target.value;
     const city = cities.find(c => c.psgcCode === cityCode);
     setSelectedCityCode(cityCode);
-
-    // Reset downstream selections
     onChange('barangay', '');
-    
-    // Update parent component's state
     onChange('city', city ? city.name : '');
   };
 
   const handleBarangayChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    // Barangay is the final selection, so we just pass its name up
     const barangayName = e.target.value;
     onChange('barangay', barangayName);
   };
 
+  const colProps = layout === 'horizontal' 
+    ? { xs: 12, md: 6, lg: 3 } 
+    : { xs: 12, md: 6 };
+
   return (
-    <Row>
-      <Col md={6}>
-        <Form.Group className="mb-3">
+    <>
+      <Col {...colProps}>
+        <Form.Group>
           <Form.Label>Province <span className="text-danger">*</span></Form.Label>
           <Form.Select value={selectedProvinceCode} onChange={handleProvinceChange} isInvalid={!!errors.province}>
             <option value="">Select Province</option>
@@ -95,8 +99,9 @@ export const AddressSelector: React.FC<AddressSelectorProps> = ({ value, onChang
           <Form.Control.Feedback type="invalid">{errors.province}</Form.Control.Feedback>
         </Form.Group>
       </Col>
-      <Col md={6}>
-        <Form.Group className="mb-3">
+      
+      <Col {...colProps}>
+        <Form.Group>
           <Form.Label>City/Municipality <span className="text-danger">*</span></Form.Label>
           <Form.Select value={selectedCityCode} onChange={handleCityChange} isInvalid={!!errors.city} disabled={!selectedProvinceCode}>
             <option value="">Select City/Municipality</option>
@@ -105,8 +110,9 @@ export const AddressSelector: React.FC<AddressSelectorProps> = ({ value, onChang
           <Form.Control.Feedback type="invalid">{errors.city}</Form.Control.Feedback>
         </Form.Group>
       </Col>
-      <Col xs={12}>
-        <Form.Group className="mb-3">
+
+      <Col {...colProps}>
+        <Form.Group>
           <Form.Label>Barangay <span className="text-danger">*</span></Form.Label>
           <Form.Select value={value.barangay} onChange={handleBarangayChange} isInvalid={!!errors.barangay} disabled={!selectedCityCode}>
             <option value="">Select Barangay</option>
@@ -115,6 +121,6 @@ export const AddressSelector: React.FC<AddressSelectorProps> = ({ value, onChang
           <Form.Control.Feedback type="invalid">{errors.barangay}</Form.Control.Feedback>
         </Form.Group>
       </Col>
-    </Row>
+    </>
   );
 };

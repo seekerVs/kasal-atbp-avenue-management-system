@@ -1,5 +1,47 @@
-.custom-shadow {
-  box-shadow: 0 0rem 1.5rem rgba(220, 53, 69, 0.25); /* Bootstrap "danger" red tint */
-  border-color: var(--bs-primary) !important; /* Optional: match border to the shadow color */
-  
+/* client/src/components/packageCard/packageCard.css */
+
+.package-card {
+  overflow: hidden; /* Important for the image and badge */
+}
+
+.package-card-img {
+  height: 200px;
+  object-fit: cover;
+}
+
+.package-card-header {
+  background-color: var(--bs-gray-100);
+  border-bottom: 1px solid #e9ecef;
+}
+
+.package-price {
+  font-size: 2.25rem;
+  font-weight: 700;
+  color: var(--bs-danger);
+}
+
+.package-card .list-group-item {
+  background-color: transparent;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+.featured-badge {
+  position: absolute;
+  top: 1rem;
+  right: -45px;
+  transform: rotate(45deg);
+  padding: 0.5rem 3rem;
+  font-size: 0.8rem;
+}
+
+.package-card-footer {
+    background-color: transparent;
+    border-top: none;
+    opacity: 0;
+    transition: opacity 0.2s ease-in-out;
+}
+
+.package-card-wrapper:hover .package-card-footer {
+    opacity: 1;
 }

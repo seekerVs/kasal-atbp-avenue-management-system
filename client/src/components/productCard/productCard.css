@@ -1,0 +1,61 @@
+/* client/src/components/productCard.css */
+
+.product-card {
+  cursor: pointer;
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+  overflow: hidden; /* Ensures child elements don't break the border-radius */
+}
+
+.product-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1) !important;
+}
+
+.product-card-image-wrapper {
+  position: relative;
+  overflow: hidden;
+  /* Enforce a 4:5 aspect ratio for a taller, more elegant look */
+  aspect-ratio: 4 / 5;
+}
+
+.product-card-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.product-card:hover .product-card-img {
+  transform: scale(1.05); /* Subtle zoom on hover */
+}
+
+.product-card-overlay {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 0.75rem;
+  opacity: 0; /* Hidden by default */
+  transition: opacity 0.3s ease;
+}
+
+.product-card:hover .product-card-overlay,
+.product-card-overlay.is-hearted {
+  opacity: 1; /* Show on hover OR if it's already hearted */
+}
+
+.heart-button {
+  background: rgba(0, 0, 0, 0.3);
+  border: none;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.heart-button:hover {
+  background: rgba(0, 0, 0, 0.5);
+}

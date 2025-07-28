@@ -1,224 +1,203 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import {
-  Container,
-  Row,
-  Col,
-  Form,
-  Button,
-  Card,
-  Image as BsImage,
-  ListGroup,
-  Spinner,
-  InputGroup,
-  Modal,
-  Alert,
-} from 'react-bootstrap';
-import {
-  BoxSeam,
-  Palette,
-  Search,
-  Tag,
-  ExclamationTriangleFill,
-  Hash // Icon for quantity
-} from 'react-bootstrap-icons';
+// client/src/layouts/singleRent/SingleRent.tsx
 
+import React, { useState, useEffect, useMemo } from 'react';
+import { Container, Row, Col, Button, Card, Image as BsImage, Spinner, Alert, Modal, ListGroup } from 'react-bootstrap';
+import { BoxSeam, Tag, ExclamationTriangleFill, Hash, Palette } from 'react-bootstrap-icons';
 import { useNavigate } from 'react-router-dom';
+
 import CustomerDetailsCard from '../../components/CustomerDetailsCard';
-import { CustomerInfo, InventoryItem, RentalOrder } from '../../types';
+import { CustomerInfo, InventoryItem, RentalOrder, ItemVariation, FormErrors } from '../../types';
 import api from '../../services/api';
 import { useAlert } from '../../contexts/AlertContext';
+import { SelectedItemData, SingleItemSelectionModal } from '../../components/modals/singleItemSelectionModal/SingleItemSelectionModal';
 
-const initialCustomerDetails: CustomerInfo = { name: '', phoneNumber: '', email: '', address: '' };
+const initialCustomerDetails: CustomerInfo = { 
+  name: '', phoneNumber: '', email: '', 
+  address: { province: 'Camarines Norte', city: '', barangay: '', street: '' } 
+};
 
-// ===================================================================================
-// --- MAIN COMPONENT ---
-// ===================================================================================
 function SingleRent() {
   const navigate = useNavigate();
   const { addAlert } = useAlert();
 
-  // State Management
-  const [allProducts, setAllProducts] = useState<InventoryItem[]>([]);
   const [allRentals, setAllRentals] = useState<RentalOrder[]>([]);
-  const [productSearchTerm, setProductSearchTerm] = useState<string>('');
-  const [selectedProduct, setSelectedProduct] = useState<InventoryItem | null>(null);
-  const [selectedVariationKey, setSelectedVariationKey] = useState<string>('');
-  const [quantity, setQuantity] = useState<number>(1); // <-- NEW STATE FOR QUANTITY
+  
+  // --- REWIRED STATE: We now store the full selection object ---
+  const [selections, setSelections] = useState<SelectedItemData[]>([]);
+  
   const [customerDetails, setCustomerDetails] = useState<CustomerInfo>(initialCustomerDetails);
   const [isNewCustomerMode, setIsNewCustomerMode] = useState(true);
   const [existingOpenRental, setExistingOpenRental] = useState<RentalOrder | null>(null);
   const [selectedRentalForDisplay, setSelectedRentalForDisplay] = useState<RentalOrder | null>(null);
   
-  // UI State
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showItemModal, setShowItemModal] = useState(false);
   const [showReminderModal, setShowReminderModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [modalData, setModalData] = useState({ rentalId: '', itemName: '', quantity: 0 });
-  const [showProductSearchResults, setShowProductSearchResults] = useState(false);
-
-  const productSearchResultsRef = useRef<HTMLDivElement>(null);
-  const productSearchInputRef = useRef<HTMLInputElement>(null);
-
+  const [errors, setErrors] = useState<FormErrors>({}); 
 
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
+    // This effect now only fetches data not related to the inventory, like all rentals for the customer search.
+    const fetchRentalData = async () => {
+      setLoading(true); // Keep the main page loader for this initial fetch
       try {
-        const [productsResponse, rentalsResponse] = await Promise.all([
-          api.get('/inventory'),
-          api.get('/rentals')
-        ]);
-        setAllProducts(productsResponse.data || []);
+        const rentalsResponse = await api.get('/rentals');
         setAllRentals(rentalsResponse.data || []);
-      } catch (err) { addAlert('Failed to load initial data.', 'danger');
-      } finally { setLoading(false); }
+      } catch (err) { 
+        addAlert('Failed to load initial rental data.', 'danger');
+      } finally { 
+        setLoading(false);
+      }
     };
-    fetchData();
-  }, []);
+    fetchRentalData();
+  }, [addAlert]);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if ( productSearchResultsRef.current && !productSearchResultsRef.current.contains(event.target as Node) && productSearchInputRef.current && !productSearchInputRef.current.contains(event.target as Node) ) { setShowProductSearchResults(false); }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => { document.removeEventListener("mousedown", handleClickOutside); };
-  }, []);
+  const subtotal = useMemo(() => {
+    return selections.reduce((total, item) => {
+      return total + (item.product.price * item.quantity);
+    }, 0);
+  }, [selections]);
 
-  const filteredProducts = useMemo<InventoryItem[]>(() => {
-    if (!productSearchTerm.trim()) return [];
-    return allProducts.filter(p => p.name.toLowerCase().includes(productSearchTerm.toLowerCase()) || p.category.toLowerCase().includes(productSearchTerm.toLowerCase()));
-  }, [productSearchTerm, allProducts]);
+  const handleAddItem = (selection: SelectedItemData) => {
+    const newItem = selection;  
+    // Check if the exact same item and variation already exists
+    const existingItemIndex = selections.findIndex(
+      item => item.product._id === newItem.product._id && 
+              item.variation.color === newItem.variation.color &&
+              item.variation.size === newItem.variation.size
+    );
 
-  const handleProductSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setProductSearchTerm(e.target.value);
-    setSelectedProduct(null);
-    setSelectedVariationKey('');
-    setQuantity(1); // Reset quantity
-    setShowProductSearchResults(true);
+    if (existingItemIndex > -1) {
+      // If it exists, just update the quantity
+      const updatedSelections = [...selections];
+      updatedSelections[existingItemIndex].quantity += newItem.quantity;
+      setSelections(updatedSelections);
+      addAlert(`Updated quantity for ${newItem.product.name}.`, 'info');
+    } else {
+      // If it's a new item, add it to the list
+      setSelections(prev => [...prev, newItem]);
+      // addAlert(`${newItem.product.name} added to rental.`, 'success');
+    }
+
+    // After adding, close the modal
+    setShowItemModal(false);
   };
 
-  const handleSelectProduct = (product: InventoryItem) => {
-    setSelectedProduct(product);
-    setProductSearchTerm(product.name);
-    setShowProductSearchResults(false);
-    setQuantity(1); // Reset quantity
-    const firstAvailableVariation = product.variations.find(v => v.quantity > 0);
-    if (firstAvailableVariation) setSelectedVariationKey(`${firstAvailableVariation.color}-${firstAvailableVariation.size}`);
-    else setSelectedVariationKey('');
+  // --- ADD THIS FUNCTION: Removes an item by its unique key ---
+  const handleRemoveItem = (product_id: string, variation_key: string) => {
+    setSelections(prev => prev.filter(item => 
+      !(item.product._id === product_id && `${item.variation.color}-${item.variation.size}` === variation_key)
+    ));
+  };
+
+  const handleQuantityChange = (product_id: string, variation_key: string, newQuantity: number) => {
+    setSelections(prevSelections => 
+      prevSelections.map(item => {
+        const currentVariationKey = `${item.variation.color}-${item.variation.size}`;
+        if (item.product._id === product_id && currentVariationKey === variation_key) {
+          
+          // --- THIS IS THE FIX ---
+          // The 'item' object itself contains the original variation data, including the stock.
+          // No need to search the separate allProducts array.
+          const maxStock = item.variation.quantity || 1;
+          
+          const clampedQuantity = Math.max(1, Math.min(newQuantity, maxStock));
+          
+          return { ...item, quantity: clampedQuantity };
+        }
+        return item;
+      })
+    );
   };
 
   const handleSelectCustomer = (selectedRental: RentalOrder) => {
     setCustomerDetails(selectedRental.customerInfo[0]);
     setSelectedRentalForDisplay(selectedRental);
-    if (selectedRental.status === 'To Process') setExistingOpenRental(selectedRental);
-    else setExistingOpenRental(null);
-  };
-
-  const currentSelectedVariation = selectedProduct?.variations.find(v => `${v.color}-${v.size}` === selectedVariationKey);
-  const displayProductImageUrl = currentSelectedVariation?.imageUrl || selectedProduct?.variations[0]?.imageUrl || 'https://placehold.co/300x450/e9ecef/adb5bd?text=Select+Item';
-
-  const handleCustomerDetailChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setCustomerDetails(prev => ({ ...prev, [name]: value }));
+    setExistingOpenRental(selectedRental.status === 'To Process' ? selectedRental : null);
   };
   
   const validateForm = () => {
-    if (!selectedProduct || !currentSelectedVariation) { addAlert('Please select a product and its variation.', 'danger'); return false; }
-    if (quantity <= 0) { addAlert('Quantity must be at least 1.', 'danger'); return false; }
-    if (currentSelectedVariation.quantity < quantity) { addAlert('Requested quantity exceeds available stock.', 'danger'); return false; }
-    if (!customerDetails.name.trim() || !customerDetails.phoneNumber.trim() || !customerDetails.address.trim()) {
-      addAlert('Please fill all required customer fields (*).', 'danger');
-      return false;
+    const newErrors: FormErrors = { address: {} };
+    if (selections.length === 0) {
+      addAlert('Please select an item to rent.', 'danger');
+      return false; // Stop early for this case
     }
-    return true;
+    if (!customerDetails.name.trim()) newErrors.name = 'Customer Name is required.';
+    if (!/^09\d{9}$/.test(customerDetails.phoneNumber)) newErrors.phoneNumber = 'Phone number must be a valid 11-digit number starting with 09.';
+    if (!customerDetails.address.province) newErrors.address.province = 'Province is required.';
+    if (!customerDetails.address.city) newErrors.address.city = 'City/Municipality is required.';
+    if (!customerDetails.address.barangay) newErrors.address.barangay = 'Barangay is required.';
+    if (!customerDetails.address.street.trim()) newErrors.address.street = 'Street, House No. is required.';
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 1 && Object.keys(newErrors.address).length === 0;
   };
 
-  const proceedWithAction = (action: 'create' | 'add') => {
-    if (action === 'create') {
-      if (!isNewCustomerMode && !existingOpenRental) setShowReminderModal(true);
-      else createNewRental();
-    } else if (action === 'add') {
-      addItemToExistingRental();
-    }
+  const createRentalPayload = () => {
+    if (selections.length === 0) return null; // <-- CHANGED
+
+    // --- Map over the selections array ---
+    const singleRentsData = selections.map(selection => {
+      const { product, variation, quantity } = selection;
+      return {
+        name: `${product.name},${variation.color},${variation.size}`,
+        price: product.price,
+        quantity: quantity,
+        imageUrl: variation.imageUrl,
+      };
+    });
+
+    return {
+      customerInfo: [customerDetails],
+      singleRents: singleRentsData, // <-- Use the new mapped array
+    };
   };
 
   const handleFormSubmission = (action: 'create' | 'add') => {
     if (!validateForm()) return;
-    proceedWithAction(action);
+
+    if (action === 'create' && !isNewCustomerMode && !existingOpenRental) {
+      setShowReminderModal(true);
+    } else if (action === 'add' && existingOpenRental) {
+      addItemToExistingRental();
+    } else {
+      createNewRental();
+    }
   };
   
   const createNewRental = async () => {
     setShowReminderModal(false);
-    if (!validateForm() || !selectedProduct || !currentSelectedVariation) return;
+    const rentalPayload = createRentalPayload();
+    if (!rentalPayload) return;
     setIsSubmitting(true);
-    
     try {
-      // --- THIS IS THE FIX ---
-      // Build the payload in the structure the backend expects.
-      const rentalPayload = {
-        customerInfo: [customerDetails], // The customer info array
-        singleRents: [                   // The singleRents array
-          {                              // An object inside the array
-            name: `${selectedProduct.name},${currentSelectedVariation.color},${currentSelectedVariation.size}`,
-            price: selectedProduct.price,
-            quantity: quantity,
-            imageUrl: currentSelectedVariation.imageUrl,
-            notes: '', // Add notes field if you have one
-          },
-        ],
-      };
-      
-      // Now the payload matches the backend's expected structure.
       const response = await api.post('/rentals', rentalPayload);
-      
       addAlert('New rental created successfully! Redirecting...', 'success');
       setTimeout(() => navigate(`/rentals/${response.data._id}`), 1500);
-
-    } catch (apiError: any) {
-      const errorMessage = apiError.response?.data?.message || "Failed to create rental.";
-      addAlert(errorMessage, 'danger');
+    } catch (err: any) {
+      addAlert(err.response?.data?.message || "Failed to create rental.", 'danger');
     } finally {
       setIsSubmitting(false);
     }
-};
+  };
 
   const addItemToExistingRental = async () => {
-    if (!validateForm() || !existingOpenRental || !selectedProduct || !currentSelectedVariation) return;
+    const payload = createRentalPayload();
+    if (!existingOpenRental || !payload) return;
     setIsSubmitting(true);
-    
     try {
-      // --- THIS IS THE FIX ---
-      // Build the payload in the same structure as createNewRental
-      const payload = {
-        singleRents: [
-          {
-            name: `${selectedProduct.name},${currentSelectedVariation.color},${currentSelectedVariation.size}`,
-            price: selectedProduct.price,
-            quantity: quantity,
-            imageUrl: currentSelectedVariation.imageUrl,
-          },
-        ],
-      };
-
-      // Now the payload is correctly structured for the backend
-      await api.put(`/rentals/${existingOpenRental._id}/addItem`, payload);
-      
+      await api.put(`/rentals/${existingOpenRental._id}/addItem`, { singleRents: payload.singleRents });
       setModalData({ 
           rentalId: existingOpenRental._id, 
-          itemName: selectedProduct.name, 
-          quantity: quantity // <-- Capture the quantity here
+          itemName: "New items", // Generic name
+          quantity: selections.length // Can show how many new items were added
       });
       setShowSuccessModal(true);
-      // Reset the form
-      setProductSearchTerm(''); 
-      setSelectedProduct(null); 
-      setSelectedVariationKey(''); 
-      setQuantity(1);
-
-    } catch (apiError: any) {
-      const errorMessage = apiError.response?.data?.message || "Failed to add item.";
-      addAlert(errorMessage, 'danger');
+      setSelections([]); // Reset the form
+    } catch (err: any) {
+      addAlert(err.response?.data?.message || "Failed to add item.", 'danger');
     } finally {
       setIsSubmitting(false);
     }
@@ -229,92 +208,116 @@ function SingleRent() {
       <h2 className="mb-4">Single Item Rent</h2>
       {loading ? ( <div className="text-center py-5"><Spinner /></div> ) : (
       <Row className="g-4">
-        <Col lg={7} xl={8}>
-          <Card className="h-100">
-            <Card.Header as="h5" className="d-flex align-items-center"><BoxSeam className="me-2" /> Select Item</Card.Header>
-            <Card.Body>
-              <Form.Group className="mb-1 position-relative">
-                <Form.Label>Search Product</Form.Label>
-                <InputGroup>
-                  <InputGroup.Text><Search /></InputGroup.Text>
-                  <Form.Control ref={productSearchInputRef} type="text" placeholder="Type name or category..." value={productSearchTerm} onChange={handleProductSearchChange} onFocus={() => setShowProductSearchResults(true)} disabled={loading} />
-                </InputGroup>
-                {showProductSearchResults && productSearchTerm.trim() && (
-                  <div ref={productSearchResultsRef}>
-                    <ListGroup className="position-absolute w-100" style={{ zIndex: 1000, maxHeight: '200px', overflowY: 'auto', border: '1px solid #dee2e6' }}>
-                      {filteredProducts.length > 0 ? filteredProducts.map(p => (
-                        <ListGroup.Item action key={p._id} onClick={() => handleSelectProduct(p)}>
-                          {p.name} <small className="text-muted">({p.category})</small>
-                        </ListGroup.Item>
-                      )) : <ListGroup.Item disabled>No products found.</ListGroup.Item>}
-                    </ListGroup>
-                  </div>
-                )}
-              </Form.Group>
-              <div style={{ minHeight: '1rem' }}></div>
-              
-              {selectedProduct && (
+        <Col lg={6} xl={7}>
+          <Card>
+            <Card.Header as="h5" className="d-flex align-items-center"><BoxSeam className="me-2" /> Selected Item</Card.Header>
+            <Card.Body className="d-flex flex-column">
+              {selections.length > 0 ? (
                 <>
-                  <Row>
-                    <Col md={8}>
-                      <Form.Group className="mb-3 mt-3">
-                        <Form.Label><Palette className="me-1"/>Variation (Color/Size)</Form.Label>
-                        <Form.Select value={selectedVariationKey} onChange={e => setSelectedVariationKey(e.target.value)} required>
-                          <option value="">-- Choose a Variation --</option>
-                          {selectedProduct.variations.map(v => {
-                            const variationKey = `${v.color}-${v.size}`;
-                            return ( <option key={variationKey} value={variationKey} disabled={v.quantity <= 0}> {v.color} - {v.size} {v.quantity <= 0 ? '(Out of Stock)' : `(Stock: ${v.quantity})`} </option> );
-                          })}
-                        </Form.Select>
-                      </Form.Group>
-                    </Col>
-                    <Col md={4}>
-                      <Form.Group className="mb-3 mt-3">
-                        <Form.Label><Hash className="me-1" />Quantity</Form.Label>
-                        <Form.Control 
-                            type="number" 
-                            value={quantity}
-                            onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                            min="1"
-                            max={currentSelectedVariation?.quantity || 1}
-                            disabled={!currentSelectedVariation || currentSelectedVariation.quantity <= 0}
-                        />
-                      </Form.Group>
-                    </Col>
-                  </Row>
+                  {/* --- NEW: List of selected items --- */}
+                  <ListGroup variant="flush" className="flex-grow-1" style={{ overflowY: 'auto', maxHeight: '400px' }}>
+                    {selections.map((item) => {
+                      const variationKey = `${item.variation.color}-${item.variation.size}`;
+                      return (
+                        <ListGroup.Item key={`${item.product._id}-${variationKey}`} className="px-2 py-3"> 
+                          <Row className="align-items-center gx-0"> 
+                            <Col xs="auto" className="me-3">
+                              <BsImage src={item.variation.imageUrl} thumbnail style={{ width: '70px', height: '70px', objectFit: 'cover' }} />
+                            </Col>
+                            <Col>
+                              <p className="fw-bold mb-0">{item.product.name}</p>
+                              <p className="text-muted small mb-1">{item.variation.color}, {item.variation.size}</p>
+                              
+                              {/* --- NEW: Quantity Stepper --- */}
+                              <div className="d-flex align-items-center gap-2">
+                                <Button 
+                                  variant="outline-secondary" 
+                                  size="sm" 
+                                  style={{ borderRadius: '50%', width: '28px', height: '28px', lineHeight: '1' }}
+                                  onClick={() => handleQuantityChange(item.product._id, variationKey, item.quantity - 1)}
+                                >
+                                  -
+                                </Button>
+                                <span className="fw-bold">{item.quantity}</span>
+                                <Button 
+                                  variant="outline-secondary" 
+                                  size="sm"
+                                  style={{ borderRadius: '50%', width: '28px', height: '28px', lineHeight: '1' }}
+                                  onClick={() => handleQuantityChange(item.product._id, variationKey, item.quantity + 1)}
+                                >
+                                  +
+                                </Button>
+                              </div>
+                              {/* --- END of Stepper --- */}
+
+                            </Col>
+                            <Col xs="auto" className="text-end">
+                              <p className="fw-bold mb-1">₱{(item.product.price * item.quantity).toLocaleString()}</p>
+                              <Button
+                                variant="outline-danger"
+                                size="sm"
+                                onClick={() => handleRemoveItem(item.product._id, variationKey)}
+                              >
+                                Remove
+                              </Button>
+                            </Col>
+                          </Row>
+                        </ListGroup.Item>
+                      );
+                    })}
+                  </ListGroup>
+
+                  <hr />
                   
-                  <div className="d-flex justify-content-between align-items-center mt-3 p-2 bg-light border rounded">
-                    <h6 className="mb-0 text-muted"><Tag className="me-2" />Total Price</h6>
-                    <h5 className="mb-0 text-success fw-bold">₱{(selectedProduct.price * quantity).toFixed(2)}</h5>
+                  {/* --- NEW: Running subtotal and Add More button --- */}
+                  <div className="d-flex justify-content-between align-items-center mb-3">
+                    <h5 className="mb-0">Subtotal:</h5>
+                    <h5 className="mb-0 text-danger fw-bold">₱{subtotal.toLocaleString()}</h5>
                   </div>
+                  <Button variant="outline-primary" onClick={() => setShowItemModal(true)}>
+                    Add More Items...
+                  </Button>
                 </>
+              ) : (
+                // --- Prompt to select the first item ---
+                <div className="text-center my-auto">
+                  <p className="text-muted fs-5">Your rental list is empty.</p>
+                  <Button onClick={() => setShowItemModal(true)}>
+                    Select an Item to Rent
+                  </Button>
+                </div>
               )}
-              <div className="text-center mt-3 mb-2">
-                <BsImage src={displayProductImageUrl} alt="Product" fluid thumbnail style={{maxHeight: '250px', objectFit: 'contain'}}/>
-              </div>
             </Card.Body>
           </Card>
         </Col>
 
-        <Col lg={5} xl={4}>
+        <Col lg={6} xl={5}>
            <CustomerDetailsCard
             customerDetails={customerDetails}
-            onCustomerDetailChange={handleCustomerDetailChange}
+            setCustomerDetails={setCustomerDetails}
             isNewCustomerMode={isNewCustomerMode}
             onSetIsNewCustomerMode={setIsNewCustomerMode}
             allRentals={allRentals}
             onSelectExisting={handleSelectCustomer}
             onSubmit={handleFormSubmission}
             isSubmitting={isSubmitting}
-            canSubmit={!!selectedProduct}
+            canSubmit={selections.length > 0}
             existingOpenRental={existingOpenRental}
             selectedRentalForDisplay={selectedRentalForDisplay}
+            errors={errors} 
           />
-
-
         </Col>
       </Row>
       )}
+
+      {/* --- THE NEW MODAL --- */}
+      <SingleItemSelectionModal
+        show={showItemModal}
+        onHide={() => setShowItemModal(false)}
+        onSelect={handleAddItem} // <-- RENAMED PROP from onConfirm
+        addAlert={addAlert}
+        mode="rental"
+      />
 
       <Modal show={showReminderModal} onHide={() => setShowReminderModal(false)} centered>
         <Modal.Header closeButton><Modal.Title><ExclamationTriangleFill className="me-2 text-warning" />Create New Rental?</Modal.Title></Modal.Header>

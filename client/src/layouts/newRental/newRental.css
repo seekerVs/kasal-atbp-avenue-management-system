@@ -1,0 +1,27 @@
+/* client/src/layouts/newRental/newRental.css */
+
+.rental-hub-card {
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    cursor: pointer;
+    border: 1px solid #e9ecef;
+}
+
+.rental-hub-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1) !important;
+    border-color: var(--bs-primary);
+}
+
+.rental-hub-card .card-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+.rental-hub-icon {
+    font-size: 3rem; /* Large icon */
+    margin-bottom: 1rem;
+    color: var(--bs-primary);
+}

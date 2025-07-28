@@ -1,73 +1,81 @@
-// client/src/components/imageDropzone/ImageDropzone.tsx
-
-import React, { useState, useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Spinner, Image, Form } from 'react-bootstrap';
-import { CloudUpload, CheckCircleFill, XCircleFill } from 'react-bootstrap-icons';
-import { uploadFile } from '../../services/api'; // Import our upload service
-import './ImageDropzone.css'; // We'll create this CSS file next
+import { Image, Form, Button } from 'react-bootstrap';
+import { CloudUpload, Trash } from 'react-bootstrap-icons';
+import './ImageDropzone.css';
 
 interface ImageDropzoneProps {
-  currentImageUrl: string;
-  onUploadSuccess: (newImageUrl: string) => void;
+  // Can be a string (existing URL) or a File object (staged file)
+  currentImage: string | File | null | undefined; 
+  onFileSelect: (file: File | null) => void;
   label: string;
 }
 
-export function ImageDropzone({ currentImageUrl, onUploadSuccess, label }: ImageDropzoneProps) {
-  const [isUploading, setIsUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export function ImageDropzone({ currentImage, onFileSelect, label }: ImageDropzoneProps) {
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
-  const onDrop = useCallback(async (acceptedFiles: File[]) => {
-    const file = acceptedFiles[0];
-    if (!file) return;
+  useEffect(() => {
+    let objectUrl: string | null = null;
 
-    setIsUploading(true);
-    setError(null);
-    try {
-      const newImageUrl = await uploadFile(file);
-      onUploadSuccess(newImageUrl); // Notify the parent component of the new URL
-    } catch (err) {
-      console.error("Upload failed in dropzone:", err);
-      setError('Upload failed. Please try again.');
-    } finally {
-      setIsUploading(false);
+    if (currentImage instanceof File) {
+      // If we have a File object, create a temporary local URL for preview
+      objectUrl = URL.createObjectURL(currentImage);
+      setPreviewUrl(objectUrl);
+    } else if (typeof currentImage === 'string') {
+      // If we have a string, it's an existing URL
+      setPreviewUrl(currentImage);
+    } else {
+      setPreviewUrl(null);
     }
-  }, [onUploadSuccess]);
+
+    // Cleanup function: revoke the object URL to avoid memory leaks
+    return () => {
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [currentImage]);
+
+  const onDrop = useCallback((acceptedFiles: File[]) => {
+    // If a file is selected, pass it up to the parent component
+    if (acceptedFiles.length > 0) {
+      onFileSelect(acceptedFiles[0]);
+    }
+  }, [onFileSelect]);
+
+  const handleRemove = () => {
+    // Notify the parent to clear the file
+    onFileSelect(null);
+  };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: { 'image/*': ['.jpeg', '.png', '.gif', '.webp'] },
-    multiple: false,
+    multiple: false, // <-- This enforces a single file upload
   });
 
   return (
     <Form.Group className="mb-3">
-      <Form.Label>{label}</Form.Label>
-      <div {...getRootProps()} className={`dropzone ${isDragActive ? 'active' : ''}`}>
-        <input {...getInputProps()} />
-        {isUploading ? (
-          <div className="dropzone-content">
-            <Spinner animation="border" size="sm" />
-            <span className="ms-2">Uploading...</span>
-          </div>
-        ) : error ? (
-          <div className="dropzone-content error">
-            <XCircleFill />
-            <span className="ms-2">{error}</span>
-          </div>
-        ) : (
+      <Form.Label>{label}<span className="text-danger">*</span></Form.Label>
+      
+      {previewUrl ? (
+        // If an image exists, show the preview and remove button
+        <div className="mt-2 d-flex align-items-center">
+          <Image src={previewUrl} thumbnail width={80} height={80} style={{ objectFit: 'cover' }} />
+          <Button variant="outline-danger" size="sm" className="ms-3" onClick={handleRemove}>
+            <Trash className="me-1" /> Remove
+          </Button>
+        </div>
+      ) : (
+        // If no image, show the dropzone
+        <div {...getRootProps()} className={`dropzone ${isDragActive ? 'active' : ''}`}>
+          <input {...getInputProps()} />
           <div className="dropzone-content">
             <CloudUpload />
             <span className="ms-2">
-              {isDragActive ? 'Drop the image here!' : 'Drag & drop image, or click to select'}
+              {isDragActive ? 'Drop the image here' : 'Drag & drop a single image, or click'}
             </span>
           </div>
-        )}
-      </div>
-      {currentImageUrl && (
-        <div className="mt-2 d-flex align-items-center">
-            <Image src={currentImageUrl} thumbnail width={80} height={80} style={{ objectFit: 'cover' }} />
-            <small className="ms-3 text-muted text-truncate">Current Image: {currentImageUrl}</small>
         </div>
       )}
     </Form.Group>

@@ -54,8 +54,6 @@ function RentalViewer() {
   const [loading, setLoading] = useState(true);
 
   // State for editing customer and order details
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [editableCustomer, setEditableCustomer] = useState<CustomerInfo | null>(null);
   const [editableDiscount, setEditableDiscount] = useState('0');
   const [editableStartDate, setEditableStartDate] = useState('');
   const [editableEndDate, setEditableEndDate] = useState('');
@@ -103,7 +101,7 @@ function RentalViewer() {
           api.get('/packages')
         ]);
         setRental(rentalRes.data);
-        setInventory(inventoryRes.data);
+        setInventory(inventoryRes.data.items || []);
         setAllPackages(packagesRes.data);
       } catch (err) { 
         console.error("Error fetching data:", err); 
@@ -116,7 +114,6 @@ function RentalViewer() {
   useEffect(() => {
     if (rental) {
         // Sync local state directly from the server-provided rental object
-        setEditableCustomer(rental.customerInfo[0]);
         setEditableDiscount(String(rental.financials?.shopDiscount || '0'));
         setEditableStartDate(rental.rentalStartDate);
         setEditableEndDate(rental.rentalEndDate);
@@ -295,27 +292,6 @@ function RentalViewer() {
 
     handleUpdateAndPay(payload);
 };
-
-  const handleSaveChanges = async () => {
-    if (!editableCustomer || !id) return;
-    try {
-      const response = await api.put(`/rentals/${id}/customer`, editableCustomer);
-      setRental(response.data);
-      setIsEditMode(false);
-      addAlert('Customer details updated successfully!', 'success');
-    } catch (err) { 
-      addAlert("Failed to save customer details.", 'danger'); 
-    }
-  };
-
-  const handleCancelEdit = () => {
-    if (rental) setEditableCustomer(rental.customerInfo[0]);
-    setIsEditMode(false);
-  };
-  
-  const handleCustomerInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    if (editableCustomer) setEditableCustomer({ ...editableCustomer, [e.target.name]: e.target.value });
-  };
 
   const handleOpenDeleteItemModal = (item: SingleRentItem) => { setItemToModify(item); setShowDeleteItemModal(true); };
   const handleOpenEditItemModal = (item: SingleRentItem) => { setItemToModify(item); setShowEditItemModal(true); };
@@ -676,8 +652,21 @@ function RentalViewer() {
     processNextInQueue(itemsToProcess);
   };
 
+  const handleCustomerSave = async (updatedCustomer: CustomerInfo) => {
+    if (!rental) return;
+    try {
+      // The API call logic is now neatly contained in one place
+      const response = await api.put(`/rentals/${rental._id}/customer`, updatedCustomer);
+      setRental(response.data); // Update the main rental state
+      addAlert('Customer details updated successfully!', 'success');
+    } catch (err) { 
+      addAlert("Failed to save customer details.", 'danger'); 
+    }
+  };
+
   if (loading) { return <Container className="text-center py-5"><Spinner /></Container>; }
-  if (!rental || !editableCustomer) { return <Container><Alert variant="info">Rental data could not be displayed.</Alert></Container>; }
+  // --- IMPORTANT: Update the check here to use `rental.customerInfo[0]` ---
+  if (!rental || !rental.customerInfo[0]) { return <Container><Alert variant="info">Rental data could not be displayed.</Alert></Container>; }
   
   const canEditDetails = rental.status === 'To Process' ;
 
@@ -696,15 +685,11 @@ function RentalViewer() {
               <span>Rental ID: {rental._id}</span>
               <small className="text-muted">Created: {new Date(rental.createdAt).toLocaleDateString()}</small>
             </Card.Header>
-            <Card.Body>
+            <Card.Body >
               <CustomerInfoCard
-                customer={editableCustomer}
-                isEditMode={isEditMode}
-                canEdit={rental.status === 'To Process'}
-                onSetIsEditMode={setIsEditMode}
-                onCustomerInputChange={handleCustomerInputChange}
-                onSaveChanges={handleSaveChanges}
-                onCancelEdit={handleCancelEdit}
+                customer={rental.customerInfo[0]}
+                canEdit={canEditDetails}
+                onSave={handleCustomerSave}
               />
               <RentalItemsList
                 singleRents={rental.singleRents}
