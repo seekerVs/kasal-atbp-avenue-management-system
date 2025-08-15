@@ -50,7 +50,10 @@ function Custom_navbar1() {
                 <NavDropdown.Item as={NavLink} to="/appointments/new">
                   Custom Tailoring Appointment
                 </NavDropdown.Item>
-              </NavDropdown>
+                </NavDropdown>
+              <Nav.Link as={NavLink} to="/track-request">
+                Tracking
+              </Nav.Link>
               <Nav.Link as={NavLink} to="/about">
                 About
               </Nav.Link>

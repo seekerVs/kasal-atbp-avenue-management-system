@@ -41,23 +41,30 @@ export interface InclusionItem {
   wearerNum: number;
   name: string;
   isCustom?: boolean;
+  type?: 'Wearable' | 'Accessory';
+}
+
+// Represents a specific, assigned variation within a package template.
+export interface AssignedItem {
+  itemId: string;
+  color: {
+    name: string;
+    hex: string;
+  };
+  size: string;
 }
 
 // --- UPDATED: Redefine the package assignment to link by ID ---
 // It now reflects the new one-to-many relationship: one inclusion to many items.
 export interface PackageAssignment {
   inclusionId: string;            // Was 'inclusionIds: string[]', now singular
-  itemIds: (string | null)[];   // Was 'itemId?: string', now a plural array that can contain nulls for custom slots
-  
-  // NOTE: assignedItemName, variation, and imageUrl are removed from this interface.
-  // Those details belong to the specific inventory item and will be looked up using the itemId.
-  // This enforces a cleaner data structure on the frontend.
+  assignedItems: (AssignedItem | null)[];
 }
 
 // --- Defines a color motif with its specific item assignments ---
 export interface ColorMotif {
   _id?: string;
-  motifName: string;
+  motifHex: string;
   assignments: PackageAssignment[];
 }
 
@@ -82,7 +89,7 @@ export type RentalStatus = 'To Process' | 'To Pickup' | 'To Return' | 'Returned'
 
 export interface BaseRentItem {
   _id: string;
-  name: string;
+  name: string; // Just the product name, e.g., "Champagne Dreams Ball Gown"
   price: number;
   quantity: number;
   imageUrl?: string;
@@ -90,7 +97,16 @@ export interface BaseRentItem {
 }
 
 // --- Base for any item that is part of a rental order ---
-export interface SingleRentItem extends BaseRentItem {}
+export interface SingleRentItem extends BaseRentItem {
+  itemId: string; // The ObjectId of the original inventory item
+  variation: {
+    color: {
+      name: string;
+      hex: string;
+    };
+    size: string;
+  };
+}
 
 // --- For custom-made items, extends the base and adds tailoring details ---
 export interface CustomTailoringItem extends BaseRentItem {
@@ -117,11 +133,19 @@ export interface PackageFulfillment {
   wearerName?: string;
   assignedItem: FulfillmentItem | CustomTailoringItem;
   isCustom?: boolean;
+  sourceInclusionId?: string;
 }
 
 // --- Represents a package once it has been added to a rental order ---
 export interface RentedPackage extends BaseRentItem {
   packageFulfillment: PackageFulfillment[];
+  variation: {
+    color: {
+      name: string;
+      hex: string;
+    };
+    size: string;
+  };
 }
 
 // ===================================================================
@@ -250,8 +274,8 @@ export interface CustomerInfo {
 export interface Payment {
   amount: number;
   date: string | Date;
-  method: 'Cash' | 'GCash' | 'Bank Transfer';
   referenceNumber?: string;
+  receiptImageUrl?: string;
 }
 
 // --- APPOINTMENT TYPES ---
@@ -259,7 +283,7 @@ export interface Payment {
 export interface Appointment {
   _id: string;
   customerInfo: CustomerInfo;
-  appointmentDate: Date;
+  appointmentDate: Date | null;
   status: 'Pending' | 'Confirmed' | 'Completed' | 'Cancelled' | 'No Show';
   statusNote?: string;
   rentalId?: string | null;
@@ -271,11 +295,15 @@ export interface Appointment {
 
 // --- RESERVATION TYPES ---
 
-// RENAMED from BookingFinancials
+// RENAMED from ReservationFinancials
 export interface ReservationFinancials {
   shopDiscount?: number;
   depositAmount?: number;
   payments?: Payment[];
+  requiredDeposit?: number;
+  subtotal?: number;
+  grandTotal?: number;
+  remainingBalance?: number;
 }
 
 export interface ItemReservation {
@@ -283,11 +311,15 @@ export interface ItemReservation {
   itemId: string;
   itemName: string;
   variation: {
-    color: string;
+    color: {
+      name: string;
+      hex: string;
+    };
     size: string;
   };
   quantity: number;
   price: number;
+  imageUrl?: string;
 }
 
 // UPDATED: Now includes a link to a potential appointment
@@ -295,31 +327,34 @@ export interface FulfillmentPreview {
   role: string;
   wearerName?: string;
   isCustom: boolean;
-  assignedItemId?: string;
+  assignedItemId?: string | InventoryItem; 
   variation?: string;
   linkedAppointmentId?: string; // <-- NEW
+  notes?: string;
 }
 
 export interface PackageReservation {
   packageReservationId: string;
   packageId: string;
   packageName: string;
-  motifName?: string;
+  motifHex?: string;
   price: number;
   fulfillmentPreview: FulfillmentPreview[];
+  imageUrl?: string;
 }
 
 export interface Reservation {
   _id: string;
   customerInfo: CustomerInfo;
-  eventDate: Date;
-  reserveStartDate: Date;
-  reserveEndDate: Date;
+  reserveDate: Date;
   status: 'Pending' | 'Confirmed' | 'Completed' | 'Cancelled';
+  cancellationReason?: string;
   rentalId?: string | null;
   financials: ReservationFinancials;
   itemReservations: ItemReservation[];
   packageReservations: PackageReservation[];
+  appointments?: Appointment[];
+  packageAppointmentDate?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -327,3 +362,21 @@ export interface Reservation {
 export type FormErrors = {
   [key: string]: any;
 };
+
+// ===================================================================
+//
+//         NEW: UNAVAILABILITY & SETTINGS TYPES
+//
+// ===================================================================
+
+export interface ShopSettings {
+  _id: 'shopSettings';
+  appointmentSlotsPerHour: number;
+}
+
+// And modify the UnavailabilityRecord to remove 'slots'
+export interface UnavailabilityRecord {
+  _id: string;
+  date: string;
+  reason: 'Public Holiday' | 'Shop Holiday';
+}

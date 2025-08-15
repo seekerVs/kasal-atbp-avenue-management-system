@@ -21,7 +21,6 @@ import {
   PencilSquare,
   PlusCircle
 } from 'react-bootstrap-icons';
-import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import CustomerDetailsCard from '../../components/CustomerDetailsCard';
 import { v4 as uuidv4 } from 'uuid';
@@ -34,12 +33,14 @@ import {
   PackageFulfillment,
   MeasurementRef,
   CustomTailoringItem,
-  FormErrors
+  FormErrors,
+  ColorMotif
 } from '../../types';
 import { SingleItemSelectionModal, SelectedItemData } from '../../components/modals/singleItemSelectionModal/SingleItemSelectionModal';
 import CreateEditCustomItemModal from '../../components/modals/createEditCustomItemModal/CreateEditCustomItemModal';
 import api from '../../services/api';
 import { useAlert } from '../../contexts/AlertContext';
+import namer from 'color-namer';
 
 const initialCustomerDetails: CustomerInfo = { 
   name: '', 
@@ -94,14 +95,6 @@ function PackageRent() {
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-
-  const inventoryMap = useMemo(() => {
-    return allInventory.reduce((map, item) => {
-      map[item._id] = item;
-      return map;
-    }, {} as Record<string, InventoryItem>);
-  }, [allInventory]);
-  
   useEffect(() => {
     const pendingItemJSON = sessionStorage.getItem('pendingCustomItem');
 
@@ -152,6 +145,27 @@ function PackageRent() {
   }, []);
 
   const selectedPackage = useMemo(() => allPackages.find(p => p._id === selectedPackageId), [selectedPackageId, allPackages]);
+
+  const motifsWithNames = useMemo(() => {
+    if (!selectedPackage) return [];
+
+    return selectedPackage.colorMotifs.map((motif: ColorMotif) => {
+      let generatedName = 'Custom Color';
+      try {
+        const names = namer(motif.motifHex);
+        generatedName = names.ntc[0]?.name || 'Custom Color';
+        generatedName = generatedName.replace(/\b\w/g, char => char.toUpperCase());
+      } catch (e) {
+        console.warn(`Could not name color for hex: ${motif.motifHex}`, e);
+      }
+      return {
+        ...motif, // includes _id, motifHex, etc.
+        displayName: generatedName, // add the new display property
+      };
+    });
+  }, [selectedPackage]);
+
+  
   const selectedMotif = useMemo(() => selectedPackage?.colorMotifs.find(m => m._id === selectedMotifId), [selectedPackage, selectedMotifId]);
 
   useEffect(() => {
@@ -160,7 +174,6 @@ function PackageRent() {
         return;
     }
     
-    // 1. Generate the base fulfillment list from the package's `inclusions` array.
     const initialFulfillment = selectedPackage.inclusions.flatMap(inclusion => {
         return Array.from({ length: inclusion.wearerNum }, (_, i) => {
             const roleName = inclusion.wearerNum > 1 ? `${inclusion.name} ${i + 1}` : inclusion.name;
@@ -169,33 +182,34 @@ function PackageRent() {
                 isCustom: !!inclusion.isCustom,
                 assignedItem: {},
                 sourceInclusionId: inclusion._id,
-            };
+            } as PackageFulfillment; // Added type assertion for clarity
         });
     });
 
-    // 2. If a motif is selected, override the assigned items.
     if (selectedMotif) {
       const inventoryMap = new Map(allInventory.map(item => [item._id, item]));
-
-      // For each assignment in the motif...
       selectedMotif.assignments.forEach(assignment => {
-        // Find all the fulfillment slots that correspond to this inclusion.
         const targetFulfillmentSlots = initialFulfillment.filter(
           fulfill => fulfill.sourceInclusionId === assignment.inclusionId
         );
         
-        // Now, map the itemIds to these slots one-by-one.
-        assignment.itemIds.forEach((itemId, wearerIndex) => {
-          if (itemId && targetFulfillmentSlots[wearerIndex]) {
-            const itemDetails = inventoryMap.get(itemId);
+        // --- (2) THE FIX IS HERE: We now loop over `assignedItems` ---
+        assignment.assignedItems.forEach((assignedItem, wearerIndex) => {
+          // Check if assignedItem is not null and has an itemId
+          if (assignedItem && assignedItem.itemId && targetFulfillmentSlots[wearerIndex]) {
+            const itemDetails = inventoryMap.get(assignedItem.itemId);
             if (itemDetails) {
-              // Note: We don't have variation info here yet, so we leave it blank for manual assignment.
-              // This part could be enhanced later if motifs also stored variation.
+              // Find the specific variation image, or use the first one as a fallback.
+              const variationDetails = itemDetails.variations.find(v => 
+                v.color.hex === assignedItem.color.hex && v.size === assignedItem.size
+              );
+
               targetFulfillmentSlots[wearerIndex].assignedItem = {
-                itemId: itemId,
+                itemId: assignedItem.itemId,
                 name: itemDetails.name,
-                variation: '', // To be filled by user
-                imageUrl: itemDetails.variations[0]?.imageUrl, // Use first image as preview
+                // We can now pre-fill the variation string directly!
+                variation: `${assignedItem.color.name}, ${assignedItem.size}`,
+                imageUrl: variationDetails?.imageUrl || itemDetails.variations[0]?.imageUrl,
               };
             }
           }
@@ -205,7 +219,6 @@ function PackageRent() {
 
     setFulfillmentData(initialFulfillment);
   }, [selectedPackage, selectedMotif, allInventory]);
-
 
   const validateCustomerDetails = (): boolean => {
     const newErrors: FormErrors = { address: {} };
@@ -324,27 +337,39 @@ function PackageRent() {
     }
   };
 
+  const buildRentalPayload = () => {
+    if (!selectedPackage) return null;
+
+    const { finalPackageFulfillment, customItemsForRental } = buildFinalPayload();
+    const selectedMotifObject = selectedPackage.colorMotifs.find(m => m._id === selectedMotifId);
+
+    return {
+      customerInfo: [customerDetails],
+      packageRents: [{
+        packageId: selectedPackage._id, // <-- THE CRUCIAL FIX: Send the ID
+        motifHex: selectedMotifObject?.motifHex, // <-- Send the HEX
+        price: selectedPackage.price,
+        quantity: 1,
+        imageUrl: selectedPackage.imageUrls[0] || '',
+        packageFulfillment: finalPackageFulfillment
+      }],
+      customTailoring: customItemsForRental
+    };
+  };
+
   const createNewRental = async () => {
     setShowReminderModal(false);
     if (!selectedPackage) return;
     setIsSubmitting(true);
 
-    // 1. Get the processed data
-    const { finalPackageFulfillment, customItemsForRental } = buildFinalPayload();
-
     try {
       // 2. Construct the final API payload
-      const rentalPayload = { 
-        customerInfo: [customerDetails],
-        packageRents: [{ // The payload is now structured exactly like the DB
-            name: `${selectedPackage.name},${selectedMotif?.motifName || 'Manual'}`,
-            price: selectedPackage.price,
-            quantity: 1, // Assuming quantity of 1 for packages for now
-            imageUrl: selectedPackage.imageUrls[0] || '',
-            packageFulfillment: finalPackageFulfillment
-        }],
-        customTailoring: customItemsForRental
-      };
+      const rentalPayload = buildRentalPayload();
+    if (!rentalPayload) {
+        addAlert("No package selected.", "danger");
+        setIsSubmitting(false);
+        return;
+    }
 
       const response = await api.post('/rentals', rentalPayload);
       addAlert("New rental created successfully! Redirecting...", 'success'); // Using global notification
@@ -404,33 +429,25 @@ function PackageRent() {
   };
 
   const handleAddItemToExistingRental = async () => {
-    if (!existingOpenRental || !selectedPackage) { 
-        addAlert("No package selected or no existing rental found.", 'danger'); 
-        console.error("No package selected or no existing rental found.");
+    if (!existingOpenRental) { 
+        addAlert("No existing rental found.", 'danger'); 
         return; 
     }
     setIsSubmitting(true);
 
-    // 1. Get the processed data
-    const { finalPackageFulfillment, customItemsForRental } = buildFinalPayload();
-
     try {
       // 2. Construct the final API payload for adding items
-      const payload = { 
-        packageRents: [{
-            name: `${selectedPackage.name},${selectedMotif?.motifName || 'Manual'}`,
-            price: selectedPackage.price,
-            quantity: 1,
-            imageUrl: selectedPackage.imageUrls[0] || '',
-            packageFulfillment: finalPackageFulfillment
-        }],
-        customTailoring: customItemsForRental
-      };
+      const payload = buildRentalPayload();
+    if (!payload) {
+        addAlert("No package selected.", "danger");
+        setIsSubmitting(false);
+        return;
+    }
 
       await api.put(`/rentals/${existingOpenRental._id}/addItem`, payload);
       
       // Reset form and show success
-      setModalData({ rentalId: existingOpenRental._id, itemName: selectedPackage.name });
+       setModalData({ rentalId: existingOpenRental._id, itemName: selectedPackage!.name });
       setShowSuccessModal(true);
       setSelectedPackageId('');
       setSelectedMotifId('');
@@ -523,9 +540,9 @@ function PackageRent() {
                       </option>
                       
                       {/* This part remains conditional to prevent errors */}
-                      {selectedPackage?.colorMotifs.map(motif => (
+                      {motifsWithNames.map(motif => (
                         <option key={motif._id} value={motif._id}>
-                          {motif.motifName}
+                          {motif.displayName}
                         </option>
                       ))}
                     </Form.Select>

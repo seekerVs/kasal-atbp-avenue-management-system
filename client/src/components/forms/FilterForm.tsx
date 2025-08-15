@@ -15,15 +15,20 @@ export interface FilterFormProps {
   searchTerm: string;
   setSearchTerm: (value: string) => void;
   onReset: () => void;
-  isModal?: boolean; // Optional prop to adjust styles for modal view
+  isModal?: boolean;
+
+  mode: 'rental' | 'assignment';
+  filterByColorHex?: string;
+  assignmentScope: 'matching' | 'all';
+  onAssignmentScopeChange: (scope: 'matching' | 'all') => void;
 }
 
 export const FilterForm: React.FC<FilterFormProps> = ({
   categories, attireType, setAttireType, selectedAge, setSelectedAge,
-  selectedGender, setSelectedGender, searchTerm, setSearchTerm, onReset, isModal
+  selectedGender, setSelectedGender, searchTerm, setSearchTerm, onReset,
+  mode, filterByColorHex, assignmentScope, onAssignmentScopeChange // Destructure new props
 }) => (
   <>
-
     <InputGroup className="mb-4">
       <Form.Control 
         type="text" 
@@ -45,6 +50,31 @@ export const FilterForm: React.FC<FilterFormProps> = ({
     <div className="d-grid mb-3">
       <Button variant="outline-secondary" size="sm" onClick={onReset}>Reset Filters</Button>
     </div>
+
+    {mode === 'assignment' && filterByColorHex && (
+      <>
+        <strong>Filter Scope</strong>
+        <Form>
+          <Form.Check
+            type="radio"
+            name="assignmentScope"
+            label="Matching Motif Color"
+            id="scope-matching"
+            checked={assignmentScope === 'matching'}
+            onChange={() => onAssignmentScopeChange('matching')}
+          />
+          <Form.Check
+            type="radio"
+            name="assignmentScope"
+            label="All Inventory"
+            id="scope-all"
+            checked={assignmentScope === 'all'}
+            onChange={() => onAssignmentScopeChange('all')}
+          />
+        </Form>
+        <hr />
+      </>
+    )}
     
     <strong>Age group</strong>
     <Form>

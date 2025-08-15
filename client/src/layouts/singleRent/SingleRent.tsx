@@ -136,13 +136,15 @@ function SingleRent() {
   };
 
   const createRentalPayload = () => {
-    if (selections.length === 0) return null; // <-- CHANGED
+    if (selections.length === 0) return null;
 
-    // --- Map over the selections array ---
+    // Map over the 'selections' state, which already holds the structured data we need.
     const singleRentsData = selections.map(selection => {
       const { product, variation, quantity } = selection;
       return {
-        name: `${product.name},${variation.color},${variation.size}`,
+        itemId: product._id,
+        name: product.name,
+        variation: variation, // Pass the whole variation object
         price: product.price,
         quantity: quantity,
         imageUrl: variation.imageUrl,
@@ -151,7 +153,7 @@ function SingleRent() {
 
     return {
       customerInfo: [customerDetails],
-      singleRents: singleRentsData, // <-- Use the new mapped array
+      singleRents: singleRentsData,
     };
   };
 
@@ -217,7 +219,7 @@ function SingleRent() {
                   {/* --- NEW: List of selected items --- */}
                   <ListGroup variant="flush" className="flex-grow-1" style={{ overflowY: 'auto', maxHeight: '400px' }}>
                     {selections.map((item) => {
-                      const variationKey = `${item.variation.color}-${item.variation.size}`;
+                      const variationKey = `${item.variation.color.hex}-${item.variation.size}`;
                       return (
                         <ListGroup.Item key={`${item.product._id}-${variationKey}`} className="px-2 py-3"> 
                           <Row className="align-items-center gx-0"> 
@@ -226,7 +228,7 @@ function SingleRent() {
                             </Col>
                             <Col>
                               <p className="fw-bold mb-0">{item.product.name}</p>
-                              <p className="text-muted small mb-1">{item.variation.color}, {item.variation.size}</p>
+                              <p className="text-muted small mb-1">{item.variation.color.name}, {item.variation.size}</p>
                               
                               {/* --- NEW: Quantity Stepper --- */}
                               <div className="d-flex align-items-center gap-2">

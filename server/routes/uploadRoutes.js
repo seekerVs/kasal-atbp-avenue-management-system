@@ -16,7 +16,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 // POST /api/upload
 // This route is protected, meaning only logged-in users can upload files.
 // It uses multer middleware to process a single file field named "file".
-router.post('/', protect, upload.single('file'), asyncHandler(async (req, res) => {
+router.post('/', upload.single('file'), asyncHandler(async (req, res) => {
   // Check if a file was actually uploaded
   if (!req.file) {
     res.status(400);

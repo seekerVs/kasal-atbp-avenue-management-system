@@ -174,7 +174,7 @@ function InventoryItems() {
 
   return (
     <Container fluid>
-      <h2 className="mb-4">Inventory Management</h2>
+      <h2 className="mb-4">Items Management</h2>
       <Card>
         <Card.Header>
           <Row className="align-items-center">
@@ -419,16 +419,24 @@ function ItemFormModal({ show, onHide, onSave, item, categories }: ItemFormModal
 
         try {
             await Promise.all(uploadPromises);
-            const itemToSave: InventoryItem = {
+            const baseItemData = {
                 ...formData,
                 price: parseFloat(priceInput) || 0,
-                _id: item ? item._id : '',
                 variations: finalVariations.map(v => ({
                     ...v,
                     quantity: parseInt(String(v.quantity), 10) || 1,
                     imageUrl: v.imageUrl as string,
                 })),
             };
+            let itemToSave: InventoryItem;
+            if (item) {
+                // If we are editing, include the original _id.
+                itemToSave = { ...baseItemData, _id: item._id };
+            } else {
+                // If we are creating, do NOT include an _id field.
+                // We cast to InventoryItem, but the _id is omitted.
+                itemToSave = baseItemData as InventoryItem;
+            }
             onSave(itemToSave, urlsToDelete);
         } catch (error: any) {
             addAlert(error.message, 'danger');
@@ -539,7 +547,7 @@ function ItemFormModal({ show, onHide, onSave, item, categories }: ItemFormModal
     return (
         <Modal show={show} onHide={() => { setErrors({}); onHide(); }} size="xl" backdrop="static">
         <Modal.Header closeButton><Modal.Title>{item ? 'Edit Item' : 'Add New Item'}</Modal.Title></Modal.Header>
-        <Modal.Body>
+        <Modal.Body style={{ height: '75vh', overflowY: 'auto' }}>
           <Form>
             <Row>
                 <Col md={6}>
@@ -574,8 +582,8 @@ function ItemFormModal({ show, onHide, onSave, item, categories }: ItemFormModal
                     </Form.Select>
                   </Form.Group>
                 </Col>
-                <Col md={3}><Form.Group className="mb-3"><Form.Label>Price (₱)<span className="text-danger">*</span></Form.Label>
-                  <Form.Control type="text" inputMode="decimal" name="price" value={priceInput} onChange={handlePriceInputChange} onBlur={handlePriceBlur} isInvalid={!!errors.price}/>
+                <Col md={3}><Form.Group className="mb-3"><Form.Label>Price<span className="text-danger">*</span></Form.Label><InputGroup><InputGroup.Text>₱</InputGroup.Text>
+                  <Form.Control type="text" inputMode="decimal" name="price" value={priceInput} onChange={handlePriceInputChange} onBlur={handlePriceBlur} isInvalid={!!errors.price}/></InputGroup>
                   </Form.Group></Col>
             </Row>
             <Form.Group className="mb-3"><Form.Label><CardText className="me-1" /> Description<span className="text-danger">*</span></Form.Label><Form.Control as="textarea" name="description" rows={2} value={formData.description} onChange={handleMainFormChange} isInvalid={!!errors.description}  /></Form.Group>
@@ -656,7 +664,7 @@ function ItemFormModal({ show, onHide, onSave, item, categories }: ItemFormModal
                   </Col>
                   <Col lg={4} md={6} sm={12}>
                     <ImageDropzone
-                      label="Variation Image *"
+                      label="Variation Image"
                       currentImage={v.imageUrl}
                       onFileSelect={(file) => handleVariationChange(index, 'imageUrl', file)}
                     />

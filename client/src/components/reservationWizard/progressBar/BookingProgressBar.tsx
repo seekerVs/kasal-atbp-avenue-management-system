@@ -10,19 +10,22 @@ interface BookingProgressBarProps {
 export const BookingProgressBar: React.FC<BookingProgressBarProps> = ({ currentStep, steps }) => {
   const totalSteps = steps.length;
 
-  // Calculate the width of the progress line.
-  // Example: If on step 2 of 5, progress should be 1/4 of the way (25%).
-  const progressWidth = ((currentStep - 1) / (totalSteps - 1)) * 100;
+  // --- NEW, CORRECTED LOGIC FOR THE LINE WIDTH ---
+  // The width should never exceed 100%. Math.min ensures this.
+  const progressWidth = Math.min(((currentStep - 1) / (totalSteps - 1)) * 100, 100);
 
   return (
     <div className="progress-bar-container">
-      {/* The blue line indicating progress */}
       <div className="progress-line" style={{ width: `${progressWidth}%` }}></div>
       
       {steps.map((label, index) => {
         const stepNumber = index + 1;
         let stepClass = 'progress-step';
-        if (stepNumber < currentStep) {
+
+        // --- NEW, CORRECTED LOGIC FOR THE STEP CLASS ---
+        // A step is now 'completed' if the current step is greater than it,
+        // OR if the current step is the very last step in the wizard.
+        if (stepNumber < currentStep || currentStep === totalSteps) {
           stepClass += ' completed';
         } else if (stepNumber === currentStep) {
           stepClass += ' active';
@@ -30,7 +33,9 @@ export const BookingProgressBar: React.FC<BookingProgressBarProps> = ({ currentS
 
         return (
           <div key={label} className={stepClass}>
-            {stepNumber < currentStep ? <CheckLg /> : stepNumber}
+            {/* --- NEW, CORRECTED LOGIC FOR THE ICON --- */}
+            {/* Show a checkmark if the step is completed. */}
+            {stepClass.includes('completed') ? <CheckLg /> : stepNumber}
             <div className="step-label">{label}</div>
           </div>
         );

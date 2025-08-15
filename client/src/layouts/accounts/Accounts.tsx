@@ -124,8 +124,8 @@ function Accounts() {
                                             <td><Badge bg={user.role.name === 'Super Admin' ? 'danger' : 'secondary'}>{user.role.name}</Badge></td>
                                             <td>{new Date(user.createdAt).toLocaleDateString()}</td>
                                             <td>
-                                                <Button variant="outline-primary" size="sm" onClick={() => { setCurrentUser(user); setShowFormModal(true); }}><PencilSquare className="me-1" /> Edit</Button>{' '}
-                                                <Button variant="outline-danger" size="sm" onClick={() => { setCurrentUser(user); setShowDeleteModal(true); }}><Trash className="me-1" /> Delete</Button>
+                                                <Button variant="outline-primary" size="sm" onClick={() => { setCurrentUser(user); setShowFormModal(true); }}><PencilSquare /></Button>{' '}
+                                                <Button variant="outline-danger" size="sm" onClick={() => { setCurrentUser(user); setShowDeleteModal(true); }}><Trash/></Button>
                                             </td>
                                         </tr>
                                     )) : (

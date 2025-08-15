@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, Button, Form, Row, Col, Card, InputGroup, Alert, ListGroup, Spinner, CardText } from 'react-bootstrap';
 import { CustomTailoringItem, InventoryItem, ItemVariation } from '../../../types';
-import api from '../../../services/api';
 import { useAlert } from '../../../contexts/AlertContext';
 import { Gem, InfoCircleFill, Palette, PlusCircleFill, TagFill, Trash } from 'react-bootstrap-icons';
 import { ImageDropzone } from '../../imageDropzone/ImageDropzone';
 import { convertMeasurementsToSize } from '../../../utils/sizeConverter';
+import { ColorPickerInput } from '../../colorPickerInput/ColorPickerInput';
+import api, { uploadFile } from '../../../services/api'; 
+
 
 interface AddItemFromCustomModalProps {
   show: boolean;
@@ -14,17 +16,27 @@ interface AddItemFromCustomModalProps {
   itemToProcess: CustomTailoringItem;
 }
 
-type AddMode = 'new' | 'variation';
+type AddMode = 'new' | 'variation'; 
+
+type VariationFormData = {
+  color: { name: string; hex: string; };
+  size: string;
+  imageUrl: string | File | null;
+};
+
+type VariationInForm = Omit<ItemVariation, 'imageUrl'> & {
+  imageUrl: string | File | null;
+};
 
 const AddItemFromCustomModal: React.FC<AddItemFromCustomModalProps> = ({ show, onHide, onFinished, itemToProcess }) => {
   const { addAlert } = useAlert();
   const [addMode, setAddMode] = useState<AddMode>('new');
-  const [formData, setFormData] = useState<Omit<InventoryItem, '_id'>>({} as any);
-  const [variationData, setVariationData] = useState({
-    color: '',
+  const [formData, setFormData] = useState<Omit<InventoryItem, '_id' | 'variations'> & { variations: VariationInForm[] }>({} as any);
+  const [variationData, setVariationData] = useState<VariationFormData>({
+    color: { name: 'Black', hex: '#000000' }, // Default color
     size: '',
-    imageUrl: '',
-    });
+    imageUrl: null,
+  });
   
   // State for 'variation' mode
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
@@ -35,33 +47,36 @@ const AddItemFromCustomModal: React.FC<AddItemFromCustomModalProps> = ({ show, o
   useEffect(() => {
     if (show) {
         const calculatedSize = convertMeasurementsToSize(itemToProcess.measurements);
-        // --- PRE-POPULATE THE 'CREATE NEW PRODUCT' FORM ---
-        const initialVariation: ItemVariation = {
-        color: '', // User must fill this
-        size: calculatedSize,
-        quantity: itemToProcess.quantity, // Pre-filled and locked
-        imageUrl: '', // User must fill this
+        
+        // Ensure this object perfectly matches the VariationInForm type.
+        const initialVariation: VariationInForm = {
+          color: { name: 'Black', hex: '#000000' },
+          size: calculatedSize,
+          quantity: itemToProcess.quantity,
+          imageUrl: null, // Initialize as null, not an empty string.
         };
 
         setFormData({
-        name: itemToProcess.name,
-        price: itemToProcess.price,
-        category: itemToProcess.outfitCategory,
-        description: itemToProcess.designSpecifications,
-        composition: itemToProcess.materials || '',
-        features: [''], // User can add these
-        variations: [initialVariation],
+          name: itemToProcess.name,
+          price: itemToProcess.price,
+          category: itemToProcess.outfitCategory,
+          description: itemToProcess.designSpecifications,
+          composition: itemToProcess.materials || [''],
+          features: [''],
+          variations: [initialVariation], // NO 'as any' CAST NEEDED. It now matches the state type.
         });
 
-        // --- RESET THE 'ADD AS VARIATION' FORM ---
-        setVariationData({ color: '', size: calculatedSize, imageUrl: '' });
+        setVariationData({ 
+            color: { name: 'Black', hex: '#000000' }, 
+            size: calculatedSize, 
+            imageUrl: null 
+        });
 
-        // Reset other states
         setAddMode('new');
         setSelectedInventoryItem(null);
         setSearchTerm('');
     }
-    }, [show, itemToProcess]);
+  }, [show, itemToProcess]);
   
   useEffect(() => {
     // Fetch inventory only when switching to 'variation' mode
@@ -100,61 +115,59 @@ const AddItemFromCustomModal: React.FC<AddItemFromCustomModalProps> = ({ show, o
         setFormData(prev => ({ ...prev, [listType]: newList }));
     };
 
-  const handleSave = async () => {
-    // --- HANDLE "CREATE NEW PRODUCT" MODE ---
-    if (addMode === 'new') {
-        const newVariation = formData.variations[0];
-        
-        // Validation for 'new' mode
-        if (!formData.name.trim()) {
-        addAlert('Product Name is required.', 'warning');
-        return;
-        }
-        if (!newVariation.color.trim()) {
-        addAlert('Please provide a Color for the new product.', 'warning');
-        return;
-        }
+    const handleSave = async () => {
+    try {
+        if (addMode === 'new') {
+            const newVariationForm = formData.variations[0];
+            if (!formData.name.trim() || !newVariationForm.color.name.trim() || !newVariationForm.imageUrl) {
+                addAlert('Product Name, Color, and Image are required.', 'warning');
+                return;
+            }
 
-        try {
-        await api.post('/inventory', formData);
-        addAlert(`Successfully created new product: ${formData.name}`, 'success');
-        onFinished();
-        } catch (error) {
-        addAlert('Failed to create new product.', 'danger');
-        }
+            let finalImageUrl = '';
+            if (newVariationForm.imageUrl instanceof File) {
+                finalImageUrl = await uploadFile(newVariationForm.imageUrl);
+            }
 
-    // --- HANDLE "ADD AS VARIATION" MODE ---
-    } else {
-        // Validation for 'variation' mode
-        if (!selectedInventoryItem) {
-        addAlert('Please select an existing product to add the variation to.', 'warning');
-        return;
-        }
-        if (!variationData.color.trim()) { // <-- We removed the size check
-        addAlert('Please provide a Color for the new variation.', 'warning'); // <-- Updated message
-        return;
-        }
-        
-        // Build the new variation from its dedicated state
-        const newVariation: ItemVariation = {
-        ...variationData,
-        quantity: itemToProcess.quantity,
-        };
-        
-        const updatedVariations = [...selectedInventoryItem.variations, newVariation];
+            const finalPayload = {
+                ...formData,
+                variations: [{ ...newVariationForm, imageUrl: finalImageUrl }],
+            };
 
-        try {
-        await api.put(`/inventory/${selectedInventoryItem._id}`, {
-            ...selectedInventoryItem,
-            variations: updatedVariations,
-        });
-        addAlert(`Successfully added new variation to ${selectedInventoryItem.name}`, 'success');
-        onFinished();
-        } catch (error) {
-        addAlert('Failed to add variation.', 'danger');
+            await api.post('/inventory', finalPayload);
+            addAlert(`Successfully created new product: ${formData.name}`, 'success');
+            onFinished();
+
+        } else { // 'variation' mode
+            if (!selectedInventoryItem || !variationData.color.name.trim() || !variationData.imageUrl) {
+                addAlert('Please select a product, and provide a color and image.', 'warning');
+                return;
+            }
+
+            let finalImageUrl = '';
+            if (variationData.imageUrl instanceof File) {
+                finalImageUrl = await uploadFile(variationData.imageUrl);
+            }
+
+            const newVariation: ItemVariation = {
+                color: variationData.color,
+                size: variationData.size,
+                imageUrl: finalImageUrl,
+                quantity: itemToProcess.quantity,
+            };
+            
+            const updatedVariations = [...selectedInventoryItem.variations, newVariation];
+            await api.put(`/inventory/${selectedInventoryItem._id}`, {
+                ...selectedInventoryItem,
+                variations: updatedVariations,
+            });
+            addAlert(`Successfully added new variation to ${selectedInventoryItem.name}`, 'success');
+            onFinished();
         }
+    } catch (error) {
+        addAlert('An error occurred while saving to inventory.', 'danger');
     }
-    };
+  };
 
     const handleMainFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -165,23 +178,32 @@ const AddItemFromCustomModal: React.FC<AddItemFromCustomModalProps> = ({ show, o
     }
     };
 
-    const handleVariationFormChange = (field: keyof ItemVariation, value: string) => {
-    const newVariations = [...formData.variations];
-    (newVariations[0] as any)[field] = value;
-    setFormData({ ...formData, variations: newVariations });
+    const handleVariationFormChange = (field: keyof Omit<ItemVariation, 'color' | 'imageUrl'>, value: string) => {
+        const newVariations = [...formData.variations];
+        (newVariations[0] as any)[field] = value;
+        setFormData({ ...formData, variations: newVariations });
     };
   
-  const filteredInventory = inventory.filter(i => 
-    i.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-  const handleImageUploadSuccess = (newUrl: string) => {
-    // This directly updates the imageUrl in the first variation of our form data.
-    handleVariationFormChange('imageUrl', newUrl);
+
+    const handleImageFileSelect = (file: File | null) => {
+        const newVariations = [...formData.variations];
+        newVariations[0].imageUrl = file;
+        setFormData({ ...formData, variations: newVariations });
     };
 
-    const handleVariationImageUploadSuccess = (newUrl: string) => {
-    setVariationData(prev => ({ ...prev, imageUrl: newUrl }));
+    const handleColorChange = (colorValue: { name: string; hex: string; }) => {
+        const newVariations = [...formData.variations];
+        (newVariations[0] as any).color = colorValue;
+        setFormData({ ...formData, variations: newVariations });
     };
+
+    const handleVariationImageFileSelect = (file: File | null) => {
+        setVariationData(prev => ({ ...prev, imageUrl: file }));
+    };
+
+    const filteredInventory = inventory.filter(i => 
+        i.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
   return (
     <Modal show={show} onHide={onFinished} size="xl" backdrop="static">
@@ -223,7 +245,12 @@ const AddItemFromCustomModal: React.FC<AddItemFromCustomModalProps> = ({ show, o
                 <Card.Header as="h5">New Variation Details</Card.Header>
                 <Card.Body>
                 <Row>
-                    <Col md={4}><Form.Group><Form.Label>Color <span className="text-danger">*</span></Form.Label><Form.Control value={variationData.color} onChange={e => setVariationData(p => ({ ...p, color: e.target.value }))} /></Form.Group></Col>
+                    <Col md={4}><Form.Group><Form.Label>Color <span className="text-danger">*</span></Form.Label>
+                        <ColorPickerInput 
+                            value={variationData.color} 
+                            onChange={(color) => setVariationData(p => ({ ...p, color }))} 
+                        />
+                    </Form.Group></Col>
                     <Col md={4}><Form.Group><Form.Label>Size <span className="text-danger">*</span></Form.Label><Form.Control value={variationData.size} onChange={e => setVariationData(p => ({ ...p, size: e.target.value }))} disabled readOnly /></Form.Group></Col>
                     <Col md={4}><Form.Group><Form.Label>Quantity</Form.Label><Form.Control value={itemToProcess.quantity} disabled readOnly /></Form.Group></Col>
                 </Row>
@@ -231,9 +258,9 @@ const AddItemFromCustomModal: React.FC<AddItemFromCustomModalProps> = ({ show, o
                     <Col>
                         <ImageDropzone
                         label="Variation Image"
-                        currentImageUrl={variationData.imageUrl}
-                        onUploadSuccess={handleVariationImageUploadSuccess}
-                        />
+                        currentImage={variationData.imageUrl}
+                        onFileSelect={handleVariationImageFileSelect} // Correct prop name and handler
+                      />
                     </Col>
                 </Row>
                 </Card.Body>
@@ -325,7 +352,10 @@ const AddItemFromCustomModal: React.FC<AddItemFromCustomModalProps> = ({ show, o
                 <Col md={3}>
                     <Form.Group>
                     <Form.Label>Color <span className="text-danger">*</span></Form.Label>
-                    <Form.Control placeholder="e.g., Scarlet Red" value={formData.variations[0].color} onChange={e => handleVariationFormChange('color', e.target.value)} />
+                    <ColorPickerInput 
+                        value={formData.variations[0].color}
+                        onChange={handleColorChange}
+                    />
                     </Form.Group>
                 </Col>
                 <Col md={3}>
@@ -344,10 +374,10 @@ const AddItemFromCustomModal: React.FC<AddItemFromCustomModalProps> = ({ show, o
                 {/* --- Image Dropzone Implementation --- */}
                 <Row className="mt-3">
                     <Col>
-                        <ImageDropzone 
+                        <ImageDropzone
                             label="Variation Image"
-                            currentImageUrl={formData.variations[0].imageUrl}
-                            onUploadSuccess={handleImageUploadSuccess}
+                            currentImage={variationData.imageUrl}
+                            onFileSelect={handleVariationImageFileSelect} // Correct prop name and handler
                         />
                     </Col>
                 </Row>

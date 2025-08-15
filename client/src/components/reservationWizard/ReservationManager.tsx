@@ -1,28 +1,96 @@
 // client/src/components/reservationWizard/ReservationManager.tsx
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Button, Alert, Row, Col } from 'react-bootstrap';
-import { useNavigate } from 'react-router-dom';
-import { PatchCheckFill, BoxSeam, Scissors } from 'react-bootstrap-icons';
-import { Reservation, FormErrors, PackageReservation, ItemReservation } from '../../types';
-import { ReservationList } from '../booking/ReservationList'; // We can reuse this component
+import { PatchCheckFill, BoxSeam } from 'react-bootstrap-icons';
+import { PackageReservation, ItemReservation, Package, Reservation, FulfillmentPreview } from '../../types';
+import { ReservationList } from './ReservationList'; // We can reuse this component
 import { PackageSelectionData, PackageSelectionModal } from '../modals/packageSelectionModal/PackageSelectionModal';
 import { SelectedItemData, SingleItemSelectionModal } from '../modals/singleItemSelectionModal/SingleItemSelectionModal';
-import { useAlert } from '../../contexts/AlertContext';
+import { PackageConfigurationData, PackageConfigurationModal } from '../modals/packageConfigurationModal/PackageConfigurationModal';
+import api from '../../services/api';
 
 type ReservationState = Omit<Reservation, '_id' | 'createdAt' | 'updatedAt' | 'status'>;
 
 interface ReservationManagerProps {
   reservation: ReservationState;
   setReservation: React.Dispatch<React.SetStateAction<ReservationState>>;
-  errors: FormErrors;
+  addAlert: (message: string, type: 'success' | 'danger' | 'warning' | 'info') => void; // Add this line
 }
 
-export const ReservationManager: React.FC<ReservationManagerProps> = ({ reservation, setReservation, errors }) => {
-  const { addAlert } = useAlert();
+export const ReservationManager: React.FC<ReservationManagerProps> = ({ reservation, setReservation, addAlert }) => {
   const [showPackageModal, setShowPackageModal] = useState(false);
   // We can add a state for the single item modal here as well for consistency
   const [showItemModal, setShowItemModal] = useState(false); 
+  const [allPackages, setAllPackages] = useState<Package[]>([]);  
+  const [showConfigModal, setShowConfigModal] = useState(false);
+  const [packageToConfigure, setPackageToConfigure] = useState<Package | null>(null);
+  const [motifToConfigure, setMotifToConfigure] = useState<string>('');
+  const [editingPackageId, setEditingPackageId] = useState<string | null>(null);
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [itemToEdit, setItemToEdit] = useState<ItemReservation | null>(null);
+  const [fulfillmentToEdit, setFulfillmentToEdit] = useState<FulfillmentPreview[] | undefined>(undefined);
+
+  useEffect(() => {
+    const fetchPackages = async () => {
+      try {
+        const res = await api.get('/packages');
+        setAllPackages(res.data || []);
+      } catch (err) {
+        console.error("Failed to fetch package templates", err);
+        addAlert('Could not load package data for editing.', 'danger');
+      }
+    };
+    fetchPackages();
+  }, [addAlert]);
+
+  const handleOpenPackageEditor = (packageReservationId: string) => {
+    // 1. Find the specific package reservation instance from the current state
+    const packageToEdit = reservation.packageReservations.find(
+      p => p.packageReservationId === packageReservationId
+    );
+
+    if (!packageToEdit) {
+      console.error("Could not find package to edit in the current reservation.");
+      return;
+    }
+
+    // 2. Find the original package template from allPackages
+    const packageTemplate = allPackages.find(p => p._id === packageToEdit.packageId);
+
+    if (!packageTemplate) {
+      console.error("Could not find the original package template.");
+      addAlert('Error: The original package template could not be found.', 'danger');
+      return;
+    }
+
+    // 3. Set the state needed to open the configuration modal in "edit" mode
+    setEditingPackageId(packageReservationId); // <-- Set the ID for edit mode
+    setPackageToConfigure(packageTemplate);    // <-- The template to configure
+    setMotifToConfigure(packageToEdit.motifHex || ''); // <-- The selected motif
+    setFulfillmentToEdit(packageToEdit.fulfillmentPreview);
+    
+    // 4. Open the modal
+    setShowConfigModal(true);
+  };
+
+  const handleOpenItemEditor = (reservationId: string) => {
+    // 1. Find the item to edit from the main reservation state
+    const item = reservation.itemReservations.find(
+      i => i.reservationId === reservationId
+    );
+
+    if (item) {
+      // 2. Set the context for both editing and pre-selection
+      setEditingItemId(reservationId);
+      setItemToEdit(item);
+      
+      // 3. Open the modal
+      setShowItemModal(true);
+    } else {
+      console.error("Could not find item to edit in the current reservation.");
+    }
+  };
 
   const handleRemoveItem = (idToRemove: string) => {
     setReservation(prev => ({
@@ -39,53 +107,152 @@ export const ReservationManager: React.FC<ReservationManagerProps> = ({ reservat
   };
 
   const handleAddPackage = (selection: PackageSelectionData) => {
-    const { pkg, motif } = selection;
-    const newPackageReservation: PackageReservation = {
-      packageReservationId: `pkg_${Date.now()}`,
-      packageId: pkg._id,
-      packageName: pkg.name,
-      price: pkg.price,
-      motifName: motif,
-      // Create the fulfillment preview based on the new inclusion structure
-      fulfillmentPreview: pkg.inclusions.flatMap(inc => 
-        Array.from({ length: inc.wearerNum }, (_, i) => ({
-          role: inc.wearerNum > 1 ? `${inc.name} ${i + 1}` : inc.name,
-          isCustom: !!inc.isCustom
-        }))
-      )
-    };
-    setReservation(prev => ({ ...prev, packageReservations: [...prev.packageReservations, newPackageReservation] }));
+    // 1. Store the data from the first modal
+    setPackageToConfigure(selection.pkg);
+    setMotifToConfigure(selection.motifHex);
+
+    // 2. Close the first modal and open the second
+    setShowPackageModal(false);
+    setShowConfigModal(true);
+  };
+
+  const handleSaveConfiguration = (config: PackageConfigurationData) => {
+    if (!packageToConfigure) return;
+
+    setReservation(prev => {
+      const updatedReservations = [...prev.packageReservations];
+
+      if (editingPackageId) {
+        // --- EDIT MODE ---
+        const indexToUpdate = updatedReservations.findIndex(
+          p => p.packageReservationId === editingPackageId
+        );
+
+        if (indexToUpdate > -1) {
+          // Replace the existing package with the updated version
+          updatedReservations[indexToUpdate] = {
+            ...updatedReservations[indexToUpdate], // Keep original IDs
+            fulfillmentPreview: config.packageReservation, // Update with new data
+          };
+        }
+      } else {
+        // --- CREATE MODE ---
+        const newPackageReservation: PackageReservation = {
+          packageReservationId: `pkg_${Date.now()}`,
+          packageId: packageToConfigure._id,
+          packageName: packageToConfigure.name,
+          price: packageToConfigure.price,
+          motifHex: motifToConfigure,
+          fulfillmentPreview: config.packageReservation,
+          imageUrl: packageToConfigure.imageUrls?.[0],
+        };
+        updatedReservations.push(newPackageReservation);
+      }
+
+      return {
+        ...prev,
+        packageReservations: updatedReservations,
+        packageAppointmentDate: config.packageAppointmentDate || prev.packageAppointmentDate,
+      };
+    });
+
+    // Clean up and close the modal, resetting edit mode state
+    setShowConfigModal(false);
+    setPackageToConfigure(null);
+    setMotifToConfigure('');
+    setEditingPackageId(null); // <-- Reset edit mode
+    setFulfillmentToEdit(undefined); // <-- Reset initial data
   };
 
   const handleAddItem = (selection: SelectedItemData) => {
     const { product, variation, quantity } = selection;
-    const newItemReservation: ItemReservation = {
-      reservationId: `item_${Date.now()}`,
-      itemId: product._id,
-      itemName: product.name,
-      variation: {
-        color: variation.color,
-        size: variation.size,
-      },
-      quantity: quantity,
-      price: product.price,
-    };
-    setReservation(prev => ({ ...prev, itemReservations: [...prev.itemReservations, newItemReservation] }));
+    
+    let updatedProductName = '';
+
+    setReservation(prev => {
+      const updatedItems = [...prev.itemReservations];
+
+      if (editingItemId) {
+        // --- EDIT MODE (This was already correct, but let's review) ---
+        const indexToUpdate = updatedItems.findIndex(
+          item => item.reservationId === editingItemId
+        );
+
+        if (indexToUpdate > -1) {
+          // Create a new object for the updated item
+          const updatedItem = {
+            ...updatedItems[indexToUpdate], // Copy existing properties
+            itemId: product._id, // Update with new data
+            itemName: product.name,
+            variation: {
+              color: variation.color,
+              size: variation.size,
+            },
+            quantity: quantity,
+            price: product.price,
+            imageUrl: variation.imageUrl,
+          };
+          // Replace the old object with the new one
+          updatedItems[indexToUpdate] = updatedItem;
+        }
+      } else {
+        // --- CREATE MODE ---
+        const existingItemIndex = updatedItems.findIndex(
+          item => item.itemId === product._id && 
+                  item.variation.color.hex === variation.color.hex &&
+                  item.variation.size === variation.size
+        );
+
+        if (existingItemIndex > -1) {
+          // --- THIS IS THE CRITICAL FIX ---
+          // 1. Create a new object by copying the existing item's properties.
+          const updatedItem = {
+            ...updatedItems[existingItemIndex],
+            // 2. Calculate the new quantity based on the old one.
+            quantity: updatedItems[existingItemIndex].quantity + quantity,
+          };
+          // 3. Replace the old object in the array with our new, updated one.
+          updatedItems[existingItemIndex] = updatedItem;
+          // --- END OF FIX ---
+
+          updatedProductName = product.name;
+        } else {
+          const newItemReservation: ItemReservation = {
+            reservationId: `item_${Date.now()}`,
+            itemId: product._id,
+            itemName: product.name,
+            variation: {
+              color: variation.color,
+              size: variation.size,
+            },
+            quantity: quantity,
+            price: product.price,
+            imageUrl: variation.imageUrl,
+          };
+          updatedItems.push(newItemReservation);
+        }
+      }
+
+      return { ...prev, itemReservations: updatedItems };
+    });
+
+    setShowItemModal(false);
+    setEditingItemId(null);
+    setItemToEdit(null);
   };
   
   return (
     <>
-      {errors.reservations && <Alert variant="warning" className="small py-2">{errors.reservations}</Alert>}
       <Row className="g-4">
         <Col lg={4}>
           <h6 className="text-muted">ADD TO YOUR RESERVATION</h6>
           <hr className="mt-1 mb-3" />
           <div className="d-grid gap-3">
-            <Button variant="danger" size="sm" onClick={() => setShowItemModal(true)}>
+            <Button variant="outline-primary" size="sm" onClick={() => setShowItemModal(true)}>
               <PatchCheckFill size={20} className="me-2" />
               Reserve Outfit
             </Button>
-            <Button variant="outline-danger" size="sm" onClick={() => setShowPackageModal(true)}>
+            <Button variant="outline-primary" size="sm" onClick={() => setShowPackageModal(true)}>
               <BoxSeam size={20} className="me-2" />
               Reserve Package
             </Button>
@@ -95,10 +262,10 @@ export const ReservationManager: React.FC<ReservationManagerProps> = ({ reservat
           <ReservationList
             itemReservations={reservation.itemReservations}
             packageReservations={reservation.packageReservations}
-            appointments={[]} // Appointments are separate now, so pass an empty array
             onRemoveItem={handleRemoveItem}
+            onEditItem={handleOpenItemEditor} 
+            onEditPackage={handleOpenPackageEditor}
             onRemovePackage={handleRemovePackage}
-            onRemoveAppointment={() => {}} // No-op
           />
         </Col>
       </Row>
@@ -110,10 +277,25 @@ export const ReservationManager: React.FC<ReservationManagerProps> = ({ reservat
 
       <SingleItemSelectionModal 
         show={showItemModal}
-        onHide={() => setShowItemModal(false)}
+        onHide={() => {
+          setShowItemModal(false);
+          setEditingItemId(null);
+          setItemToEdit(null);
+        }}
         onSelect={handleAddItem}
         addAlert={addAlert}
         mode="rental"
+        preselectedItemId={itemToEdit?.itemId}
+        preselectedVariation={`${itemToEdit?.variation.color.name}, ${itemToEdit?.variation.size}`}
+      />
+
+      <PackageConfigurationModal
+        show={showConfigModal}
+        onHide={() => setShowConfigModal(false)}
+        onSave={handleSaveConfiguration}
+        pkg={packageToConfigure}
+        motifHex={motifToConfigure}
+        initialFulfillmentData={fulfillmentToEdit}
       />
     </>
   );

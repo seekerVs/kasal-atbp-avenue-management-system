@@ -33,7 +33,8 @@ import {
   CustomTailoringItem,
   RentalStatus,
   InventoryItem,
-  Package
+  Package,
+  ItemVariation
 } from '../../types';
 import api from '../../services/api';
 import { formatCurrency } from '../../utils/formatters';
@@ -341,21 +342,27 @@ function RentalViewer() {
     finally { setShowDeleteItemModal(false); setItemToModify(null); }
   };
 
-  const handleSaveItemChanges = async (newQuantity: number, newVariationJSON: string) => {
+  const handleSaveItemChanges = async (newQuantity: number, newVariationObject: ItemVariation) => {
     if (!itemToModify || !rental) return;
 
-    const newVariation = JSON.parse(newVariationJSON); 
+    // The new payload now sends a structured `newVariation` object
     const payload = { 
         quantity: newQuantity, 
-        newVariation: { color: newVariation.color, size: newVariation.size }};
+        newVariation: newVariationObject 
+    };
+    
     try {
+        // The endpoint remains the same, but the payload it expects has changed
         const response = await api.put(`/rentals/${rental._id}/items/${itemToModify._id}`, payload);
         setRental(response.data);
         addAlert('Item updated successfully!', 'success');
     } catch (err: any) { 
-      addAlert("Failed to update item.", 'danger'); 
+      addAlert(err.response?.data?.message || "Failed to update item.", 'danger'); 
     }
-    finally { setShowEditItemModal(false); setItemToModify(null); }
+    finally { 
+      setShowEditItemModal(false); 
+      setItemToModify(null); 
+    }
   };
 
   const handleOpenEditPackageModal = (pkg: RentedPackage) => { setPackageToModify(pkg); setShowEditPackageModal(true); };

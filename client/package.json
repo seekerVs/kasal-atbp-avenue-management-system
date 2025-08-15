@@ -17,9 +17,12 @@
     "bootstrap": "^5.3.5",
     "color-namer": "^1.4.0",
     "date-fns": "^4.1.0",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^3.0.1",
     "react": "^19.0.0",
     "react-bootstrap": "^2.10.9",
     "react-bootstrap-icons": "^1.11.5",
+    "react-bootstrap-typeahead": "^6.4.1",
     "react-datepicker": "^8.4.0",
     "react-dom": "^19.0.0",
     "react-dropzone": "^14.3.8",
@@ -27,6 +30,7 @@
     "react-router-dom": "^7.5.3",
     "recharts": "^2.15.3",
     "sass": "^1.87.0",
+    "tesseract.js": "^6.0.1",
     "uuid": "^11.1.0"
   },
   "devDependencies": {

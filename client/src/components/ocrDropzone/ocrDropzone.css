@@ -1,0 +1,51 @@
+/* client/src/components/ocrDropzone/ocrDropzone.css */
+
+.ocr-dropzone-wrapper {
+  border: 1px solid #dee2e6;
+  border-radius: 0.375rem;
+  padding: 1rem;
+}
+
+/* --- Idle State --- */
+.dropzone-area.idle {
+  border: 2px dashed #adb5bd;
+  border-radius: 0.375rem;
+  padding: 2rem;
+  text-align: center;
+  color: #6c757d;
+  cursor: pointer;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+.dropzone-area.idle:hover {
+  border-color: var(--bs-primary);
+}
+.dropzone-area.idle.active {
+  border-color: var(--bs-success);
+  background-color: #e9f7ef;
+}
+
+/* --- Result State --- */
+.result-area {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.receipt-preview {
+  width: 120px;
+  height: auto;
+  flex-shrink: 0;
+  border: 1px solid #dee2e6;
+}
+
+.status-and-input {
+  flex-grow: 1;
+}
+
+.processing-status {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--bs-primary);
+}

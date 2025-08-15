@@ -5,6 +5,7 @@ import CreateEditCustomItemModal from '../createEditCustomItemModal/CreateEditCu
 import { SingleItemSelectionModal, SelectedItemData } from '../singleItemSelectionModal/SingleItemSelectionModal';
 import { ExclamationTriangleFill, PencilSquare, PlusCircle, Trash } from 'react-bootstrap-icons';
 import api from '../../../services/api';
+import { PackageFulfillmentForm } from '../../forms/packageFulfillmentForm/PackageFulfillmentForm';
 
 interface StagedFile {
   file: File;
@@ -299,89 +300,13 @@ const EditPackageModal: React.FC<EditPackageModalProps> = ({ show, onHide, pkg, 
           <h4>{pkg.name.split(',')[0]}</h4>
           <p className="text-muted">Edit wearer names and assign items for each role in this package.</p>
           <div style={{ maxHeight: '55vh', overflowY: 'auto' }} className="pe-2">
-            <ListGroup className="list-group-flush">
-              {fulfillment.map((fulfillItem, index) => {
-                  // --- THIS IS THE REFACTORED SECTION ---
-                  const assignedItem = fulfillItem.assignedItem;
-                  
-                  // 1. The source of truth for 'isCustom' is now directly on the fulfillment item.
-                  const isDesignatedAsCustom = fulfillItem.isCustom === true;
-                  
-                  // 2. Determine the status based on the correct properties.
-                  const hasWearerName = !!fulfillItem.wearerName?.trim();
-                  const isLinkedToItem = assignedItem && 'itemId' in assignedItem && !!assignedItem.itemId;
-                  const isFullyAssigned = isLinkedToItem && !!(assignedItem as any).variation;
-                  const hasCustomData = isDesignatedAsCustom && assignedItem && 'outfitCategory' in assignedItem;
-                  
-                  const getStatus = (): { text: string; variant: 'success' | 'info' | 'warning' | 'danger' } => {
-                    if (!isDesignatedAsCustom) {
-                      if (isFullyAssigned) return hasWearerName ? { text: 'Complete', variant: 'success' } : { text: 'No Wearer Name', variant: 'warning' };
-                      if (isLinkedToItem) return { text: 'Needs Variation', variant: 'info' };
-                      return { text: 'No Assignment', variant: 'danger' };
-                    }
-                    if (isDesignatedAsCustom) {
-                      if (hasCustomData) return hasWearerName ? { text: 'Complete', variant: 'success' } : { text: 'No Wearer Name', variant: 'warning' };
-                      return { text: 'No Custom Details', variant: 'info' };
-                    }
-                    return { text: 'No Assignment', variant: 'danger' };
-                  };
-                  
-                  const { text: statusText, variant: statusVariant } = getStatus();
-
-                  return (
-                      <ListGroup.Item key={index} className="py-3">
-                          <Row className="align-items-center">
-                              <Col>
-                                  {/* 3. The 'role' is also directly on the fulfillment item. */}
-                                  <Form.Label htmlFor={`wearer-name-${index}`} className="fw-bold">{fulfillItem.role}</Form.Label>
-                                  <Form.Control
-                                      id={`wearer-name-${index}`}
-                                      type="text"
-                                      placeholder="Enter wearer's name"
-                                      value={fulfillItem.wearerName || ''}
-                                      onChange={(e) => handleWearerNameChange(index, e.target.value)}
-                                  />
-                              </Col>
-                              <Col md={5}>
-                                  <div className="d-flex justify-content-between align-items-center mb-1">
-                                      <Form.Label className="small text-muted mb-0">Assigned Item</Form.Label>
-                                      <Badge bg={statusVariant} pill>{statusText}</Badge>
-                                  </div>
-                                  {isLinkedToItem && !isDesignatedAsCustom && assignedItem ? (
-                                      <div>
-                                          <p className="mb-0 fw-bold">{assignedItem.name}</p>
-                                          <p className="small text-muted mb-0">{(assignedItem as any).variation || <i>No variation selected</i>}</p>
-                                      </div>
-                                  ) : hasCustomData && assignedItem ? (
-                                      <div>
-                                          <p className="mb-0 fw-bold">{assignedItem.name}</p>
-                                          <p className="small text-primary mb-0 fst-italic">To be custom-made</p>
-                                      </div>
-                                  ) : (
-                                      <div className="text-muted fst-italic pt-2">No item assigned</div>
-                                  )}
-                              </Col>
-                              <Col md="auto" className="text-end d-flex gap-2">
-                                {(isLinkedToItem || hasCustomData) && (
-                                    <Button variant="outline-danger" size="sm" onClick={() => handleClearAssignment(index)}><Trash /></Button>
-                                )}
-                                <Button variant="outline-primary" size="sm" onClick={() => {
-                                  // 4. The logic for opening the correct modal now uses `isDesignatedAsCustom`.
-                                  if (isDesignatedAsCustom) {
-                                      handleOpenCustomItemModal(index);
-                                  } else {
-                                      handleOpenInventoryAssignment(index);
-                                  }
-                                }}>
-                                    <PencilSquare className="me-1" />
-                                    {(isLinkedToItem || hasCustomData) ? 'Change' : 'Assign'}
-                                </Button>
-                            </Col>
-                          </Row>
-                      </ListGroup.Item>
-                  );
-              })}
-            </ListGroup>
+            <PackageFulfillmentForm
+              fulfillmentData={fulfillment}
+              onWearerNameChange={handleWearerNameChange}
+              onOpenAssignmentModal={handleOpenInventoryAssignment}
+              onOpenCustomItemModal={handleOpenCustomItemModal}
+              onClearAssignment={handleClearAssignment}
+            />
           </div>
         </Modal.Body>
         <Modal.Footer>

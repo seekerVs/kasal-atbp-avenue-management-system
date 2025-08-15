@@ -7,6 +7,7 @@ const asyncHandler = require('../utils/asyncHandler');
 const { protect } = require('../middleware/authMiddleware');
 const { sanitizeRequestBody } = require('../middleware/sanitizeMiddleware');
 const { customAlphabet } = require('nanoid');
+const bcrypt = require('bcryptjs');
 
 const router = express.Router();
 
@@ -30,6 +31,98 @@ router.get('/', protect, asyncHandler(async (req, res) => {
 
     res.status(200).json(transformedUsers);
 }));
+
+router.get('/me', protect, asyncHandler(async (req, res) => {
+    // We use a nested populate to get the role AND the permissions within that role.
+    const user = await User.findById(req.user._id)
+      .select('-passwordHash')
+      .populate({
+        path: 'roleId',
+        populate: {
+          path: 'permissions',
+          model: 'Permission'
+        }
+      });
+      
+    if (!user) {
+        res.status(404);
+        throw new Error('User not found.');
+    }
+    const userObject = user.toObject();
+    userObject.role = userObject.roleId;
+    delete userObject.roleId;
+    res.status(200).json(userObject);
+}));
+
+// PUT /api/users/me - Allows a user to update their own name and email
+router.put('/me', protect, sanitizeRequestBody, asyncHandler(async (req, res) => {
+    const { name, email } = req.body;
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+        res.status(404);
+        throw new Error('User not found.');
+    }
+
+    // Check if the new email is already taken by another user
+    if (email && email !== user.email) {
+        const emailExists = await User.findOne({ email: email, _id: { $ne: user._id } });
+        if (emailExists) {
+            res.status(409); // Conflict
+            throw new Error('This email address is already in use by another account.');
+        }
+        user.email = email;
+    }
+    
+    user.name = name || user.name;
+    const savedUser = await user.save();
+    
+    // Repopulate to send back the full, updated object
+    const updatedUser = await User.findById(savedUser._id).select('-passwordHash').populate({
+        path: 'roleId',
+        populate: { path: 'permissions', model: 'Permission' }
+    });
+
+    const userObject = updatedUser.toObject();
+    userObject.role = userObject.roleId;
+    delete userObject.roleId;
+
+    res.status(200).json(userObject);
+}));
+
+// PUT /api/users/change-password - Allows a logged-in user to change their own password
+router.put('/change-password', protect, sanitizeRequestBody, asyncHandler(async (req, res) => {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+        res.status(400);
+        throw new Error('Current and new passwords are required.');
+    }
+    if (newPassword.length < 6) {
+        res.status(400);
+        throw new Error('New password must be at least 6 characters long.');
+    }
+
+    // We need the full user document, including the password hash, for comparison
+    const user = await User.findById(req.user._id);
+    if (!user) {
+        res.status(404); // Should not happen if token is valid, but good practice
+        throw new Error('User not found.');
+    }
+
+    // Verify that the provided current password is correct
+    const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!isMatch) {
+        res.status(401); // 401 Unauthorized
+        throw new Error('Incorrect current password.');
+    }
+
+    // If correct, update the password. The pre-save hook will hash the new one.
+    user.passwordHash = newPassword;
+    await user.save();
+
+    res.status(200).json({ message: 'Password updated successfully.' });
+}));    
 
 // --- CREATE A NEW USER ---
 // POST /api/users

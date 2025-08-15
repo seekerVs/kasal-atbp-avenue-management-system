@@ -1,0 +1,30 @@
+/* client/src/components/adminBar/adminBar.css */
+
+.admin-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 40px; /* Slim bar height */
+  background-color: #212529; /* Bootstrap's dark color */
+  color: #adb5bd; /* Muted text color */
+  z-index: 1055; /* Higher than the main navbar to ensure it's on top */
+  font-size: 0.9rem;
+}
+
+.admin-bar-info {
+  font-style: italic;
+}
+
+.admin-bar-link {
+  color: #f8f9fa !important; /* White text for links */
+  display: flex;
+  align-items: center;
+  padding: 0 1rem !important;
+  transition: background-color 0.2s ease;
+}
+
+.admin-bar-link:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #fff !important;
+}

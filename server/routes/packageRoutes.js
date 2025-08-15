@@ -11,6 +11,24 @@ router.get('/', asyncHandler(async (req, res) => {
   res.status(200).json(packages);
 }));
 
+// ADD THIS ROUTE after your main GET / route
+
+// GET /api/packages/check-name - For frontend validation
+router.get('/check-name', asyncHandler(async (req, res) => {
+    const { name, excludeId } = req.query;
+    if (!name) {
+        return res.status(400).json({ message: "Name is required for check." });
+    }
+
+    const query = { name: { $regex: `^${name}$`, $options: 'i' } };
+    if (excludeId) {
+        query._id = { $ne: excludeId };
+    }
+
+    const pkg = await PackageModel.findOne(query);
+    res.status(200).json({ isTaken: !!pkg });
+}));
+
 // GET /api/packages/:id
 router.get('/:id', asyncHandler(async (req, res) => {
   const pkg = await PackageModel.findById(req.params.id).lean();
@@ -19,21 +37,37 @@ router.get('/:id', asyncHandler(async (req, res) => {
 }));
 
 // POST /api/packages/
-router.post('/', asyncHandler(async (req, res) => {
-  const newPackage = new PackageModel(req.body);
-  const savedPackage = await newPackage.save();
-  res.status(201).json(savedPackage);
+router.post('/', asyncHandler(async (req, res, next) => {
+  try {
+    const newPackage = new PackageModel(req.body);
+    const savedPackage = await newPackage.save();
+    res.status(201).json(savedPackage);
+  } catch (error) {
+    if (error.code === 11000) {
+      res.status(409); // Conflict
+      throw new Error('A package with this name already exists.');
+    }
+    next(error);
+  }
 }));
 
-// PUT /api/packages/:id
-router.put('/:id', asyncHandler(async (req, res) => {
-  const updatedPackage = await PackageModel.findByIdAndUpdate(
-    req.params.id,
-    req.body,
-    { new: true, runValidators: true }
-  );
-  if (!updatedPackage) return res.status(404).json({ message: "Package not found." });
-  res.status(200).json(updatedPackage);
+// PUT /:id route
+router.put('/:id', asyncHandler(async (req, res, next) => {
+  try {
+    const updatedPackage = await PackageModel.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true, runValidators: true }
+    );
+    if (!updatedPackage) return res.status(404).json({ message: "Package not found." });
+    res.status(200).json(updatedPackage);
+  } catch (error) {
+    if (error.code === 11000) {
+      res.status(409);
+      throw new Error('A package with this name already exists.');
+    }
+    next(error);
+  }
 }));
 
 // DELETE /api/packages/:id

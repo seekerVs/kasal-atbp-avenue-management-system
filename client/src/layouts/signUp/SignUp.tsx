@@ -3,13 +3,9 @@ import { Container, Form, Button, Card, InputGroup, Alert } from "react-bootstra
 import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeSlash } from "react-bootstrap-icons";
 import api from "../../services/api";
+import { dispatchAuthChangeEvent } from "../../services/authEvent";
 
-// You will likely need this prop from App.tsx to change the navbar after signup
-interface SignUpProps {
-  setNavbarType: (type: "main" | "alt") => void;
-}
-
-function Sign_up({ setNavbarType }: SignUpProps) {
+function SignUp() {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [showRepeatPassword, setShowRepeatPassword] = useState(false);
@@ -56,9 +52,8 @@ function Sign_up({ setNavbarType }: SignUpProps) {
       // On success, get the token, save it, and navigate
       const { token } = response.data;
       localStorage.setItem("authToken", token);
+      dispatchAuthChangeEvent(); 
       
-      // Update the navbar and redirect to the dashboard
-      setNavbarType("alt");
       navigate("/dashboard");
 
     } catch (error: any) {
@@ -168,4 +163,4 @@ function Sign_up({ setNavbarType }: SignUpProps) {
   );
 }
 
-export default Sign_up;
+export default SignUp;

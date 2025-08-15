@@ -20,13 +20,14 @@ const CustomerInfoSchema = new mongoose.Schema({
 const PaymentSchema = new mongoose.Schema({
   amount: { type: Number, required: true },
   date: { type: Date, required: true },
-  method: { type: String, required: true, enum: ['Cash', 'GCash', 'Bank Transfer'] },
   referenceNumber: { type: String, trim: true },
+  receiptImageUrl: { type: String, trim: true }, 
 }, { _id: false });
 
 const FinancialsSchema = new mongoose.Schema({
   shopDiscount: { type: Number, default: 0 },
   depositAmount: { type: Number, default: 0 },
+  requiredDeposit: { type: Number, default: 0 },
   payments: [PaymentSchema],
 }, { _id: false });
 
@@ -36,7 +37,12 @@ const ItemReservationSchema = new mongoose.Schema({
   itemId: { type: mongoose.Schema.Types.ObjectId, ref: 'items', required: true },
   itemName: { type: String, required: true, trim: true },
   variation: {
-    color: { type: String, required: true, trim: true },
+    // --- THIS IS THE MODIFIED BLOCK ---
+    color: {
+      name: { type: String, required: true },
+      hex: { type: String, required: true },
+    },
+    // --- END OF MODIFICATION ---
     size: { type: String, required: true, trim: true },
   },
   quantity: { type: Number, required: true, min: 1 },
@@ -50,14 +56,15 @@ const FulfillmentPreviewSchema = new mongoose.Schema({
   assignedItemId: { type: mongoose.Schema.Types.ObjectId, ref: 'items' },
   variation: { type: String },
   // If a custom role creates an appointment, we link it here
-  linkedAppointmentId: { type: String, ref: 'Appointment', default: null }
+  linkedAppointmentId: { type: String, ref: 'Appointment', default: null },
+  notes: { type: String, trim: true }
 }, { _id: false });
 
 const PackageReservationSchema = new mongoose.Schema({
   packageReservationId: { type: String, required: true },
   packageId: { type: mongoose.Schema.Types.ObjectId, ref: 'packages', required: true },
   packageName: { type: String, required: true, trim: true },
-  motifName: { type: String, trim: true },
+  motifHex: { type: String, trim: true }, 
   price: { type: Number, required: true },
   fulfillmentPreview: [FulfillmentPreviewSchema],
 }, { _id: false });

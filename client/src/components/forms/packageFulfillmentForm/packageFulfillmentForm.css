@@ -1,0 +1,14 @@
+/* client\src\components\forms\packageFulfillmentForm\packageFulfillmentForm.css */
+
+.fulfillment-form-container {
+  /* Set a max-height to make the list scrollable within modals */
+  max-height: 70vh;
+  overflow-y: auto;
+  padding-right: 0.5rem; /* Add some space for the scrollbar */
+}
+
+.assignment-details {
+  min-height: 42px; /* Give the details section a fixed height to prevent layout jumps */
+  display: flex;
+  flex-direction: column;
+}

@@ -6,19 +6,33 @@ const InclusionSchema = new mongoose.Schema({
     wearerNum: { type: Number, required: true, min: 1 },
     name: { type: String, required: true },
     isCustom: { type: Boolean, default: false },
+    type: {
+        type: String,
+        enum: ['Wearable', 'Accessory'], // A list of allowed types
+        default: 'Wearable'
+    }
 });
+
+const AssignedItemSchema = new mongoose.Schema({
+    itemId: { type: mongoose.Schema.Types.ObjectId, ref: 'items', required: true },
+    color: {
+        name: { type: String, required: true },
+        hex: { type: String, required: true },
+    },
+    size: { type: String, required: true },
+}, { _id: false });
 
 const AssignmentSchema = new mongoose.Schema({
     // It now links to a SINGLE inclusion.
     inclusionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Package.inclusions', required: true },
     // And can have MULTIPLE item IDs, one for each wearer in the inclusion.
     // 'null' is a valid value for a custom slot.
-    itemIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'items', default: null }],
+    assignedItems: [{ type: AssignedItemSchema, default: null }],
 
 }, { _id: false });
 
 const ColorMotifSchema = new mongoose.Schema({
-    motifName: { type: String, required: true },
+    motifHex: { type: String, required: true },
     assignments: [AssignmentSchema]
 });
 

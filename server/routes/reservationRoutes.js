@@ -3,10 +3,15 @@
 const express = require('express');
 const { customAlphabet } = require('nanoid');
 const Reservation = require('../models/Reservation');
+const ItemModel = require('../models/Item');
+const PackageModel = require('../models/Package');
 const asyncHandler = require('../utils/asyncHandler');
 const Appointment = require('../models/Appointment'); 
 const { protect } = require('../middleware/authMiddleware');
 const { sanitizeRequestBody } = require('../middleware/sanitizeMiddleware');
+const mongoose = require('mongoose'); 
+const { calculateFinancials } = require('../utils/financialsCalculator');
+const namer = require('color-namer');
 
 const router = express.Router();
 
@@ -21,15 +26,15 @@ router.post(
   '/',
   sanitizeRequestBody,
   asyncHandler(async (req, res) => {
-    const { customerInfo, eventDate, itemReservations, packageReservations } = req.body;
+    const { customerInfo, reserveDate, itemReservations, packageReservations, financials } = req.body;
 
     // Backend Validation
     if (!customerInfo?.name || !customerInfo?.phoneNumber) {
         res.status(400).json({ message: "Customer name and phone number are required." });
         return;
     }
-    if (!eventDate) {
-        res.status(400).json({ message: "An event date is required." });
+    if (!reserveDate) {
+        res.status(400).json({ message: "A reservation date is required." });
         return;
     }
     const hasItems = (itemReservations && itemReservations.length > 0) || (packageReservations && packageReservations.length > 0);
@@ -38,56 +43,89 @@ router.post(
         return;
     }
 
-    // Assign unique IDs to sub-documents
+    // Prepare data for and call the financials calculator
+    const dataForCalculator = {
+      singleRents: itemReservations || [],
+      packageRents: packageReservations || [],
+      financials: {},
+    };
+    const calculated = calculateFinancials(dataForCalculator);
+    if (!calculated) {
+      res.status(500);
+      throw new Error('Could not calculate reservation financials.');
+    }
+
+    // Validate payment against the grand total (subtotal + deposit)
+    const grandTotal = calculated.grandTotal;
+    const payment = financials?.payments?.[0];
+
+    if (grandTotal > 0) {
+      if (!payment || !payment.amount) {
+        res.status(400);
+        throw new Error('Payment details are required for this reservation.');
+      }
+      const minimumPayment = grandTotal * 0.5;
+      if (payment.amount < minimumPayment) {
+        res.status(400);
+        throw new Error(`Payment is insufficient. A minimum of 50% (₱${minimumPayment.toFixed(2)}) of the grand total is required.`);
+      }
+    }
+
+    // Assign unique IDs to sub-documents and generate motif names
     if (itemReservations) {
         itemReservations.forEach(item => { item.reservationId = `item_${nanoid_subdoc()}`; });
     }
     if (packageReservations) {
-        packageReservations.forEach(pkg => { pkg.packageReservationId = `pkg_${nanoid_subdoc()}`; });
+        packageReservations.forEach(pkg => { 
+            pkg.packageReservationId = `pkg_${nanoid_subdoc()}`;
+            // The motifHex is already on the object from the frontend, no processing needed.
+        });
     }
 
     const newReservation = new Reservation({
         _id: `RES-${nanoid_reservation()}`,
-        ...req.body,
+        ...req.body, // This includes packageAppointmentDate from the client
+        financials: {
+            requiredDeposit: calculated.requiredDeposit,
+            depositAmount: calculated.requiredDeposit, 
+            payments: financials.payments || []
+        },
         status: 'Pending',
     });
 
-    let savedReservation = await newReservation.save();
+    // Save the initial reservation
+    await newReservation.save();
 
-    // --- 2. NEW LOGIC: Check for and create linked appointments ---
-    let appointmentsCreated = false;
-    if (savedReservation.packageReservations && savedReservation.packageReservations.length > 0) {
-      // Use Promise.all to handle multiple appointment creations concurrently
-      await Promise.all(savedReservation.packageReservations.map(async (pkg) => {
+    // Check for and create linked appointments
+    if (newReservation.packageReservations && newReservation.packageReservations.length > 0) {
+      await Promise.all(newReservation.packageReservations.map(async (pkg) => {
         await Promise.all(pkg.fulfillmentPreview.map(async (fulfillment) => {
           if (fulfillment.isCustom && !fulfillment.linkedAppointmentId) {
-            appointmentsCreated = true;
 
-            // Create a new Appointment document
             const newAppointment = new Appointment({
               _id: `APT-${nanoid_appointment()}`,
-              customerInfo: savedReservation.customerInfo,
-              // Use the eventDate as a placeholder appointment date
-              appointmentDate: savedReservation.eventDate,
+              customerInfo: newReservation.customerInfo,
+              appointmentDate: newReservation.packageAppointmentDate, 
               status: 'Pending',
-              statusNote: `Auto-generated for custom item: '${fulfillment.role}' from Reservation ID: ${savedReservation._id}`,
-              sourceReservationId: savedReservation._id,
+              statusNote: `Auto-generated for package '${pkg.packageName}', custom item: '${fulfillment.role}'. Notes: ${fulfillment.notes || 'N/A'}`.trim(),
+              sourceReservationId: newReservation._id,
             });
             const savedAppointment = await newAppointment.save();
-
-            // Link the new appointment ID back to the reservation's fulfillment preview
+            // Link the ID back to the reservation fulfillment
             fulfillment.linkedAppointmentId = savedAppointment._id;
           }
         }));
       }));
-    }
-
-    // 3. If appointments were created, we must save the reservation AGAIN to persist the linkedAppointmentId changes
-    if (appointmentsCreated) {
-      savedReservation = await savedReservation.save();
+      // Save the reservation AGAIN to persist the linkedAppointmentId changes
+      await newReservation.save();
     }
     
-    res.status(201).json(savedReservation);
+    // Instead of returning the potentially stale 'savedReservation' variable,
+    // we convert the final, fully-updated Mongoose document to a plain object
+    // to ensure all data (including packageAppointmentDate) is present.
+    const finalReservationObject = newReservation.toObject();
+    
+    res.status(201).json(finalReservationObject);
   })
 );
 
@@ -97,10 +135,60 @@ router.get(
   '/',
   protect,
   asyncHandler(async (req, res) => {
-    const reservations = await Reservation.find({}).sort({ eventDate: -1 }).lean();
-    res.status(200).json(reservations);
+    // 1. Get pagination parameters from the query string
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10; // Default to 10 per page
+    const skip = (page - 1) * limit;
+
+    // We will build the filter based on all reservations for the count
+    const filter = {}; // You can add status filters here later if needed
+
+    // 2. Execute two queries in parallel for efficiency
+    const [reservations, totalReservations] = await Promise.all([
+      Reservation.find(filter).sort({ createdAt: -1 }).limit(limit).skip(skip).lean(),
+      Reservation.countDocuments(filter)
+    ]);
+
+    // 3. Gather all unique Item and Package IDs from the CURRENT PAGE of reservations
+    const itemIds = new Set();
+    const packageIds = new Set();
+    reservations.forEach(res => {
+      res.itemReservations.forEach(item => itemIds.add(item.itemId));
+      res.packageReservations.forEach(pkg => packageIds.add(pkg.packageId));
+    });
+
+    // 4. Fetch all required Items and Packages for the current page
+    const [items, packages] = await Promise.all([
+      ItemModel.find({ _id: { $in: [...itemIds] } }).select('variations').lean(),
+      PackageModel.find({ _id: { $in: [...packageIds] } }).select('imageUrls').lean()
+    ]);
+
+    const itemMap = new Map(items.map(item => [item._id.toString(), item]));
+    const packageMap = new Map(packages.map(pkg => [pkg._id.toString(), pkg]));
+
+    // 5. Enrich the reservation data for the current page
+    const enrichedReservations = reservations.map(res => {
+      const enrichedItems = res.itemReservations.map(item => {
+        const fullItem = itemMap.get(item.itemId.toString());
+        const variation = fullItem?.variations.find(v => v.color.hex === item.variation.color.hex && v.size === item.variation.size);
+        return { ...item, imageUrl: variation?.imageUrl || null };
+      });
+      const enrichedPackages = res.packageReservations.map(pkg => {
+        const fullPackage = packageMap.get(pkg.packageId.toString());
+        return { ...pkg, imageUrl: fullPackage?.imageUrls[0] || null };
+      });
+      return { ...res, itemReservations: enrichedItems, packageReservations: enrichedPackages };
+    });
+
+    // 6. Send the paginated and enriched response
+    res.status(200).json({
+      reservations: enrichedReservations,
+      currentPage: page,
+      totalPages: Math.ceil(totalReservations / limit),
+    });
   })
 );
+
 
 // --- GET A SINGLE RESERVATION (ADMIN ONLY) ---
 // METHOD: GET /api/reservations/:id
@@ -108,7 +196,15 @@ router.get(
   '/:id',
   protect,
   asyncHandler(async (req, res) => {
-    const reservation = await Reservation.findById(req.params.id).lean();
+    // --- THIS IS THE MODIFIED BLOCK ---
+    const reservation = await Reservation.findById(req.params.id)
+      .populate({
+        path: 'packageReservations.fulfillmentPreview.assignedItemId',
+        model: 'items', // Explicitly specify the model to use for population
+        select: 'name variations' // We only need the name and variations (for the image)
+      })
+      .lean(); // .lean() should come after .populate()
+
     if (!reservation) {
       res.status(404).json({ message: 'Reservation not found.' });
       return;
@@ -141,5 +237,183 @@ router.put(
     res.status(200).json(updatedReservation);
   })
 );
+
+// METHOD: PUT /api/reservations/:id/customer
+router.put(
+  '/:id/customer',
+  protect, // Ensure only authenticated admins can access
+  sanitizeRequestBody, // Reuse your existing sanitizer for name and address fields
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const newCustomerInfo = req.body;
+
+    // Backend validation to ensure the payload is in the correct format
+    if (!newCustomerInfo || !newCustomerInfo.name || !newCustomerInfo.phoneNumber || !newCustomerInfo.address) {
+      res.status(400);
+      throw new Error('Incomplete customer information provided.');
+    }
+
+    // Find the reservation and update the 'customerInfo' field.
+    // The '$set' operator replaces the entire 'customerInfo' object with the new one.
+    const updatedReservation = await Reservation.findByIdAndUpdate(
+      id,
+      { $set: { customerInfo: newCustomerInfo } },
+      { new: true, runValidators: true } // Return the updated document
+    ).populate({ // Re-populate the assigned items after the update
+      path: 'packageReservations.fulfillmentPreview.assignedItemId',
+      model: 'items',
+      select: 'name variations'
+    });
+    
+    if (!updatedReservation) {
+      res.status(404);
+      throw new Error('Reservation not found.');
+    }
+
+    // Send the full, updated reservation back to the frontend
+    res.status(200).json(updatedReservation);
+  })
+);
+
+router.put(
+  '/:id/confirm',
+  protect, // Admin only
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+
+    const reservation = await Reservation.findById(id);
+
+    if (!reservation) {
+      res.status(404);
+      throw new Error('Reservation not found.');
+    }
+
+    if (reservation.status !== 'Pending') {
+      res.status(400);
+      throw new Error(`Only reservations with a 'Pending' status can be confirmed. Current status: ${reservation.status}.`);
+    }
+
+    reservation.status = 'Confirmed';
+    const updatedReservation = await reservation.save();
+
+    res.status(200).json(updatedReservation);
+  })
+);
+
+router.put(
+  '/:id/cancel',
+  protect, // Admin only
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { reason } = req.body; 
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      const reservation = await Reservation.findById(id).session(session);
+      if (!reservation) {
+        res.status(404);
+        throw new Error('Reservation not found.');
+      }
+      if (reservation.status === 'Completed' || reservation.status === 'Cancelled') {
+        res.status(400);
+        throw new Error(`This reservation cannot be cancelled as it is already ${reservation.status}.`);
+      }
+
+      const stockUpdateOperations = [];
+
+      // Restore stock for single item reservations
+      if (reservation.itemReservations && reservation.itemReservations.length > 0) {
+        for (const item of reservation.itemReservations) {
+          stockUpdateOperations.push({
+            updateOne: {
+              filter: { _id: item.itemId, "variations.color.hex": item.variation.color.hex, "variations.size": item.variation.size },
+              update: { $inc: { "variations.$.quantity": item.quantity } }
+            }
+          });
+        }
+      }
+      
+      // Restore stock for package reservations (if they have assigned items)
+      if (reservation.packageReservations && reservation.packageReservations.length > 0) {
+        for (const pkg of reservation.packageReservations) {
+          for (const fulfillment of pkg.fulfillmentPreview) {
+            if (fulfillment.assignedItemId && fulfillment.variation) {
+              const [colorName, size] = fulfillment.variation.split(',').map(s => s.trim());
+              stockUpdateOperations.push({
+                updateOne: {
+                  filter: { _id: fulfillment.assignedItemId, "variations.color.name": colorName, "variations.size": size },
+                  update: { $inc: { "variations.$.quantity": 1 } }
+                }
+              });
+            }
+          }
+        }
+      }
+
+      // Execute all stock updates if any were generated
+      if (stockUpdateOperations.length > 0) {
+        await ItemModel.bulkWrite(stockUpdateOperations, { session });
+      }
+
+      // Update the reservation status
+      reservation.status = 'Cancelled';
+      reservation.cancellationReason = reason || 'No reason provided.';
+      const updatedReservation = await reservation.save({ session });
+
+      await session.commitTransaction();
+      res.status(200).json(updatedReservation);
+
+    } catch (error) {
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      session.endSession();
+    }
+  })
+);
+
+// METHOD: PUT /api/reservations/:id/reschedule
+router.put(
+  '/:id/reschedule',
+  protect, // Admin only
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { newDate } = req.body;
+
+    if (!newDate) {
+      res.status(400);
+      throw new Error('A new reservation date is required.');
+    }
+
+    const reservation = await Reservation.findById(id);
+    if (!reservation) {
+      res.status(404);
+      throw new Error('Reservation not found.');
+    }
+
+    // Only pending or confirmed reservations can be rescheduled
+    if (reservation.status !== 'Pending' && reservation.status !== 'Confirmed') {
+        res.status(400);
+        throw new Error(`Cannot reschedule a reservation with status "${reservation.status}".`);
+    }
+
+    // Update the date and save
+    reservation.reserveDate = newDate;
+    const updatedReservation = await reservation.save();
+
+    // Re-populate to send back the full data, just like the GET route
+    const populatedReservation = await Reservation.findById(updatedReservation._id)
+      .populate({
+        path: 'packageReservations.fulfillmentPreview.assignedItemId',
+        model: 'items',
+        select: 'name variations'
+      })
+      .lean();
+
+    res.status(200).json(populatedReservation);
+  })
+);
+
 
 module.exports = router;

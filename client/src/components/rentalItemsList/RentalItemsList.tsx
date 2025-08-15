@@ -34,18 +34,14 @@ const RentalItemsList: React.FC<RentalItemsListProps> = ({
 }) => {
 
   const SingleItem = ({ item }: { item: SingleRentItem }) => {
-    const nameParts = item.name.split(',');
-    const productName = nameParts[0] || "Unknown Item";
-    const color = nameParts[1] || "N/A";
-    const size = nameParts[2] || "N/A";
     return (
       <Row className="align-items-center mb-3 border-bottom pb-3">
         <Col xs="auto">
           <Image src={item.imageUrl} thumbnail style={{ width: '80px', height: '80px', objectFit: 'cover' }} />
         </Col>
         <Col>
-          <p className="fw-bold mb-1">{productName}</p>
-          <p className="text-muted small mb-0">Variation: {color} - {size}</p>
+          <p className="fw-bold mb-1">{item.name}</p>
+          <p className="text-muted small mb-0">Variation: {item.variation.color.name} - {item.variation.size}</p>
           <p className="text-muted small mb-0">Qty: {item.quantity}</p>
         </Col>
         <Col xs="auto" className="text-end">

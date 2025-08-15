@@ -7,6 +7,9 @@ import {
 } from '@aivangogh/ph-address';
 import { Address } from '../../types';
 
+// 1. Import the Typeahead component
+import { Typeahead } from 'react-bootstrap-typeahead';
+
 type TProvince = { name: string; psgcCode: string; regionCode: string; };
 type TMunicipality = { name: string; psgcCode: string; provinceCode: string; };
 type TBarangay = { name: string; psgcCode: string; municipalCityCode: string; };
@@ -19,15 +22,10 @@ interface AddressSelectorProps {
 }
 
 export const AddressSelector: React.FC<AddressSelectorProps> = ({ value, onChange, errors, layout = 'horizontal'  }) => {
-  // --- FIX #1: Get the province list immediately and store it. ---
-  // We use useState here so it's only called once per component lifecycle.
+  // State and useEffect hooks remain the same
   const [provinces] = useState<TProvince[]>(getAllProvinces());
-
   const [cities, setCities] = useState<TMunicipality[]>([]);
   const [barangays, setBarangays] = useState<TBarangay[]>([]);
-
-  // --- FIX #2: Initialize the state correctly. ---
-  // This now works because `provinces` has data right from the start.
   const [selectedProvinceCode, setSelectedProvinceCode] = useState(() => {
     if (value.province) {
       const initialProvince = provinces.find(p => p.name === value.province);
@@ -35,52 +33,87 @@ export const AddressSelector: React.FC<AddressSelectorProps> = ({ value, onChang
     }
     return '';
   });
-
-  // This state is still needed for the City/Municipality dropdown.
   const [selectedCityCode, setSelectedCityCode] = useState('');
 
-  // --- FIX #3: Removed the redundant useEffect blocks. ---
-
-  // This effect correctly populates cities when a province is selected.
   useEffect(() => {
-    if (selectedProvinceCode) {
-      setCities(getMunicipalitiesByProvince(selectedProvinceCode));
-    } else {
-      setCities([]);
+    // This effect runs on initial mount to pre-populate the dropdowns.
+    if (value.province) {
+      const province = provinces.find(p => p.name === value.province);
+      if (province) {
+        setSelectedProvinceCode(province.psgcCode);
+        const municipalities = getMunicipalitiesByProvince(province.psgcCode);
+        setCities(municipalities);
+
+        // If there's also a pre-selected city, load its barangays too.
+        if (value.city) {
+          const city = municipalities.find(m => m.name === value.city);
+          if (city) {
+            setSelectedCityCode(city.psgcCode);
+            setBarangays(getBarangaysByMunicipality(city.psgcCode));
+          }
+        }
+      }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (selectedProvinceCode) setCities(getMunicipalitiesByProvince(selectedProvinceCode));
+    else setCities([]);
   }, [selectedProvinceCode]);
 
-  // This effect correctly populates barangays when a city is selected.
   useEffect(() => {
-    if (selectedCityCode) {
-      setBarangays(getBarangaysByMunicipality(selectedCityCode));
-    } else {
-      setBarangays([]);
-    }
+    if (selectedCityCode) setBarangays(getBarangaysByMunicipality(selectedCityCode));
+    else setBarangays([]);
   }, [selectedCityCode]);
 
-  // Handlers can remain the same.
-  const handleProvinceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const provinceCode = e.target.value;
-    const province = provinces.find(p => p.psgcCode === provinceCode);
-    setSelectedProvinceCode(provinceCode);
-    setSelectedCityCode('');
-    onChange('province', province ? province.name : '');
-    onChange('city', '');
-    onChange('barangay', '');
+  // --- 2. Create new, more flexible handlers for the Typeahead component ---
+  const handleProvinceChange = (selected: any[]) => {
+    if (selected.length > 0) {
+      const selection = selected[0];
+      // `customOption` is true when the user types a new value
+      const provinceCode = selection.customOption ? '' : selection.psgcCode;
+      const provinceName = selection.name;
+
+      setSelectedProvinceCode(provinceCode);
+      setSelectedCityCode('');
+      onChange('province', provinceName);
+      onChange('city', '');
+      onChange('barangay', '');
+    } else {
+      // Handle clearing the input
+      setSelectedProvinceCode('');
+      setSelectedCityCode('');
+      onChange('province', '');
+      onChange('city', '');
+      onChange('barangay', '');
+    }
   };
 
-  const handleCityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const cityCode = e.target.value;
-    const city = cities.find(c => c.psgcCode === cityCode);
-    setSelectedCityCode(cityCode);
-    onChange('barangay', '');
-    onChange('city', city ? city.name : '');
+  const handleCityChange = (selected: any[]) => {
+    if (selected.length > 0) {
+      const selection = selected[0];
+      const cityCode = selection.customOption ? '' : selection.psgcCode;
+      const cityName = selection.name;
+      
+      setSelectedCityCode(cityCode);
+      onChange('city', cityName);
+      onChange('barangay', '');
+    } else {
+      setSelectedCityCode('');
+      onChange('city', '');
+      onChange('barangay', '');
+    }
   };
 
-  const handleBarangayChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const barangayName = e.target.value;
-    onChange('barangay', barangayName);
+  const handleBarangayChange = (selected: any[]) => {
+    if (selected.length > 0) {
+      const selection = selected[0];
+      const barangayName = selection.name;
+      onChange('barangay', barangayName);
+    } else {
+      onChange('barangay', '');
+    }
   };
 
   const colProps = layout === 'horizontal' 
@@ -89,36 +122,63 @@ export const AddressSelector: React.FC<AddressSelectorProps> = ({ value, onChang
 
   return (
     <>
+      {/* --- 3. Replace all Form.Select with Typeahead components --- */}
       <Col {...colProps}>
         <Form.Group>
-          <Form.Label>Province <span className="text-danger">*</span></Form.Label>
-          <Form.Select value={selectedProvinceCode} onChange={handleProvinceChange} isInvalid={!!errors.province}>
-            <option value="">Select Province</option>
-            {provinces.map((p) => (<option key={p.psgcCode} value={p.psgcCode}>{p.name}</option>))}
-          </Form.Select>
-          <Form.Control.Feedback type="invalid">{errors.province}</Form.Control.Feedback>
+          <Form.Label>Province<span className="text-danger">*</span></Form.Label>
+          <Typeahead
+            id="province-typeahead"
+            allowNew // <-- This allows custom user input
+            labelKey="name" // <-- Tells Typeahead to display the 'name' property from the objects
+            options={provinces}
+            onChange={handleProvinceChange}
+            selected={provinces.filter(p => p.name === value.province)}
+            placeholder="Choose or type a province..."
+            isInvalid={!!errors.province}
+          />
+          <Form.Control.Feedback type="invalid" className={errors.province ? 'd-block' : ''}>
+            {errors.province}
+          </Form.Control.Feedback>
         </Form.Group>
       </Col>
       
       <Col {...colProps}>
         <Form.Group>
-          <Form.Label>City/Municipality <span className="text-danger">*</span></Form.Label>
-          <Form.Select value={selectedCityCode} onChange={handleCityChange} isInvalid={!!errors.city} disabled={!selectedProvinceCode}>
-            <option value="">Select City/Municipality</option>
-            {cities.map((c) => (<option key={c.psgcCode} value={c.psgcCode}>{c.name}</option>))}
-          </Form.Select>
-          <Form.Control.Feedback type="invalid">{errors.city}</Form.Control.Feedback>
+          <Form.Label>City/Municipality<span className="text-danger">*</span></Form.Label>
+          <Typeahead
+            id="city-typeahead"
+            allowNew
+            labelKey="name"
+            options={cities}
+            onChange={handleCityChange}
+            selected={cities.filter(c => c.name === value.city)}
+            placeholder="Choose or type a city..."
+            disabled={!value.province}
+            isInvalid={!!errors.city}
+          />
+          <Form.Control.Feedback type="invalid" className={errors.city ? 'd-block' : ''}>
+            {errors.city}
+          </Form.Control.Feedback>
         </Form.Group>
       </Col>
 
       <Col {...colProps}>
         <Form.Group>
-          <Form.Label>Barangay <span className="text-danger">*</span></Form.Label>
-          <Form.Select value={value.barangay} onChange={handleBarangayChange} isInvalid={!!errors.barangay} disabled={!selectedCityCode}>
-            <option value="">Select Barangay</option>
-            {barangays.map((b) => (<option key={b.psgcCode} value={b.name}>{b.name}</option>))}
-          </Form.Select>
-          <Form.Control.Feedback type="invalid">{errors.barangay}</Form.Control.Feedback>
+          <Form.Label>Barangay<span className="text-danger">*</span></Form.Label>
+          <Typeahead
+            id="barangay-typeahead"
+            allowNew
+            labelKey="name"
+            options={barangays}
+            onChange={handleBarangayChange}
+            selected={barangays.filter(b => b.name === value.barangay)}
+            placeholder="Choose or type a barangay..."
+            disabled={!value.city}
+            isInvalid={!!errors.barangay}
+          />
+          <Form.Control.Feedback type="invalid" className={errors.barangay ? 'd-block' : ''}>
+            {errors.barangay}
+          </Form.Control.Feedback>
         </Form.Group>
       </Col>
     </>

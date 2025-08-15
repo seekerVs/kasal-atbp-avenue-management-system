@@ -1,0 +1,41 @@
+/* client/src/components/dateTimePicker/dateTimePicker.css */
+
+/* Main container using flexbox for alignment */
+.datetime-picker-container {
+  display: flex;
+  flex-wrap: wrap; /* Allow wrapping on very small screens */
+  gap: 0.5rem; /* Space between the date and time inputs */
+  align-items: flex-start; /* Aligns items to the top */
+}
+
+/* Wrapper for the DatePicker to control its width */
+.date-picker-wrapper {
+  flex: 2 1 180px; /* flex-grow, flex-shrink, flex-basis */
+  max-width: 250px; /* --- ADD THIS LINE --- */
+}
+
+/* Wrapper for the Time Dropdown */
+.time-picker-wrapper {
+  position: relative; /* Allows positioning of the spinner inside */
+  flex: 1 1 120px; /* flex-grow, flex-shrink, flex-basis */
+  max-width: 170px; /* --- ADD THIS LINE --- */
+}
+
+/* Styling for the spinner next to the time dropdown */
+.time-loader-spinner {
+  position: absolute;
+  top: 50%;
+  right: 2.5rem; /* Position it before the dropdown arrow */
+  transform: translateY(-50%);
+  color: var(--bs-primary);
+}
+
+.time-dropdown-menu {
+  max-height: 220px; /* Set a maximum height */
+  overflow-y: auto;   /* Add a scrollbar when content overflows */
+  width: 100%; /* Make the menu match the toggle's width */
+}
+
+.time-dropdown-toggle.btn-outline-secondary {
+  border-color: var(--bs-primary); /* Use Bootstrap's "light" gray variable */
+}

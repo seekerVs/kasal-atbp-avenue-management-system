@@ -12,7 +12,7 @@ router.get('/', asyncHandler(async (req, res) => {
   // 1. Get pagination and filter parameters from the query string
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 18;
-  const { category, ageGroup, gender, search, sort } = req.query;
+  const { category, categories, ageGroup, gender, search, sort, colorHex, excludeCategory } = req.query;
 
   // 2. Build the filter object dynamically (same as before)
   const filter = {};
@@ -20,6 +20,22 @@ router.get('/', asyncHandler(async (req, res) => {
   if (ageGroup) filter.ageGroup = ageGroup;
   if (gender) filter.gender = gender;
   if (search) filter.name = { $regex: search, $options: 'i' };
+  if (colorHex) {
+    filter['variations'] = { $elemMatch: { 'color.hex': colorHex } };
+  }
+  if (excludeCategory) {
+    filter.category = { ...filter.category, $ne: excludeCategory };
+  }
+
+  if (categories) {
+    // If 'categories' query param exists (e.g., "Veils,Jewelry"), split it into an array.
+    const categoryArray = categories.split(',');
+    // Use MongoDB's $in operator to find items where the category is in the provided array.
+    filter.category = { $in: categoryArray };
+  } else if (category) {
+    // Fallback to the original single category filter if 'categories' is not provided.
+    filter.category = category;
+  }
   
   const sortOptions = {};
   if (sort === 'price_asc') sortOptions.price = 1;

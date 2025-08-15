@@ -1,5 +1,3 @@
-// src/components/sidebar/sidebarItems.tsx
-
 import {
   HouseDoorFill,
   CalendarCheck,
@@ -10,20 +8,19 @@ import {
   JournalCheck,
   CalendarHeart,
   CalendarPlus,
+  GearFill, // Keep the Gear icon
 } from "react-bootstrap-icons";
-import { Icon } from "react-bootstrap-icons"; // Import the base Icon type
+import { Icon } from "react-bootstrap-icons";
 
-// A type for sub-items, where an icon is not required
 export interface SubNavItem {
   title: string;
   path: string;
 }
 
-// The main NavItem type for top-level entries
 export interface NavItem {
   title: string;
   path: string;
-  icon: Icon; // This ensures we get proper type hints for icons
+  icon: Icon;
   subItems?: SubNavItem[];
 }
 
@@ -35,7 +32,7 @@ export const sidebarItems: NavItem[] = [
   },
   {
     title: "Rentals",
-    path: "#", // Parent path can be "#" if it only serves as a trigger
+    path: "#",
     icon: CalendarPlus,
     subItems: [
       { title: "New Rental", path: "/new-rental" },
@@ -45,16 +42,12 @@ export const sidebarItems: NavItem[] = [
   {
     title: "Reservations",
     path: "/manage-reservations",
-    icon: JournalCheck, // A fitting icon for reservations
+    icon: JournalCheck,
   },
   {
     title: "Appointments",
-    path: "#", // 2. Make Appointments a collapsible parent
+    path: "/manage-appointments",
     icon: CalendarHeart,
-    subItems: [ 
-      { title: "Manage Appointments", path: "/manage-appointments" },
-      { title: "Shop Unavailability", path: "/manage-unavailability" }, // 3. Add the new link
-    ],
   },
   {
     title: "Inventory",
@@ -73,11 +66,17 @@ export const sidebarItems: NavItem[] = [
   {
     title: "divider",
     path: "",
-    icon: () => null, // Placeholder for dividers
+    icon: () => null,
   },
+  // --- CORRECTED STRUCTURE ---
   {
     title: "Accounts",
     path: "/accounts",
-    icon: PeopleFill,
+    icon: PeopleFill, // Accounts is a top-level item again
+  },
+  {
+    title: "Settings",
+    path: "/settings", // Settings is now a direct link
+    icon: GearFill,
   },
 ];

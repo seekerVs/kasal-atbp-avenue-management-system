@@ -1,0 +1,11 @@
+.calendar-wrapper {
+  /* This is the key property: it adds a horizontal scrollbar ONLY if the content inside overflows. */
+  overflow-x: auto;
+
+  /* Adds a little space below the scrollbar so it doesn't touch the card edge. */
+  padding-bottom: 0.5rem;
+
+  /* Ensures the calendar inside is centered, similar to the old d-flex behavior. */
+  display: flex;
+  justify-content: center;
+}

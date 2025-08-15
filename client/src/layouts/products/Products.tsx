@@ -11,24 +11,24 @@ import {
   Spinner,
   Alert,
 } from "react-bootstrap";
-import { Funnel, Search, SortDown } from "react-bootstrap-icons";
+import { Funnel, SortDown } from "react-bootstrap-icons";
 import ProductCard from "../../components/productCard/ProductCard";
 import { useNavigate } from "react-router-dom";
 import CustomFooter from "../../components/customFooter/CustomFooter";
 
 import api from '../../services/api';
 import { InventoryItem } from '../../types';
-import './products.css'; // Import the new CSS
+import './products.css';
 import CustomPagination from "../../components/customPagination/CustomPagination";
 import { useHeartedItems } from "../../hooks/useHeartedItems";
 import { FilterForm } from '../../components/forms/FilterForm';
+import { ProductCardSkeleton } from "../../components/productCardSkeleton/ProductCardSkeleton";
 
-// --- Products Component (Main Component) ---
 function Products() {
   const navigate = useNavigate();
-  const { isHearted, addHeartedId, removeHeartedId } = useHeartedItems();;
+  const { isHearted, addHeartedId, removeHeartedId } = useHeartedItems();
   const [products, setProducts] = useState<InventoryItem[]>([]);
-  const [categories, setCategories] = useState<string[]>([]); // State for dynamic categories
+  const [categories, setCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,14 +49,14 @@ function Products() {
       try {
         const params: any = {
           page: currentPage,
-          limit: ITEMS_PER_PAGE
+          limit: ITEMS_PER_PAGE,
+          excludeCategory: 'Accessory' 
         };
         if (attireType) params.category = attireType;
         if (selectedAge) params.ageGroup = selectedAge;
         if (selectedGender) params.gender = selectedGender;
         if (searchTerm) params.search = searchTerm;
 
-        // --- ADD THIS SORTING LOGIC ---
         if (selectedSort === "Price Asc") params.sort = 'price_asc';
         if (selectedSort === "Price Desc") params.sort = 'price_desc';
         if (selectedSort === "Latest") params.sort = 'latest';
@@ -73,7 +73,6 @@ function Products() {
     fetchProducts();
   }, [attireType, selectedAge, selectedGender, searchTerm, currentPage, selectedSort]);
 
-  // This useEffect fetches the categories list only once.
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
@@ -94,19 +93,18 @@ function Products() {
     setAttireType("");
     setSelectedAge("");
     setSelectedGender("");
-    setSelectedSort("Relevance"); // Also reset sort order
+    setSelectedSort("Relevance");
     setCurrentPage(1);
   };
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
-    window.scrollTo(0, 0); // Scroll to top on page change
+    window.scrollTo(0, 0);
   };
 
   const handleHeartClick = async (productId: string) => {
     const wasHearted = isHearted(productId);
 
-    // 1. Optimistically update the UI first for a snappy user experience
     if (wasHearted) {
       removeHeartedId(productId);
       setProducts(prev =>
@@ -123,30 +121,22 @@ function Products() {
       );
     }
 
-    // 2. Send the corresponding request to the backend
     try {
       if (wasHearted) {
-        // Un-hearting: send a DELETE request
         await api.delete(`/inventory/${productId}/heart`);
       } else {
-        // Hearting: send a POST request
         await api.post(`/inventory/${productId}/heart`);
       }
     } catch (error) {
       console.error("Failed to update heart count on server:", error);
-      // Optional: Revert the UI change on failure
-      setProducts(prev => [...prev]); // Force a re-render to get original state back if needed
     }
   };
 
   return (
-    // Replaced container-fluid with our new custom container class
     <>
       <div className="products-page-container pt-4">
         <Row>
-          {/* Sidebar */}
           <Col md={3} className="text-start">
-            {/* Mobile View Accordion */}
             <div className="d-lg-none mb-3">
               <Accordion>
                 <Accordion.Item eventKey="0">
@@ -166,12 +156,14 @@ function Products() {
                         searchTerm={searchTerm}
                         setSearchTerm={setSearchTerm}
                         onReset={handleResetFilters}
+                        mode="rental"
+                        assignmentScope="all"
+                        onAssignmentScopeChange={() => {}}
                     />
                   </Accordion.Body>
                 </Accordion.Item>
               </Accordion>
             </div>
-            {/* Desktop View Filter */}
             <div className="d-none d-lg-block">
               <FilterForm
                   categories={categories}
@@ -184,10 +176,13 @@ function Products() {
                   searchTerm={searchTerm}
                   setSearchTerm={setSearchTerm}
                   onReset={handleResetFilters}
+                  mode="rental"
+                  assignmentScope="all"
+                  onAssignmentScopeChange={() => {}}
               />
             </div>
           </Col>
-          {/* Product Grid */}
+          
           <Col md={9} className="pb-4 product-grid-container">
             <div className="d-flex justify-content-end align-items-center mb-3">
               <DropdownButton
@@ -195,7 +190,6 @@ function Products() {
                 size="sm"
                 align="end"
                 variant="outline-secondary"
-                // --- REPLACE THE LINE BELOW ---
                 title={
                   <>
                     <SortDown className="me-2" />
@@ -211,26 +205,31 @@ function Products() {
                 <Dropdown.Item eventKey="Price Desc">Price Desc</Dropdown.Item>
               </DropdownButton>
             </div>
+            
             {loading ? (
-              <div className="text-center py-5"><Spinner /> <p className="mt-2">Loading Items...</p></div>
+              <Row xs={2} sm={2} md={3} lg={4} xl={5} className="g-2">
+                {Array.from({ length: ITEMS_PER_PAGE }).map((_, index) => (
+                  <Col key={index}>
+                    <ProductCardSkeleton />
+                  </Col>
+                ))}
+              </Row>
             ) : error ? (
               <Alert variant="danger">{error}</Alert>
-            ) : products.length === 0 ? ( // <-- Using sortedProducts here
+            ) : products.length === 0 ? (
                 <Alert variant="info" className="text-center">No items found matching your criteria.</Alert>
             ) : (
-              <Row xs={2} sm={2} md={3} lg={4} xl={5} className="g-3">
-                {products.map((product) => ( // <-- Using sortedProducts here
+              <Row xs={2} sm={2} md={3} lg={4} xl={5} className="g-2" >
+                {products.map((product) => (
                   <Col key={product._id}>
                     <ProductCard
                       image={product.variations[0]?.imageUrl || 'https://via.placeholder.com/400x500?text=No+Image'}
                       title={product.name}
                       price={product.price}
-                      sizes={product.variations.map(v => v.size)}
-                      // --- ADD THESE PROPS ---
+                      sizes={Array.from(new Set(product.variations.map(v => v.size)))}
                       heartCount={product.heartCount || 0}
                       isHearted={isHearted(product._id)}
                       onHeartClick={() => handleHeartClick(product._id)}
-                      // --- RENAME THIS PROP ---
                       onCardClick={() => navigate(`/productViewer/${product._id}`)}
                     />
                   </Col>

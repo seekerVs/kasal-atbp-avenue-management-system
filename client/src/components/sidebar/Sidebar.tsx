@@ -8,19 +8,15 @@ import {
   Offcanvas,
   Container,
   Image,
-  Dropdown,
 } from "react-bootstrap";
-import { BoxArrowRight, PersonCircle, GearFill, ChevronDown } from "react-bootstrap-icons";
+import { BoxArrowRight } from "react-bootstrap-icons";
 import { sidebarItems } from "./sidebarItems";
 import { SidebarNavItem } from "./SidebarNavItem"; // Import the new component
 import "./Sidebar.css";
 import { Logo2 } from "../../assets/images";
+import { dispatchAuthChangeEvent } from "../../services/authEvent";
 
-interface SidebarProps {
-  setNavbarType: (type: "main" | "alt") => void;
-}
-
-function Sidebar({ setNavbarType }: SidebarProps) {
+function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -54,7 +50,10 @@ function Sidebar({ setNavbarType }: SidebarProps) {
   const handleSignOut = () => {
     handleCloseOffcanvas();
     localStorage.removeItem("authToken");
-    setNavbarType("main");
+    
+    // Dispatch the event to notify the app of the sign-out
+    dispatchAuthChangeEvent(); 
+    
     navigate("/signIn");
   };
 
@@ -85,22 +84,10 @@ function Sidebar({ setNavbarType }: SidebarProps) {
         {/* Footer is now a direct child */}
         <div className="sidebar-footer">
           <div className="sidebar-divider"></div>
-          <Dropdown drop="up" className="profile-dropdown">
-            <Dropdown.Toggle as="div" className="nav-link-custom">
-              <PersonCircle className="nav-icon" />
-              <span>My Profile</span>
-              <ChevronDown className="chevron-icon" />
-            </Dropdown.Toggle>
-            <Dropdown.Menu variant="dark">
-              <Dropdown.Item onClick={() => navigate('/settings')}>
-                <GearFill className="me-2"/> Settings
-              </Dropdown.Item>
-              <Dropdown.Divider />
-              <Dropdown.Item onClick={handleSignOut}>
-                <BoxArrowRight className="me-2"/> Sign Out
-              </Dropdown.Item>
-            </Dropdown.Menu>
-          </Dropdown>
+          <div onClick={handleSignOut} className="nav-link-custom">
+            <BoxArrowRight className="nav-icon" />
+            <span>Sign Out</span>
+          </div>
         </div>
       </nav>
       {/* ===== MOBILE NAVBAR & OFFCANVAS (Now much cleaner) ===== */}

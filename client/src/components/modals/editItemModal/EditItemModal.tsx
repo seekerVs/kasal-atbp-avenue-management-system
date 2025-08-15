@@ -1,17 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Modal, Button, Form, Spinner, Alert, Row, Col } from 'react-bootstrap';
 import { Palette } from 'react-bootstrap-icons';
-import { SingleRentItem, InventoryItem } from '../../../types';
+import { SingleRentItem, InventoryItem, ItemVariation } from '../../../types';
 import api from '../../../services/api';
-
-const getVariationKey = (v: { color: string, size: string }) => JSON.stringify({ color: v.color, size: v.size });
 
 // --- COMPONENT PROPS INTERFACE ---
 interface EditItemModalProps {
   show: boolean;
   onHide: () => void;
   item: SingleRentItem; // <-- NEW, CORRECT TYPE
-  onSave: (quantity: number, newVariationString: string) => void;
+  onSave: (quantity: number, newVariation: ItemVariation) => void;
 }
 
 // ===================================================================================
@@ -20,26 +18,30 @@ interface EditItemModalProps {
 const EditItemModal: React.FC<EditItemModalProps> = ({ show, onHide, item, onSave }) => {
   const [productDetails, setProductDetails] = useState<InventoryItem | null>(null);
   const [quantity, setQuantity] = useState(item.quantity);
-  const [selectedVariationKey, setSelectedVariationKey] = useState('');
+  const [selectedVariation, setSelectedVariation] = useState<ItemVariation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   // Set/Reset state when the modal is shown with a new item
   useEffect(() => {
-    if (show) {
+    if (show && item) {
       setQuantity(item.quantity);
-      const initialVariation = {
-          color: item.name.split(',')[1],
-          size: item.name.split(',')[2]
-      };
-      setSelectedVariationKey(getVariationKey(initialVariation));
       
       const fetchProductDetails = async () => {
           setLoading(true);
           setError('');
           try {
-              const res = await api.get(`/inventory/byFullName/${encodeURIComponent(item.name)}`);
-              setProductDetails(res.data);
+              // --- UPDATED: Fetch by the direct itemId ---
+              const res = await api.get(`/inventory/${item.itemId}`);
+              const fetchedProduct: InventoryItem = res.data;
+              setProductDetails(fetchedProduct);
+              
+              // --- UPDATED: Find and set the initial variation object ---
+              const initialVariation = fetchedProduct.variations.find(
+                  v => v.color.hex === item.variation.color.hex && v.size === item.variation.size
+              );
+              setSelectedVariation(initialVariation || null);
+
           } catch (err) {
               setError('Could not load item variations.');
           } finally {
@@ -51,71 +53,32 @@ const EditItemModal: React.FC<EditItemModalProps> = ({ show, onHide, item, onSav
   }, [show, item]);
 
   const maxAvailableStock = useMemo(() => {
-    if (!productDetails) return 1; // Default to 1 if details not loaded
+    if (!productDetails || !selectedVariation) return 1;
 
-    try {
-        const selectedVarObj = JSON.parse(selectedVariationKey);
-        const currentVariation = productDetails.variations.find(v => v.color === selectedVarObj.color && v.size === selectedVarObj.size);
-        if (!currentVariation) return 1;
-
-        const originalVarObj = {
-            color: item.name.split(',')[1],
-            size: item.name.split(',')[2]
-        };
-        
-        const isOriginalVariation = currentVariation.color === originalVarObj.color && currentVariation.size === originalVarObj.size;
-        
-        return currentVariation.quantity + (isOriginalVariation ? item.quantity : 0);
-    } catch (e) {
-        return 1; // Fallback in case of JSON parsing error
-    }
-  }, [selectedVariationKey, productDetails, item]);
+    const currentDBStock = selectedVariation.quantity;
+    const isOriginalVariation = selectedVariation.color.hex === item.variation.color.hex && selectedVariation.size === item.variation.size;
+    
+    // If we're on the original variation, the available stock is what's in the DB PLUS what the user currently has rented.
+    // Otherwise, it's just what's in the DB.
+    return currentDBStock + (isOriginalVariation ? item.quantity : 0);
+  }, [selectedVariation, productDetails, item]);
 
   const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let newQuantity = Number(e.target.value);
-    // Ensure quantity is not less than 1
-    if (newQuantity < 1) {
-        newQuantity = 1;
-    }
-    // --- NEW: Cap the quantity at the max available stock ---
-    if (newQuantity > maxAvailableStock) {
-        newQuantity = maxAvailableStock;
-    }
+    if (newQuantity < 1) newQuantity = 1;
+    if (newQuantity > maxAvailableStock) newQuantity = maxAvailableStock;
     setQuantity(newQuantity);
   };
   
   const handleSaveChanges = () => {
-    setError(''); // Clear previous errors
-
-    if (quantity < 1) {
-        setError("Quantity must be at least 1.");
+    if (!selectedVariation) {
+        setError("A valid variation must be selected.");
         return;
     }
-
-    const selectedVariationObject = JSON.parse(selectedVariationKey);
-    const currentVariation = productDetails?.variations.find(v => v.color === selectedVariationObject.color && v.size === selectedVariationObject.size);
-    if (!currentVariation) {
-        setError("Please select a valid variation.");
-        return;
-    }
-
-    const originalItemVariationKey = `${item.name.split(',')[1]}-${item.name.split(',')[2]}`;
-    const isOriginalVariation = selectedVariationKey === originalItemVariationKey;
-    
-    // This is the available stock in the database for the selected variation
-    const stockInDB = currentVariation.quantity;
-    
-    // If we're editing the original item, its current quantity doesn't count against the stock.
-    // So, we add it back to get the "total available" for this transaction.
-    const totalAvailable = stockInDB + (isOriginalVariation ? item.quantity : 0);
-    
-    if (quantity > totalAvailable) {
-        setError(`Requested quantity (${quantity}) exceeds available stock (${totalAvailable}).`);
-        return;
-    }
-    
-    onSave(quantity, selectedVariationKey);
-};
+    // --- UPDATED: Pass the full variation object to the onSave handler ---
+    onSave(quantity, selectedVariation);
+    onHide(); // The modal now just passes data up, it doesn't need to know how to close itself fully.
+  };
 
   return (
     <Modal show={show} onHide={onHide} centered>
@@ -134,66 +97,39 @@ const EditItemModal: React.FC<EditItemModalProps> = ({ show, onHide, item, onSav
             <Form.Group as={Row} className="mb-3 align-items-center">
               <Form.Label column sm="3">Quantity</Form.Label>
               <Col sm="9">
-                <Form.Control 
-                  type="number" 
-                  min="1" 
-                  max={maxAvailableStock} // Add the max attribute
-                  value={quantity} 
-                  onChange={handleQuantityChange}
-                />
+                <Form.Control type="number" min="1" max={maxAvailableStock} value={quantity} onChange={handleQuantityChange}/>
               </Col>
             </Form.Group>
             <Form.Group as={Row} className="mb-3 align-items-center">
               <Form.Label column sm="3"><Palette className="me-1"/>Variation</Form.Label>
               <Col sm="9">
-                <Form.Select value={selectedVariationKey} onChange={e => setSelectedVariationKey(e.target.value)}>
-                  {productDetails.variations.map(v => {
-                    const currentVariationKey = getVariationKey(v); // Create JSON key
-                    
-                    const originalItemVariationKey = JSON.stringify({
-                      color: item.name.split(',')[1],
-                      size: item.name.split(',')[2]
-                    });
-
-                    const isOriginalVariation = currentVariationKey === originalItemVariationKey;
+                {/* --- UPDATED: Select logic now works with variation objects --- */}
+                <Form.Select 
+                  value={selectedVariation ? JSON.stringify(selectedVariation) : ""}
+                  onChange={e => setSelectedVariation(JSON.parse(e.target.value))}
+                >
+                  <option value="" disabled>-- Select a Variation --</option>
+                  {productDetails.variations.map((v, index) => {
+                    const isOriginalVariation = v.color.hex === item.variation.color.hex && v.size === item.variation.size;
                     const stockAvailable = v.quantity + (isOriginalVariation ? item.quantity : 0);
                     const isSelectable = stockAvailable >= quantity;
 
                     return (
                       <option 
-                        key={currentVariationKey} // Key is now a stable JSON string
-                        value={currentVariationKey} 
+                        key={index}
+                        value={JSON.stringify(v)}
                         disabled={!isSelectable && !isOriginalVariation}
                       >
-                        {v.color} - {v.size} (Stock: {stockAvailable})
+                        {v.color.name} - {v.size} (Stock: {stockAvailable})
                       </option>
                     );
                   })}
                 </Form.Select>
-                {/* <Form.Select value={selectedVariationKey} onChange={e => setSelectedVariationKey(e.target.value)}>
-                  {productDetails.variations.map(v => {
-                    const originalItemVariationKey = `${item.name.split(',')[1]}-${item.name.split(',')[2]}`;
-                    const currentVariationKey = `${v.color}-${v.size}`;
-                    const isOriginalVariation = currentVariationKey === originalItemVariationKey;
-                    const stockAvailable = v.quantity + (isOriginalVariation ? item.quantity : 0);
-                    const isSelectable = stockAvailable >= quantity;
-
-                    return (
-                      <option 
-                        key={currentVariationKey}
-                        value={currentVariationKey} 
-                        disabled={!isSelectable && !isOriginalVariation}
-                      >
-                        {v.color} - {v.size} (Stock: {stockAvailable})
-                      </option>
-                    );
-                  })}
-                </Form.Select> */}
               </Col>
             </Form.Group>
           </Form>
         ) : (
-            <Alert variant="warning">Could not find product details.</Alert>
+          <Alert variant="warning">Could not find product details.</Alert>
         )}
       </Modal.Body>
       <Modal.Footer>

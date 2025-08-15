@@ -20,7 +20,16 @@ const AlertContainer = () => {
           dismissible
           className="shadow-lg"
         >
-          {message}
+          {/* --- THIS IS THE NEW LOGIC --- */}
+          {Array.isArray(message) ? (
+            <ul className="mb-0 ps-3">
+              {message.map((msg, index) => (
+                <li key={index}>{msg}</li>
+              ))}
+            </ul>
+          ) : (
+            message
+          )}
         </Alert>
       ))}
     </div>

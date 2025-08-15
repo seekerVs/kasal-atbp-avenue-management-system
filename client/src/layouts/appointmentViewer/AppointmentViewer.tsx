@@ -50,7 +50,11 @@ function AppointmentViewer() {
         
         const fetchedAppointment: Appointment = appointmentRes.data;
         setAppointment(fetchedAppointment);
-        setNewAppointmentDate(new Date(fetchedAppointment.appointmentDate));
+        setNewAppointmentDate(
+          fetchedAppointment.appointmentDate 
+            ? new Date(fetchedAppointment.appointmentDate) 
+            : null
+        );
         setMeasurementRefs(refsRes.data || []);
         setUnavailableDates(unavailableRes.data.map((rec: UnavailabilityRecord) => new Date(rec.date)));
         
@@ -195,7 +199,11 @@ function AppointmentViewer() {
             </Card.Header>
             <Card.Body>
               <p><PersonFill className="me-2 text-muted"/><strong>Customer:</strong> {appointment.customerInfo.name}</p>
-              <p><CalendarEvent className="me-2 text-muted"/><strong>Date:</strong> {format(new Date(appointment.appointmentDate), 'MMMM dd, yyyy, h:mm a')}</p>
+              <p><CalendarEvent className="me-2 text-muted"/><strong>Date:</strong> {
+                appointment.appointmentDate 
+                  ? format(new Date(appointment.appointmentDate), 'MMMM dd, yyyy, h:mm a') 
+                  : 'N/A'
+              }</p>
             </Card.Body>
           </Card>
           

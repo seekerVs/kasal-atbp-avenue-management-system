@@ -1,0 +1,28 @@
+/* client/src/components/modals/motifBuilderModal/motifBuilderModal.css */
+
+.motif-grid-container {
+  display: grid;
+  /* Creates a responsive grid that fits as many columns as possible */
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 1rem;
+}
+
+.motif-card {
+  cursor: pointer;
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+  border: 1px solid #dee2e6;
+  text-align: center;
+}
+
+.motif-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-color: var(--bs-primary);
+}
+
+.motif-card-swatch {
+  height: 80px;
+  border-top-left-radius: var(--bs-card-inner-border-radius);
+  border-top-right-radius: var(--bs-card-inner-border-radius);
+  border-bottom: 1px solid #dee2e6;
+}

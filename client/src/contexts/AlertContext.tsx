@@ -11,12 +11,12 @@ export type AlertType = 'success' | 'danger' | 'warning' | 'info';
 
 interface AlertState {
   id: string;
-  message: string;
+  message: string | string[];
   type: AlertType;
 }
 
 interface AlertContextType {
-  addAlert: (message: string, type: AlertType) => void;
+  addAlert: (message: string | string[], type: AlertType) => void; // <-- THIS IS THE CHANGE
   removeAlert: (id: string) => void;
   alerts: AlertState[];
 }
@@ -41,7 +41,7 @@ export const AlertProvider: React.FC<{ children: ReactNode }> = ({
   }, []);
 
   const addAlert = useCallback(
-    (message: string, type: AlertType, duration: number = 5000) => {
+    (message: string | string[], type: AlertType, duration: number = 5000) => {
       const id = uuidv4();
       const newAlert: AlertState = { id, message, type };
       setAlerts((prev) => [newAlert, ...prev]); // Add new alerts to the top

@@ -29,7 +29,10 @@ const EXCLUDED_KEYS = new Set([
   'referenceNumber',
   'variation',   // e.g., "Natural, L"
   'imageUrl',    // URL
-  'referenceImages' // Array of URLs
+  'referenceImages',
+  'currentPassword',
+  'newPassword',
+  'receiptImageUrl'
 ]);
 
 /**

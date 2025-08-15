@@ -20,7 +20,7 @@ export const WizardControls: React.FC<WizardControlsProps> = ({
   isSubmitting = false,
 }) => {
   // Determine the text for the "Next" button. On the final review step, it should say "Submit".
-  const nextButtonText = currentStep === totalSteps - 1 ? 'Submit Booking' : 'Next';
+  const nextButtonText = currentStep === totalSteps - 1 ? 'Submit' : 'Next';
 
   // The controls should not be visible on the final "Finish" screen.
   if (currentStep >= totalSteps) {
@@ -41,7 +41,7 @@ export const WizardControls: React.FC<WizardControlsProps> = ({
 
       {/* The "Next" or "Submit" button. */}
       <div>
-        <Button variant="danger" onClick={onNext} disabled={isNextDisabled || isSubmitting}>
+        <Button onClick={onNext} disabled={isNextDisabled || isSubmitting}>
           {isSubmitting ? (
             <>
               <Spinner as="span" size="sm" className="me-2" />

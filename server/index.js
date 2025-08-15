@@ -29,6 +29,8 @@ const permissionRoutes = require('./routes/permissionRoutes.js');
 const roleRoutes = require('./routes/roleRoutes.js');
 const userRoutes = require('./routes/userRoutes.js');
 const unavailabilityRoutes = require('./routes/unavailabilityRoutes.js'); 
+const settingsRoutes = require('./routes/settingsRoutes.js');
+const trackingRoutes = require('./routes/trackingRoutes.js');
 
 // --- Route Definitions ---
 const API_PREFIX = '/api';
@@ -50,6 +52,8 @@ app.use(`${API_PREFIX}/permissions`, permissionRoutes);
 app.use(`${API_PREFIX}/roles`, roleRoutes);
 app.use(`${API_PREFIX}/users`, userRoutes);;
 app.use(`${API_PREFIX}/unavailability`, unavailabilityRoutes);
+app.use(`${API_PREFIX}/settings`, settingsRoutes);
+app.use(`${API_PREFIX}/track`, trackingRoutes);
 
 // Sensor routes do not have the /api prefix as per original file
 app.use('/sensor', sensorRoutes);

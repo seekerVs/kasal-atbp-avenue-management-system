@@ -2,20 +2,18 @@
 
 import React, { useEffect, useState, useMemo } from "react";
 import {
-  Row, Col, Button, Image, Spinner, Carousel, Modal, Alert, Toast, ToastContainer, Accordion,
+  Row, Col, Button, Image, Spinner, Carousel, Modal, Alert, Accordion,
 } from "react-bootstrap"; 
-import { X, CheckCircleFill } from "react-bootstrap-icons";
+import { X } from "react-bootstrap-icons";
 import { SizeChart } from "../../assets/images";
-import { useNavigate, useParams, Link } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import CustomFooter from "../../components/customFooter/CustomFooter";
 
-import { InventoryItem, ItemVariation, ItemReservation } from "../../types";
+import { InventoryItem, ItemVariation } from "../../types";
 import api from "../../services/api";
 
 import './productViewer.css'; // Import the new CSS file
-
-type ColorData = { name: string; hex: string };
-const toCleanHex = (hex: string) => hex.replace('#', '').toUpperCase();
+import { DataPrivacyModal } from "../../components/modals/dataPrivacyModal/DataPrivacyModal";
 
 const ProductViewer: React.FC = () => {
   const navigate = useNavigate();
@@ -27,10 +25,8 @@ const ProductViewer: React.FC = () => {
   const [selectedVariation, setSelectedVariation] = useState<ItemVariation | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [showSizeChart, setShowSizeChart] = useState(false);
-  const [showSuccessToast, setShowSuccessToast] = useState(false);
-  const [colorData, setColorData] = useState<Record<string, ColorData>>({});
-  const [loadingColors, setLoadingColors] = useState(false);
   const [carouselIndex, setCarouselIndex] = useState(0);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
 
   useEffect(() => {
     if (!id) {
@@ -51,111 +47,89 @@ const ProductViewer: React.FC = () => {
     fetchProduct();
   }, [id]);
 
-  useEffect(() => {
-    if (!product || product.variations.length === 0) return;
-    const fetchColorNames = async () => {
-      setLoadingColors(true);
-      try {
-        const uniqueHexes = Array.from(new Set(product.variations.map(v => toCleanHex(v.color))));
-        const query = uniqueHexes.join(',');
-        if (!query) { setLoadingColors(false); return; }
-
-        const response = await fetch(`https://api.color.pizza/v1/?values=${query}&list=bestOf`);
-        if (!response.ok) throw new Error('Color API response was not ok.');
-        const data = await response.json();
-
-        const newColorMap: Record<string, ColorData> = {};
-        data.colors.forEach((colorInfo: { name: string; hex: string; requestedHex: string }) => {
-          const key = toCleanHex(colorInfo.requestedHex);
-          newColorMap[key] = { name: colorInfo.name, hex: colorInfo.hex };
-        });
-        setColorData(newColorMap);
-      } catch (err) {
-        console.error("Failed to fetch color names:", err);
-      } finally {
-        setLoadingColors(false);
-      }
-    };
-    fetchColorNames();
-  }, [product]);
-
-
   const availableColors = useMemo(() => {
     if (!product) return [];
-    return Array.from(new Set(product.variations.map(v => v.color)));
+    // Use a Map to get unique color objects based on their hex value
+    const colorsMap = new Map<string, { name: string; hex: string }>();
+    product.variations.forEach(v => {
+      if (!colorsMap.has(v.color.hex)) {
+        colorsMap.set(v.color.hex, v.color);
+      }
+    });
+    return Array.from(colorsMap.values());
   }, [product]);
 
   const sizesForSelectedColor = useMemo(() => {
     if (!product || !selectedVariation) return [];
-    return product.variations.filter(v => v.color === selectedVariation.color);
+    return product.variations.filter(v => v.color.hex === selectedVariation.color.hex);
   }, [product, selectedVariation]);
   
   const imagesForCarousel = useMemo(() => {
     if (!product) return [];
-
-    // 1. Get all image URLs from every variation.
     const allImageUrls = product.variations.map(v => v.imageUrl);
-
-    // 2. Use a Set to automatically keep only the unique URLs.
-    // 3. Convert the Set back to an array.
     const uniqueImageUrls = Array.from(new Set(allImageUrls));
-
     return uniqueImageUrls;
   }, [product]);
 
   useEffect(() => {
-    // Don't do anything if the necessary data isn't ready yet.
     if (!selectedVariation || imagesForCarousel.length === 0) {
       return;
     }
-
-    // Find the index of the selected variation's image within our full slideshow array.
     const newIndex = imagesForCarousel.findIndex(
       (imageUrl) => imageUrl === selectedVariation.imageUrl
     );
-
-    // If the image is found in the array, update the carousel's active index.
     if (newIndex !== -1) {
       setCarouselIndex(newIndex);
     }
   }, [selectedVariation, imagesForCarousel]);
 
 
-  const handleColorSelect = (color: string) => {
+  const handleColorSelect = (colorObj: { name: string; hex: string; }) => {
     if (!product) return;
-    const firstAvailableSizeForColor = product.variations.find(v => v.color === color && v.quantity > 0);
-    setSelectedVariation(firstAvailableSizeForColor || product.variations.find(v => v.color === color) || null);
+    const firstAvailableSizeForColor = product.variations.find(v => v.color.hex === colorObj.hex && v.quantity > 0);
+    setSelectedVariation(firstAvailableSizeForColor || product.variations.find(v => v.color.hex === colorObj.hex) || null);
     setQuantity(1);
   };
 
   const handleSizeSelect = (size: string) => {
     if (!product || !selectedVariation) return;
-    const newVariation = product.variations.find(v => v.color === selectedVariation.color && v.size === size);
+    const newVariation = product.variations.find(v => v.color.hex === selectedVariation.color.hex && v.size === size);
     setSelectedVariation(newVariation || null);
     setQuantity(1);
   };
 
-  const handleAddToReservation = () => {
+  const handleInitiateReservation = () => {
     if (!product || !selectedVariation || selectedVariation.quantity < 1) {
       alert("This variation is out of stock or invalid.");
       return;
     }
-    const newItemReservation: ItemReservation = {
-      reservationId: `item_${Date.now()}`,
-      itemId: product._id,
-      itemName: product.name,
-      variation: {
-        color: selectedVariation.color,
-        size: selectedVariation.size,
-      },
-      quantity: quantity,
-      price: product.price,
+    setShowPrivacyModal(true);
+  };
+
+  const handleProceedToReservation = () => {
+    if (!product || !selectedVariation) return;
+
+    const reservationPayload = {
+      type: 'item',
+      data: {
+        itemId: product._id,
+        itemName: product.name,
+        variation: {
+          color: selectedVariation.color,
+          size: selectedVariation.size,
+        },
+        quantity: quantity,
+        price: product.price,
+        imageUrl: selectedVariation.imageUrl,
+      }
     };
-    const existingItemsJSON = sessionStorage.getItem('pendingReservations');
-    const existingItems: ItemReservation[] = existingItemsJSON ? JSON.parse(existingItemsJSON) : [];
-    existingItems.push(newItemReservation);
-    sessionStorage.setItem('pendingReservations', JSON.stringify(existingItems));
-    setShowSuccessToast(true);
+
+    // Store the payload in sessionStorage for the next page to pick up
+    sessionStorage.setItem('pendingReservationItem', JSON.stringify(reservationPayload));
+    
+    // Close the modal and navigate
+    setShowPrivacyModal(false);
+    navigate('/reservations/new');
   };
 
   if (loading) return <div className="text-center py-5"><Spinner /></div>;
@@ -164,28 +138,37 @@ const ProductViewer: React.FC = () => {
 
   return (
     <>
-      <div className="product-viewer-container mt-3 mt-lg-4 mx-4 mx-lg-5 position-relative">
-        <Button variant="link" className="position-absolute top-0 end-0 p-0 m-0 mt-3" onClick={() => navigate(`/products`)} style={{ zIndex: 10 }}>
+      <div className="product-viewer-container position-relative py-4 px-3 px-lg-4">
+        <Button variant="link" className="position-absolute top-0 end-0 p-3" onClick={() => navigate(`/products`)} style={{ zIndex: 10 }}>
           <X size={28} color="dark" />
         </Button>
-        <Row className="g-4 g-lg-5">
-          <Col md={6} lg={7} className="d-flex justify-content-md-end">
+        <Row className="g-4 g-lg-5 justify-content-center">
+          {/* --- CORRECTED: Reverted column order to have image on the left and be larger --- */}
+          <Col md={6} lg={5} className="d-flex justify-content-center justify-content-lg-end">
+            <div className="w-100" style={{ maxWidth: '500px' }}>
               <Carousel 
                 activeIndex={carouselIndex} 
                 onSelect={(idx) => setCarouselIndex(idx)} 
-                interval={3000} 
-                className="w-100" 
-                style={{ maxWidth: '500px' }}
+                interval={imagesForCarousel.length > 1 ? 3000 : null}
+                variant="dark"
+                className="border rounded" // No longer needs w-100
               >
                 {imagesForCarousel.map((img, idx) => (
                   <Carousel.Item key={idx}>
-                    <Image src={img} fluid rounded style={{ aspectRatio: '4/5', objectFit: 'cover' }} />
+                    <Image 
+                        src={img} 
+                        fluid 
+                        rounded 
+                        style={{ aspectRatio: '4/5', objectFit: 'cover' }} 
+                    />
                   </Carousel.Item>
                 ))}
               </Carousel>
+            </div>
           </Col>
 
-          <Col md={6} lg={5} className="text-start text-dark">
+          {/* --- CORRECTED: Reverted column order for details --- */}
+          <Col md={6} lg={7} className="text-start text-dark">
             <p className="product-category mb-2">{product.category}</p>
             <h2 className="product-title mb-2">{product.name}</h2>
             <p className="lead fs-6 text-muted">{product.description}</p>
@@ -196,35 +179,20 @@ const ProductViewer: React.FC = () => {
             <div className="mb-3">
               <span className="selector-label">
                 Color:
-                {loadingColors ? (
-                  <Spinner animation="border" size="sm" className="ms-2" />
-                ) : (
-                  <span className="fw-normal ms-2">
-                    {colorData[toCleanHex(selectedVariation?.color ?? '')]?.name || selectedVariation?.color}
-                  </span>
-                )}
+                <span className="fw-normal ms-2">
+                  {selectedVariation?.color.name}
+                </span>
               </span>
               <div className="d-flex gap-2 mt-2">
-                {availableColors.map((originalColorHex) => {
-                  // --- THIS IS THE FIX ---
-                  // 1. Create the clean key.
-                  const cleanHexKey = toCleanHex(originalColorHex);
-                  // 2. Use that clean key to look up the color info.
-                  const colorInfo = colorData[cleanHexKey];
-                  
-                  const displayHex = colorInfo ? colorInfo.hex : originalColorHex;
-                  const displayName = colorInfo ? colorInfo.name : originalColorHex;
-
-                  return (
-                    <button
-                      key={originalColorHex}
-                      className={`color-swatch ${selectedVariation?.color === originalColorHex ? 'active' : ''}`}
-                      style={{ backgroundColor: displayHex }}
-                      onClick={() => handleColorSelect(originalColorHex)}
-                      title={displayName}
-                    />
-                  );
-                })}
+                {availableColors.map((colorObj) => (
+                  <button
+                    key={colorObj.hex}
+                    className={`color-swatch ${selectedVariation?.color.hex === colorObj.hex ? 'active' : ''}`}
+                    style={{ backgroundColor: colorObj.hex }}
+                    onClick={() => handleColorSelect(colorObj)}
+                    title={colorObj.name}
+                  />
+                ))}
               </div>
             </div>
 
@@ -253,8 +221,8 @@ const ProductViewer: React.FC = () => {
             </div>
 
             <div className="d-grid gap-2 my-4">
-              <Button className="add-to-booking-btn" size="lg" onClick={handleAddToReservation} disabled={!selectedVariation || selectedVariation.quantity < 1}>
-                Add to Reservation
+              <Button className="add-to-booking-btn" size="lg" onClick={handleInitiateReservation} disabled={!selectedVariation || selectedVariation.quantity < 1}>
+                Reserve Now
               </Button>
             </div>
             
@@ -279,16 +247,11 @@ const ProductViewer: React.FC = () => {
         <Modal.Body className="text-center"><Image src={SizeChart} fluid /></Modal.Body>
       </Modal>
 
-      <ToastContainer position="bottom-center" className="p-3" style={{ zIndex: 1100 }}>
-        <Toast onClose={() => setShowSuccessToast(false)} show={showSuccessToast} delay={4000} autohide bg="dark">
-          <Toast.Body className="text-white">
-            <div className="d-flex align-items-center justify-content-between">
-                <span><CheckCircleFill className="me-2 text-success" />Added to your reservation!</span>
-                <Button onClick={() => navigate('/reservations/new')} variant="outline-light" size="sm">View Reservation</Button>
-            </div>
-          </Toast.Body>
-        </Toast>
-      </ToastContainer>
+      <DataPrivacyModal
+        show={showPrivacyModal}
+        onHide={() => setShowPrivacyModal(false)}
+        onProceed={handleProceedToReservation}
+      />
     </>
   );
 };

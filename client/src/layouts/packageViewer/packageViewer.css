@@ -1,16 +1,10 @@
 /* client/src/layouts/packageViewer/packageViewer.css */
 
-/* Main container for spacing */
 .package-viewer-container {
   max-width: 1200px;
-  margin: 20rem auto 0;
-  padding-top: 3rem;
-}
-
-@media (min-width: 992px) {
-  .package-viewer-container {
-    padding-top: 2rem;
-  }
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 /* Main Package Title */
@@ -26,7 +20,107 @@
   color: var(--bs-danger);
 }
 
-/* "Reserve this Package" Button Styling */
+.selector-label {
+  display: block;
+  margin-bottom: 0.2rem;
+  font-weight: 600;
+  color: var(--bs-dark);
+}
+
+.motif-swatch-container {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.motif-swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid var(--bs-gray-300);
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  padding: 0;
+}
+
+.motif-swatch:hover {
+  transform: scale(1.1);
+}
+
+.motif-swatch.active {
+  border-color: var(--bs-dark);
+  transform: scale(1.1);
+  box-shadow: 0 0 0 3px var(--bs-primary-border-subtle);
+}
+
+/* --- ADDED: Styles for the preview scroller from modal --- */
+@keyframes scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.motif-scroller {
+  width: 100%;
+  background-color: var(--bs-gray-100);
+  border-radius: 0.375rem;
+  padding: 0.75rem 0;
+  overflow: hidden;
+  -webkit-mask: linear-gradient(90deg, transparent, white 2%, white 98%, transparent);
+  mask: linear-gradient(90deg, transparent, white 2%, white 98%, transparent);
+}
+
+.motif-scroller-inner {
+  display: flex;
+  gap: 0.75rem;
+  width: max-content;
+  flex-wrap: nowrap;
+}
+
+.motif-scroller-inner.animating {
+  animation: scroll 40s linear infinite;
+}
+
+.motif-scroller:hover .motif-scroller-inner.animating {
+  animation-play-state: paused;
+}
+
+.motif-preview-item {
+  background-color: #fff;
+  border-radius: 0.25rem;
+  border: 1px solid var(--bs-gray-300);
+  overflow: hidden;
+  text-align: center;
+  font-size: 0.8rem;
+  width: 120px;
+  flex-shrink: 0;
+}
+
+.motif-preview-img {
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  object-fit: cover;
+  border-bottom: 1px solid var(--bs-gray-300);
+}
+
+.motif-preview-details {
+  padding: 0.5rem;
+}
+
+.motif-preview-name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 0.25rem;
+}
+
+.motif-preview-sizes {
+  color: var(--bs-gray-600);
+  margin-bottom: 0;
+}
+
+/* --- END of added styles for scroller --- */
+
 .reserve-package-btn {
   background-color: var(--bs-danger);
   border-color: var(--bs-danger);
@@ -36,16 +130,14 @@
   filter: brightness(90%);
 }
 
-/* Inclusions List Styling */
-.inclusions-list {
-  padding-left: 1.2rem;
-}
-.inclusions-list li {
-  margin-bottom: 0.25rem;
+/* --- ADDED: Styles for accordion --- */
+.package-viewer-accordion .accordion-button {
+  background-color: var(--bs-gray-100);
+  color: var(--bs-dark);
+  font-weight: 600;
 }
 
-/* --- Added from ProductViewer for consistent carousel alignment --- */
-.image-carousel-wrapper {
-  max-width: 85%;
-  margin: 0;
+.package-viewer-accordion .accordion-button:not(.collapsed) {
+  background-color: var(--bs-gray-100);
+  box-shadow: none;
 }

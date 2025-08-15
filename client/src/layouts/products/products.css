@@ -1,11 +1,11 @@
 /* client/src/layouts/products/products.css */
 
 .products-page-container {
-  max-width: 1400px; /* Or your preferred max width */
+  width: 100%;
   margin-left: auto;
   margin-right: auto;
-  padding-left: 1rem;
-  padding-right: 1rem;
+  padding-left: 5rem;
+  padding-right: 5rem;
 }
 
 /* Ensure the search button text is white */
@@ -19,9 +19,21 @@
   padding-left: 1.5rem;
 }
 
+@media (max-width: 992px) {
+  .products-page-container {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+
 @media (max-width: 767px) {
   .product-grid-container {
     border-left: none;
     padding-left: 0.75rem;
+  }
+
+  .products-page-container {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
   }
 }

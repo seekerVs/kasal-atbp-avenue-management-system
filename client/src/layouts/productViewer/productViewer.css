@@ -3,14 +3,9 @@
 /* Main container for spacing */
 .product-viewer-container {
   max-width: 1200px;
-  margin: 20rem auto 0;
-  padding-top: 3rem; /* Default padding for smaller screens */
-}
-
-@media (min-width: 992px) {
-  .product-viewer-container {
-    padding-top: 2rem; /* A bit more padding for larger screens */
-  }
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 /* Category Text Styling (e.g., "BALL GOWN") */

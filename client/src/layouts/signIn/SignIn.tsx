@@ -2,16 +2,13 @@ import React, { useState } from "react";
 import { Form, Button, Card, InputGroup, Alert } from "react-bootstrap"; // Import Alert for error messages
 import { Eye, EyeSlash } from "react-bootstrap-icons";
 import CustomFooter from "../../components/customFooter/CustomFooter"; // Assuming this path is correct
-import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "../../services/api";
+import { dispatchAuthChangeEvent } from "../../services/authEvent";
 
-interface SignInProps {
-  setNavbarType: (type: "main" | "alt") => void;
-}
-
-function SignIn({ setNavbarType }: SignInProps) {
+function SignIn() {
   const navigate = useNavigate();
-
+  
   const [searchParams] = useSearchParams();
   const wasLoggedOutForInactivity = searchParams.get('reason') === 'inactivity';
 
@@ -37,12 +34,11 @@ function SignIn({ setNavbarType }: SignInProps) {
       const { token } = response.data;
 
       // Store the token (e.g., in localStorage)
-      localStorage.setItem("authToken", token); // Important for subsequent authenticated requests
+      localStorage.setItem("authToken", token); // Important for subsequ  ent authenticated requests
+      dispatchAuthChangeEvent(); 
 
       console.log("Signed in successfully!");
-
-      // Update the navbar type and navigate to dashboard
-      setNavbarType("alt");
+      
       navigate("/dashboard");
     } catch (error: any) {
       console.error("Sign-in failed:", error);

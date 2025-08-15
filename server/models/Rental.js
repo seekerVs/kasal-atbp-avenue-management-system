@@ -12,10 +12,26 @@ const CustomerInfoSchema = new mongoose.Schema({
 }, { _id: false });
 
 const SingleRentItemSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  price: { type: Number, required: true },
+  itemId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'items', // Direct reference to the original inventory item
+    required: true,
+  },
+  name: { type: String, required: true }, // Now just the product name, e.g., "Champagne Dreams Ball Gown"
+  variation: {
+    type: {
+      color: {
+        name: { type: String, required: true },
+        hex: { type: String, required: true },
+      },
+      size: { type: String, required: true },
+    },
+    required: true,
+    _id: false, // Don't create a separate _id for the variation sub-object
+  },
+  price: { type: Number, required: true }, // Denormalized for historical accuracy
   quantity: { type: Number, required: true },
-  imageUrl: { type: String },
+  imageUrl: { type: String }, // Denormalized for performance
   notes: { type: String },
 });
 
