@@ -9,7 +9,7 @@ import { AddressSelector } from './addressSelector/AddressSelector'; // Assuming
 // --- UPDATED: Simplified Component Props ---
 interface CustomerDetailsCardProps {
   customerDetails: CustomerInfo;
-  setCustomerDetails: React.Dispatch<React.SetStateAction<CustomerInfo>>; // Pass the setter directly
+  setCustomerDetails: React.Dispatch<React.SetStateAction<CustomerInfo>>;
   isNewCustomerMode: boolean;
   onSetIsNewCustomerMode: React.Dispatch<React.SetStateAction<boolean>>;
   allRentals: RentalOrder[];
@@ -24,7 +24,7 @@ interface CustomerDetailsCardProps {
 
 function CustomerDetailsCard({
   customerDetails,
-  setCustomerDetails, // Use the new prop
+  setCustomerDetails,
   isNewCustomerMode,
   onSetIsNewCustomerMode,
   allRentals,
@@ -39,7 +39,6 @@ function CustomerDetailsCard({
 
   const [searchTerm, setSearchTerm] = useState('');
 
-  // --- NEW: Internal handlers for state changes ---
   const handleCustomerChange = (field: keyof Omit<CustomerInfo, 'address'>, value: string) => {
     setCustomerDetails(prev => ({ ...prev, [field]: value }));
   };
@@ -87,7 +86,7 @@ function CustomerDetailsCard({
                     name="phoneNumber" type="tel" maxLength={11}
                     value={customerDetails.phoneNumber}
                     onChange={(e) => handleCustomerChange('phoneNumber', e.target.value)}
-                    error={errors.name}
+                    error={errors.phoneNumber}
                   />
                 </Col>
                 <Col md={6}>
@@ -96,11 +95,10 @@ function CustomerDetailsCard({
                     name="email" type="email"
                     value={customerDetails.email || ''}
                     onChange={(e) => handleCustomerChange('email', e.target.value)}
-                    error={errors.name}
+                    error={errors.email}
                   />
                 </Col>
               </Row>
-              {/* --- NEW: Integrated AddressSelector --- */}
               <hr />
               <Row className="g-3">
                 {/* 2. The AddressSelector will now render its 3 half-width columns here */}
@@ -124,7 +122,6 @@ function CustomerDetailsCard({
               </Row>
             </Form>
           ) : (
-            // --- Search functionality remains the same ---
             <>
               <Form.Group className="mb-3">
                 <Form.Label><PeopleFill className="me-2" />Search Existing Customer/Rental</Form.Label>

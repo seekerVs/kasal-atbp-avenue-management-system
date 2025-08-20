@@ -85,7 +85,7 @@ export interface Package {
 //
 // ===================================================================
 
-export type RentalStatus = 'To Process' | 'To Pickup' | 'To Return' | 'Returned' | 'Completed' | 'Cancelled';
+export type RentalStatus = 'Pending' | 'To Pickup' | 'To Return' | 'Returned' | 'Completed' | 'Cancelled';
 
 export interface BaseRentItem {
   _id: string;
@@ -372,6 +372,8 @@ export type FormErrors = {
 export interface ShopSettings {
   _id: 'shopSettings';
   appointmentSlotsPerHour: number;
+  gcashName?: string;
+  gcashNumber?: string;
 }
 
 // And modify the UnavailabilityRecord to remove 'slots'

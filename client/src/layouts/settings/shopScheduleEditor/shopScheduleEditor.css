@@ -1,11 +1,76 @@
 .calendar-wrapper {
-  /* This is the key property: it adds a horizontal scrollbar ONLY if the content inside overflows. */
   overflow-x: auto;
-
-  /* Adds a little space below the scrollbar so it doesn't touch the card edge. */
   padding-bottom: 0.5rem;
-
-  /* Ensures the calendar inside is centered, similar to the old d-flex behavior. */
   display: flex;
   justify-content: center;
+}
+
+/* --- THEME STYLES UPDATED --- */
+
+/* Use our custom theme class as the root for all overrides */
+.custom-datepicker-theme .react-datepicker {
+  border: none;
+  /* font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"; */
+}
+
+/* Header background (Month and Year) */
+.custom-datepicker-theme .react-datepicker__header {
+  background-color: var(--bs-primary); /* MODIFIED: Use theme variable */
+  border-bottom: none;
+  padding-top: 10px;
+}
+
+/* Header text color (Month, Year, and Day names like "Mo", "Tu") */
+.custom-datepicker-theme .react-datepicker__current-month,
+.custom-datepicker-theme .react-datepicker-time__header,
+.custom-datepicker-theme .react-datepicker__day-name {
+  color: #fff;
+  font-weight: bold;
+}
+
+/* Navigation arrows (< >) */
+.custom-datepicker-theme .react-datepicker__navigation-icon::before {
+  border-color: #fff;
+  border-width: 2px 2px 0 0;
+}
+
+/* The currently selected day */
+.custom-datepicker-theme .react-datepicker__day--selected {
+  background-color: var(--bs-primary); /* MODIFIED: Use theme variable */
+  color: #fff;
+  border-radius: 50%;
+}
+.custom-datepicker-theme .react-datepicker__day--selected:hover {
+  background-color: var(--bs-primary); /* MODIFIED: Use theme variable */
+  filter: brightness(90%); /* Darken on hover */
+}
+
+/* A day that you are hovering over */
+.custom-datepicker-theme .react-datepicker__day:hover {
+  background-color: var(--bs-light); /* MODIFIED: Use theme variable */
+  border-radius: 50%;
+}
+
+/* --- MODIFIED: The current day, but not selected --- */
+.custom-datepicker-theme .react-datepicker__day--today {
+  font-weight: bold;
+  /* Remove the border properties */
+  position: relative; /* Required for the pseudo-element */
+}
+
+/* Create the underline using a ::after pseudo-element */
+.custom-datepicker-theme .react-datepicker__day--today::after {
+  content: '';
+  position: absolute;
+  bottom: 6px; /* Position the line just below the number */
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60%; /* Make the line slightly shorter than the number's width */
+  height: 2px;
+  background-color: var(--bs-primary); /* Use the theme color for the line */
+}
+
+/* A day that is outside the current month */
+.custom-datepicker-theme .react-datepicker__day--outside-month {
+  color: var(--bs-gray-400); /* MODIFIED: Use theme variable */
 }

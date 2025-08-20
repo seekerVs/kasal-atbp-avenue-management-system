@@ -357,7 +357,7 @@ router.put('/:id/addItem', asyncHandler(async (req, res) => {
             throw new Error("Rental not found.");
         }
         
-        if (rental.status !== 'To Process') {
+        if (rental.status !== 'Pending') {
             res.status(400);
             throw new Error(`Cannot add items to a rental with status "${rental.status}".`);
         }

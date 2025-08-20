@@ -1,0 +1,65 @@
+.date-picker-wrapper {
+  position: relative;
+}
+
+.date-picker-popover {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0; 
+  right: auto;
+  z-index: 1000;
+  background-color: #fff;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 10px;
+}
+
+@media (max-width: 992px) {
+  .date-picker-popover {
+    left: auto;
+    right: 0;
+  }
+}
+
+.date-picker-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid #e9ecef;
+  margin-top: 10px;
+}
+
+.date-picker-popover .rdrDefinedRangesWrapper {
+  width: 140px;
+}
+
+.date-picker-popover .rdrStaticRangeLabel {
+  font-size: 0.8rem;
+  padding: 8px 12px;
+}
+
+.date-picker-popover .rdrDayNumber {
+  font-size: 0.85rem;
+}
+
+.date-picker-popover .rdrDayNumber span {
+  width: 28px;
+  height: 28px;
+}
+
+
+@media (max-width: 576px) {
+  .date-picker-popover .rdrDateRangePickerWrapper {
+    flex-direction: column; /* Stack the sidebar and calendar vertically */
+  }
+
+  /* Also, make the static ranges sidebar take up the full width */
+  .date-picker-popover .rdrStaticRanges {
+    width: 100%;
+    border-bottom: 1px solid #e9ecef; /* Add a separator line */
+    padding-bottom: 8px; /* Add some space below the buttons */
+  }
+}
+

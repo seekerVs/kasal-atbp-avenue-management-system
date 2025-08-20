@@ -29,76 +29,13 @@
   }
 }
 
-/* --- ADD THIS NEW CLASS --- */
-/* This will apply to the div wrapping your <Routes> for the authenticated layout */
 .main-content {
-  flex-grow: 1; /* This is the key property to make it fill remaining space */
-  overflow-y: auto; /* Allow content to scroll if it's too tall */
-  padding: 1.5rem; /* Your preferred padding */
-  /* max-height is no longer needed because the parent flex container controls the height */
-  background-color: var(--bs-gray-100); /* Move the background color here from #root */
+  flex-grow: 1;
+  overflow-y: auto;
+  padding: 1.5rem;
+  background-color: var(--bs-gray-100);
 }
 
-/* --- START: Custom React-Datepicker Theme --- */
-
-/* 
-  We use CSS variables to make it easy to change the theme.
-  This rule makes our primary theme color the same as Bootstrap's "danger" color.
-  You could change this to var(--bs-primary) for a blue theme, for example.
-*/
-:root {
-  --datepicker-theme-color: var(--bs-primary);
-  --datepicker-hover-color: var(--bs-light);
-}
-
-/* Header background (Month and Year) */
-.react-datepicker__header {
-  background-color: var(--datepicker-theme-color);
-  border-bottom: none;
-  padding-top: 10px;
-}
-
-/* Header text color (Month, Year, and Day names like "Mo", "Tu") */
-.react-datepicker__current-month,
-.react-datepicker-time__header,
-.react-datepicker__day-name {
-  color: var(--bs-white);
-  font-weight: bold;
-}
-
-/* Navigation arrows (< >) */
-.react-datepicker__navigation-icon::before {
-  border-color: var(--bs-white);
-  border-width: 2px 2px 0 0;
-}
-
-/* The currently selected day */
-.react-datepicker__day--selected {
-  background-color: var(--datepicker-theme-color);
-  color: var(--bs-white);
-  border-radius: 0.3rem;
-}
-.react-datepicker__day--selected:hover {
-  background-color: var(--datepicker-theme-color);
-  filter: brightness(0.9); /* Slightly darken on hover */
-}
-
-/* A day that you are hovering over */
-.react-datepicker__day:hover {
-  background-color: var(--datepicker-hover-color);
-  border-radius: 0.3rem;
-}
-
-/* A day that is in the range of a selected start/end date (optional but good for ranges) */
-.react-datepicker__day--in-range,
-.react-datepicker__day--in-selecting-range {
-  background-color: rgba(220, 53, 69, 0.15); /* A light red */
-  border-radius: 0.3rem;
-}
-
-/* The selected time in the time picker list */
-.react-datepicker__time-container .react-datepicker__time .react-datepicker__time-box ul.react-datepicker__time-list li.react-datepicker__time-list-item--selected {
-  background-color: var(--datepicker-theme-color);
-  color: var(--bs-white);
-  font-weight: bold;
+.rdrDayNumber span:after {
+  background: var(--bs-primary) !important; /* Bootstrap primary color or any custom */
 }

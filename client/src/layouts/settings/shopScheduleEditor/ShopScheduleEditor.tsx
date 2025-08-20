@@ -116,17 +116,17 @@ function ShopScheduleEditor() {
         <h6 className="text-muted">SELECT DATE</h6>
         <Card className="shadow-sm">
           <Card.Body>
-            <div className="calendar-wrapper">
+            <div className="calendar-wrapper custom-datepicker-theme">
                 <DatePicker
-                selected={selectedDate}
-                onChange={(date: Date | null) => {
-                    if (date) {
-                    setSelectedDate(startOfDay(date));
-                    }
-                }}
-                inline
-                minDate={new Date()}
-                filterDate={isNotSunday}
+                  selected={selectedDate}
+                  onChange={(date: Date | null) => {
+                      if (date) {
+                        setSelectedDate(startOfDay(date));
+                      }
+                  }}
+                  inline
+                  minDate={new Date()}
+                  filterDate={isNotSunday}
                 />
             </div>
           </Card.Body>

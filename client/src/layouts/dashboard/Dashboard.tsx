@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Container,
   Row,
@@ -8,7 +8,6 @@ import {
   Alert,
   Table,
   Button,
-  Form,
   OverlayTrigger,
   Badge,
   Tooltip,
@@ -18,24 +17,29 @@ import {
   HourglassSplit,
   ArrowRepeat,
   BagCheckFill,
-  BoxArrowUpRight
+  BoxArrowUpRight,
+  CaretDownFill,
+  CaretUpFill,
+  JournalCheck,
+  CalendarHeart,
 } from "react-bootstrap-icons";
 import {
-  LineChart,
-  Line,
   XAxis,
   Tooltip as RechartsTooltip,
   YAxis,
   CartesianGrid,
   ResponsiveContainer,
-  Area,
   ReferenceLine,
+  Bar,
+  BarChart,
 } from "recharts";
 import { useNavigate } from "react-router-dom";
+import { subDays, format as formatDate } from 'date-fns';
+
 import "./dashboard.css";
 import { RentalOrder } from "../../types";
 import api from "../../services/api";
-
+import { AdvancedDateRangePicker } from "../../components/advancedDateRangePicker/AdvancedDateRangePicker";
 
 // --- Data Interfaces ---
 interface SalesDataPoint {
@@ -43,12 +47,10 @@ interface SalesDataPoint {
   sales: number;
 }
 interface DashboardStats {
-  ToProcess?: number;
-  ToPickup?: number;
+  Pending?: number; // Renamed from ToProcess
   ToReturn?: number;
-  Completed?: number;
-  Returned?: number;
-  Cancelled?: number;
+  pendingReservations?: number;
+  pendingAppointments?: number;
 }
 interface DashboardData {
   stats: DashboardStats;
@@ -59,31 +61,33 @@ interface DashboardData {
 }
 
 interface DashboardRentalOrder extends RentalOrder {
-  itemCount: number; // The new field from our backend
+  itemCount: number;
 }
 
 const formatSalesDataForChart = (
     apiData: { _id: string; totalSales: number }[],
-    startDateStr: string,
-    endDateStr: string
+    startDate: Date,
+    endDate: Date
 ): SalesDataPoint[] => {
     const salesMap = new Map(apiData.map(item => [item._id, item.totalSales]));
     const result: SalesDataPoint[] = [];
     
-    let currentDate = new Date(startDateStr + 'T00:00:00'); // Ensure UTC context
-    const endDate = new Date(endDateStr + 'T00:00:00');
+    let currentDate = new Date(startDate);
+    const end = new Date(endDate);
 
-    // Loop through every day in the selected date range
-    while (currentDate <= endDate) {
-        const dateString = currentDate.toISOString().split('T')[0]; // "YYYY-MM-DD"
+    while (currentDate <= end) {
+        // Create the date string from LOCAL year, month, and day to avoid timezone shifts.
+        const year = currentDate.getFullYear();
+        const month = String(currentDate.getMonth() + 1).padStart(2, '0'); // getMonth() is 0-indexed
+        const day = String(currentDate.getDate()).padStart(2, '0');
+        const dateString = `${year}-${month}-${day}`;
         
         result.push({
-            // Format the label for the X-axis
             name: currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-            sales: salesMap.get(dateString) || 0, // Get sales for this day, or 0 if none
+            sales: salesMap.get(dateString) || 0, // Now this key will be correct
         });
         
-        currentDate.setDate(currentDate.getDate() + 1); // Move to the next day
+        currentDate.setDate(currentDate.getDate() + 1);
     }
     return result;
 };
@@ -104,12 +108,12 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 const dynamicYAxisFormatter = (value: number): string => {
     if (value >= 1000000) {
-        return `₱${(value / 1000000).toFixed(1)}M`; // Format as millions
+        return `₱${(value / 1000000).toFixed(1)}M`;
     }
     if (value >= 1000) {
-        return `₱${(value / 1000).toFixed(0)}k`; // Format as thousands
+        return `₱${(value / 1000).toFixed(0)}k`;
     }
-    return `₱${value}`; // Format as a plain number
+    return `₱${value}`;
 };
 
 function Dashboard() {
@@ -119,23 +123,28 @@ function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [chartLoading, setChartLoading] = useState(false); 
 
-  // State for date pickers
-  const [startDate, setStartDate] = useState(() => new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0]);
-  const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [dateRange, setDateRange] = useState({
+    startDate: subDays(new Date(), 6),
+    endDate: new Date(),
+  });
+
+  type SortableColumn = 'customer' | 'items' | 'status';
+  const [sortColumn, setSortColumn] = useState<SortableColumn>('status');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       const isInitialLoad = !dashboardData;
-      // Use the main loader only on the first load
       if (isInitialLoad) setLoading(true); 
-      // Use the chart-specific loader for subsequent date changes
       else setChartLoading(true);
       
       setError(null);
       try {
-        // Pass the dates as query parameters to the API
         const response = await api.get('/dashboard/stats', {
-          params: { startDate, endDate }
+          params: {
+            startDate: formatDate(dateRange.startDate, 'yyyy-MM-dd'),
+            endDate: formatDate(dateRange.endDate, 'yyyy-MM-dd')
+          }
         });
         setDashboardData(response.data);
       } catch (err) {
@@ -147,16 +156,82 @@ function Dashboard() {
       }
     };
     fetchDashboardData();
-  }, [startDate, endDate]);
+  }, [dateRange]);
 
-  const allUpcomingAndOverdue = [
-    ...(dashboardData?.overdueOrders || []),
-    ...(dashboardData?.toReturnOrders || [])
-  ];
+  const sortedUpcomingAndOverdue = useMemo(() => {
+    if (!dashboardData) return [];
+    
+    const allOrders = [...(dashboardData.overdueOrders || []), ...(dashboardData.toReturnOrders || [])];
 
-  const handleExport = () => {
-    alert("Export functionality would be implemented here!");
+    return allOrders.sort((a, b) => {
+      let aValue, bValue;
+
+      switch (sortColumn) {
+        case 'customer':
+          aValue = a.customerInfo[0]?.name || '';
+          bValue = b.customerInfo[0]?.name || '';
+          break;
+        case 'items':
+          aValue = a.itemCount || 0;
+          bValue = b.itemCount || 0;
+          break;
+        case 'status':
+        default:
+          aValue = new Date(a.rentalEndDate).getTime();
+          bValue = new Date(b.rentalEndDate).getTime();
+          break;
+      }
+
+      if (aValue < bValue) {
+        return sortDirection === 'asc' ? -1 : 1;
+      }
+      if (aValue > bValue) {
+        return sortDirection === 'asc' ? 1 : -1;
+      }
+      return 0;
+    });
+  }, [dashboardData, sortColumn, sortDirection]);
+
+  const handleSort = (column: SortableColumn) => {
+    if (sortColumn === column) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
   };
+
+  const getSortIcon = (column: SortableColumn) => {
+    // Determine if the current column is the one being sorted
+    const isActive = sortColumn === column;
+
+    return (
+      <span className="sort-icon-container">
+        {/* The 'asc' caret is muted if the column is NOT active OR if the direction is 'desc' */}
+        <CaretUpFill size={12} className={!isActive || sortDirection === 'desc' ? 'sort-icon-muted' : ''} />
+        {/* The 'desc' caret is muted if the column is NOT active OR if the direction is 'asc' */}
+        <CaretDownFill size={12} className={!isActive || sortDirection === 'asc' ? 'sort-icon-muted' : ''} />
+      </span>
+    );
+  };
+  
+  const totalSalesForRange = useMemo(() => {
+    if (!dashboardData?.weeklySalesData) {
+      return 0;
+    }
+    return dashboardData.weeklySalesData.reduce((sum, day) => sum + day.totalSales, 0);
+  }, [dashboardData?.weeklySalesData]);
+
+  const chartData = useMemo(() => {
+    if (!dashboardData) return [];
+    return formatSalesDataForChart(dashboardData.weeklySalesData, dateRange.startDate, dateRange.endDate);
+  }, [dashboardData, dateRange.startDate, dateRange.endDate]);
+  
+  const averageSales = useMemo(() => {
+    if (chartData.length === 0) return 0;
+    return chartData.reduce((sum, entry) => sum + entry.sales, 0) / chartData.length;
+  }, [chartData]);
+
 
   const renderOrderTableRows = (orders: DashboardRentalOrder[]) => {
     if (orders.length === 0) {
@@ -164,7 +239,7 @@ function Dashboard() {
     }
 
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // Normalize today's date
+    today.setHours(0, 0, 0, 0);
 
     return orders.map((order) => {
         const returnDate = new Date(order.rentalEndDate);
@@ -215,82 +290,118 @@ function Dashboard() {
     return <Container><Alert variant="danger">{error || 'Could not load data.'}</Alert></Container>;
   }
   
-
-  const { stats, monthlySales, weeklySalesData } = dashboardData;
-  const chartData = dashboardData ? formatSalesDataForChart(weeklySalesData, startDate, endDate) : [];
-
-  const averageSales = chartData.length > 0 ? chartData.reduce((sum, entry) => sum + entry.sales, 0) / chartData.length : 0;
+  const { stats } = dashboardData;
 
   return (
     <div className="d-flex flex-column justify-content-between gap-3">
       <p className="m-0 fw-semibold fs-2 text-start">Dashboard</p>
 
-      {/* --- Top Row: Summary Cards --- */}
-      <Row>
-        <Col md={3} sm={6} className="mb-3"><Card className="shadow-sm h-100"><Card.Body className="d-flex align-items-center border-start border-primary border-5 rounded bg-white"><div className="text-start pe-3 py-2"><p className="text-secondary mb-1 fw-bold">SALES (MONTHLY)</p><h4 className="fw-bold mb-0">₱{monthlySales.toLocaleString('en-US', { minimumFractionDigits: 2 })}</h4></div><CalendarFill size={40} className="ms-auto text-light" /></Card.Body></Card></Col>
-        <Col md={3} sm={6} className="mb-3"><Card className="shadow-sm h-100"><Card.Body className="d-flex align-items-center border-start border-primary border-5 rounded bg-white"><div className="text-start pe-3 py-2"><p className="text-secondary mb-1 fw-bold">TO PROCESS</p><h4 className="fw-bold mb-0">{stats.ToProcess || 0}</h4></div><HourglassSplit size={40} className="ms-auto text-light" /></Card.Body></Card></Col>
-        <Col md={3} sm={6} className="mb-3"><Card className="shadow-sm h-100"><Card.Body className="d-flex align-items-center border-start border-primary border-5 rounded bg-white"><div className="text-start pe-3 py-2"><p className="text-secondary mb-1 fw-bold">TO RETURN</p><h4 className="fw-bold mb-0">{stats.ToReturn || 0}</h4></div><ArrowRepeat size={40} className="ms-auto text-light" /></Card.Body></Card></Col>
-        <Col md={3} sm={6} className="mb-3"><Card className="shadow-sm h-100"><Card.Body className="d-flex align-items-center border-start border-primary border-5 rounded bg-white"><div className="text-start pe-3 py-2"><p className="text-secondary mb-1 fw-bold">COMPLETED ORDERS</p><h4 className="fw-bold mb-0">{(stats.Completed || 0) + (stats.Returned || 0)}</h4></div><BagCheckFill size={40} className="ms-auto text-light" /></Card.Body></Card></Col>
+      <Row xs={1} sm={2} md={3} lg={5} className="g-3">
+        {/* Each Col will automatically take up 1/5th of the width on large screens,
+            1/3rd on medium, 1/2 on small, and full-width on extra-small */}
+        <Col>
+          <Card className="shadow-sm h-100">
+            <Card.Body className="d-flex align-items-center border-start border-primary border-4 rounded bg-white">
+              <div className="text-start pe-3 py-2">
+                <p className="text-secondary mb-1 fw-bold small">SALES</p>
+                <h5 className="fw-bold mb-0">₱{totalSalesForRange.toLocaleString('en-US', { minimumFractionDigits: 2 })}</h5>
+              </div>
+              <CalendarFill size={30} className="ms-auto text-light" />
+            </Card.Body>
+          </Card>
+        </Col>
+        <Col>
+          <Card className="shadow-sm h-100">
+            <Card.Body className="d-flex align-items-center border-start border-primary border-4 rounded bg-white">
+              <div className="text-start pe-3 py-2">
+                <p className="text-secondary mb-1 fw-bold small">PENDING RESERVATIONS</p>
+                <h5 className="fw-bold mb-0">{stats.pendingReservations || 0}</h5>
+              </div>
+              <JournalCheck size={30} className="ms-auto text-light" />
+            </Card.Body>
+          </Card>
+        </Col>
+        <Col>
+          <Card className="shadow-sm h-100">
+            <Card.Body className="d-flex align-items-center border-start border-primary border-4 rounded bg-white">
+              <div className="text-start pe-3 py-2">
+                <p className="text-secondary mb-1 fw-bold small">PENDING APPOINTMENTS</p>
+                <h5 className="fw-bold mb-0">{stats.pendingAppointments || 0}</h5>
+              </div>
+              <CalendarHeart size={30} className="ms-auto text-light" />
+            </Card.Body>
+          </Card>
+        </Col>
+        <Col>
+          <Card className="shadow-sm h-100">
+            <Card.Body className="d-flex align-items-center border-start border-primary border-4 rounded bg-white">
+              <div className="text-start pe-3 py-2">
+                <p className="text-secondary mb-1 fw-bold small">PENDING <br/>RENTALS</p>
+                <h5 className="fw-bold mb-0">{stats.Pending || 0}</h5>
+              </div>
+              <HourglassSplit size={30} className="ms-auto text-light" />
+            </Card.Body>
+          </Card>
+        </Col>
+        <Col>
+          <Card className="shadow-sm h-100">
+            <Card.Body className="d-flex align-items-center border-start border-primary border-4 rounded bg-white">
+              <div className="text-start pe-3 py-2">
+                <p className="text-secondary mb-1 fw-bold small">TO RETURN</p>
+                <h5 className="fw-bold mb-0">{stats.ToReturn || 0}</h5>
+              </div>
+              <ArrowRepeat size={30} className="ms-auto text-light" />
+            </Card.Body>
+          </Card>
+        </Col>
       </Row>
 
-      {/* --- Middle Row: Sales Chart & To Return/Overdue Table --- */}
       <Row>
         <Col lg={7} className="mb-3">
           <Card className="shadow-sm h-100">
             <Card.Header className="bg-white py-3">
-                <div className="d-flex flex-wrap justify-content-between align-items-center">
-                    <h5 className="mb-2 mb-md-0 fw-bold">Sales Visualization</h5>
-                    <div className="d-flex flex-wrap align-items-center gap-2">
-                        <Button variant="outline-secondary" size="sm" onClick={handleExport}>
+                <div className="d-flex justify-content-between align-items-center">
+                    <h5 className="mb-0 fw-bold">Sales Visualization</h5>
+                    <div className="d-flex align-items-center gap-2">
+                        <Button 
+                          variant="outline-secondary" 
+                          size="sm" 
+                          onClick={() => alert("Export functionality to be implemented.")}
+                          className="text-nowrap"
+                        >
                             <BoxArrowUpRight className="me-1" /> Export
                         </Button>
-                        <Form.Control
-                            type="date"
-                            value={startDate}
-                            onChange={(e) => setStartDate(e.target.value)}
-                            className="form-control-sm"
-                            style={{ width: "auto" }}
-                        />
-                        <span className="text-muted">→</span>
-                        <Form.Control
-                            type="date"
-                            value={endDate}
-                            onChange={(e) => setEndDate(e.target.value)}
-                            className="form-control-sm"
-                            style={{ width: "auto" }}
+                        <AdvancedDateRangePicker 
+                          initialRange={dateRange}
+                          onRangeChange={setDateRange} 
                         />
                     </div>
                 </div>
             </Card.Header>
             <Card.Body className="d-flex justify-content-center align-items-center" style={{ minHeight: '320px' }}>
-              {/* Use the new chart-specific loader */}
               {chartLoading ? <Spinner animation="border" /> : (
                 <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                    {/* 1. Define the gradient for the area chart */}
+                  <BarChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }} barGap={4}>
                     <defs>
-                      <linearGradient id="salesGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#AE0C00" stopOpacity={0.4}/>
-                        <stop offset="95%" stopColor="#AE0C00" stopOpacity={0}/>
+                      <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#AE0C00" stopOpacity={0.8}/>
+                        <stop offset="95%" stopColor="#AE0C00" stopOpacity={0.3}/>
                       </linearGradient>
                     </defs>
                     
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="name" />
                     <YAxis tickFormatter={dynamicYAxisFormatter} allowDecimals={false} />
-                    
-                    {/* 2. Use the custom tooltip component */}
                     <RechartsTooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(174, 12, 0, 0.1)' }}/>
-                    
-                    {/* 3. Add the reference line for the average */}
                     {averageSales > 0 && <ReferenceLine y={averageSales} label={{ value: 'Avg', position: 'insideTopLeft' }} stroke="grey" strokeDasharray="4 4" />}
                     
-                    {/* 4. The Area component creates the gradient fill */}
-                    <Area type="monotone" dataKey="sales" stroke="none" fill="url(#salesGradient)" />
-                    
-                    {/* 5. The Line component now has dots. Legend is removed. */}
-                    <Line type="monotone" dataKey="sales" stroke="#AE0C00" strokeWidth={2} activeDot={{ r: 8 }} dot={{ r: 4 }} />
-                  </LineChart>
+                    {/* --- 3. REPLACE Line and Area with Bar --- */}
+                    <Bar 
+                      dataKey="sales" 
+                      fill="url(#barGradient)" 
+                      radius={[4, 4, 0, 0]} // Adds slightly rounded top corners
+                    />
+                  </BarChart>
                 </ResponsiveContainer>
               )}
             </Card.Body>
@@ -299,25 +410,30 @@ function Dashboard() {
 
         <Col lg={5} className="mb-3">
           <Card className="shadow-sm h-100">
-            {/* --- NEW: Simplified Header for the single tab --- */}
             <Card.Header>
                 <h5 className="mb-0 fw-bold">Upcoming & Overdue Returns</h5>
             </Card.Header>
             <Card.Body className="p-0">
               <div className="table-responsive">
                 <Table hover className="mb-0 dashboard-table">
-                  {/* --- NEW: Updated Table Headers --- */}
                   <thead>
                     <tr>
-                      <th>Customer</th>
-                      <th className="text-center">Items</th>
-                      <th>Status</th>
-                      <th>Contact</th>
+                      <th onClick={() => handleSort('customer')} className="sortable-header">
+                        Customer {getSortIcon('customer')}
+                      </th>
+                      <th onClick={() => handleSort('items')} className="sortable-header text-center">
+                        Items {getSortIcon('items')}
+                      </th>
+                      <th onClick={() => handleSort('status')} className="sortable-header">
+                        Status {getSortIcon('status')}
+                      </th>
+                      <th className="sortable-header">
+                        Contact
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {/* Render the single combined and sorted list */}
-                    {renderOrderTableRows(allUpcomingAndOverdue)}
+                    {renderOrderTableRows(sortedUpcomingAndOverdue)}
                   </tbody>
                 </Table>
               </div>

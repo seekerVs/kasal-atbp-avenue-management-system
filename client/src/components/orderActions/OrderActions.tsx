@@ -20,7 +20,7 @@ import './orderActions.css'
 // --- HELPER FUNCTIONS ---
 const getStatusIcon = (status: RentalStatus) => {
     switch (status) {
-        case 'To Process': return <HourglassSplit size={20} className="me-2" />;
+        case 'Pending': return <HourglassSplit size={20} className="me-2" />;
         case 'To Pickup': return <BoxSeam size={20} className="me-2" />;
         case 'To Return': return <ArrowCounterclockwise size={20} className="me-2" />;
         case 'Returned': case 'Completed': return <CheckCircleFill size={20} className="me-2" />;
@@ -121,12 +121,12 @@ const OrderActions: React.FC<OrderActionsProps> = ({
   };
 
   const showPaymentForm = 
-    (status === 'To Process' && !isPaid) || 
+    (status === 'Pending' && !isPaid) || 
     (status === 'To Pickup' && !isFullyPaid);
 
   const shouldDisableButton = 
-    // Disable if it's the first payment ('To Process' status) AND payment details are invalid.
-    (status === 'To Process' && (
+    // Disable if it's the first payment ('Pending' status) AND payment details are invalid.
+    (status === 'Pending' && (
       (parseFloat(paymentAmount) <= 0) ||
       (paymentUiMode === 'Gcash' && gcashRef.trim() === '')
     )) ||
@@ -415,7 +415,7 @@ const OrderActions: React.FC<OrderActionsProps> = ({
         )}
         
         <div className="d-grid gap-2 mt-4">
-          {status === 'To Process' && (<Button size="lg" onClick={onInitiatePickup} style={{ backgroundColor: '#8B0000', border: 'none', fontWeight: 'bold' }} disabled={shouldDisableButton}>Move to Pickup</Button>)}
+          {status === 'Pending' && (<Button size="lg" onClick={onInitiatePickup} style={{ backgroundColor: '#8B0000', border: 'none', fontWeight: 'bold' }} disabled={shouldDisableButton}>Move to Pickup</Button>)}
           {status === 'To Pickup' && (
             <Button
               variant="info"

@@ -151,7 +151,7 @@ function ManageReservations() {
           </div>
           <Badge bg={getStatusBadgeVariant(reservation.status)} pill>{reservation.status.toUpperCase()}</Badge>
         </Card.Header>
-        <Card.Body className="p-4">
+        <Card.Body className="px-4 py-2">
             <p className="mb-1"><span className='fw-medium'>Customer: </span>{customer.name}</p>
             <p className="mb-1 text-muted small">Contact: {customer.phoneNumber}</p>
             <hr className="my-2"/>
@@ -224,7 +224,7 @@ function ManageReservations() {
   };
 
   return (
-    <div style={{ backgroundColor: "#F8F9FA", minHeight: "100vh", paddingTop: '1rem', paddingBottom: '1rem' }}>
+    <div style={{ minHeight: "100vh", paddingTop: '1rem', paddingBottom: '1rem' }}>
       <Container fluid="lg">
         <Card className="shadow-sm">
           <Card.Header className="bg-white border-bottom-0 pt-3 px-3">

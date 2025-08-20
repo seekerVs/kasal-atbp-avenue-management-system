@@ -32,7 +32,7 @@ import api from '../../services/api';
 import { formatCurrency } from '../../utils/formatters';
 
 
-type TabStatus = RentalStatus | 'All';
+type TabStatus = RentalStatus;
 
 type BadgeVariant = 'primary' | 'secondary' | 'success' | 'danger' | 'warning' | 'info' | 'light' | 'dark';
 
@@ -41,7 +41,7 @@ type BadgeVariant = 'primary' | 'secondary' | 'success' | 'danger' | 'warning' |
 // ===================================================================================
 function ManageRentals() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<TabStatus>('To Process');
+  const [activeTab, setActiveTab] = useState<TabStatus>('Pending');
   const [allRentals, setAllRentals] = useState<RentalOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -71,7 +71,7 @@ function ManageRentals() {
 
   const getStatusBadgeVariant = (status: RentalStatus): BadgeVariant => {
     switch (status) {
-      case 'To Process': return 'primary';
+      case 'Pending': return 'primary';
       case 'To Pickup': return 'info';
       case 'To Return': return 'warning';
       case 'Returned': return 'success';
@@ -84,33 +84,25 @@ function ManageRentals() {
   const filteredRentals = allRentals.filter(rental => {
     if (!rental || !rental._id) return false;
 
-    // --- 1. Tab Filtering (same as before) ---
     const lowercasedStatus = rental.status.toLowerCase();
     const lowercasedActiveTab = activeTab.toLowerCase();
 
     let tabMatch = false;
-    if (lowercasedActiveTab === 'all') {
-      tabMatch = lowercasedStatus !== 'cancelled';
-    } else if (lowercasedActiveTab === 'completed') {
+    if (lowercasedActiveTab === 'completed') {
       tabMatch = lowercasedStatus === 'returned' || lowercasedStatus === 'completed';
     } else {
       tabMatch = lowercasedStatus === lowercasedActiveTab;
     }
 
-    // If it doesn't match the selected tab, exclude it immediately.
     if (!tabMatch) {
       return false;
     }
 
-    // --- 2. Search Term Filtering (the new part) ---
-    // If the search term is empty, no need to filter further.
     if (!searchTerm.trim()) {
-      return true; // It already passed the tab filter.
+      return true;
     }
 
     const lowercasedSearch = searchTerm.toLowerCase();
-
-    // Check against multiple fields. Optional chaining (?.) prevents errors if data is missing.
     const customerName = rental.customerInfo[0]?.name?.toLowerCase() || '';
     const orderId = rental._id.toLowerCase();
     const customerPhone = rental.customerInfo[0]?.phoneNumber || '';
@@ -306,7 +298,7 @@ function ManageRentals() {
             </Col>
             <Col className="d-flex justify-content-end align-items-center">
               <div className="d-flex align-items-center gap-2">
-                {rental.status === 'To Process' && (
+                {rental.status === 'Pending' && (
                   <Button variant="outline-secondary" onClick={() => handleShowCancelModal(rental)}>
                     <XCircleFill className="me-1" /> Cancel
                   </Button>
@@ -327,7 +319,7 @@ function ManageRentals() {
   };
 
   return (
-    <div style={{ backgroundColor: "#F8F9FA", minHeight: "100vh", paddingTop: '1rem', paddingBottom: '1rem' }}>
+    <div style={{ minHeight: "100vh", paddingTop: '1rem', paddingBottom: '1rem' }}>
       <Container fluid="lg">
         <Card className="shadow-sm overflow-hidden">
           <Card.Header className="bg-white border-bottom-0 pt-3 px-3">
@@ -344,8 +336,7 @@ function ManageRentals() {
             </div>
           </Card.Header>
           <Nav variant="tabs" activeKey={activeTab} onSelect={(k) => setActiveTab(k as TabStatus)} className="px-3 pt-2">
-            <Nav.Item><Nav.Link eventKey="All"><BoxSeam className="me-1" />All Rentals</Nav.Link></Nav.Item>
-            <Nav.Item><Nav.Link eventKey="To Process"><CalendarCheck className="me-1" />To Process</Nav.Link></Nav.Item>
+            <Nav.Item><Nav.Link eventKey="Pending"><CalendarCheck className="me-1" />Pending</Nav.Link></Nav.Item>
             <Nav.Item><Nav.Link eventKey="To Pickup"><CalendarCheck className="me-1" />To Pickup</Nav.Link></Nav.Item>
             <Nav.Item><Nav.Link eventKey="To Return"><ArrowCounterclockwise className="me-1" />To Return</Nav.Link></Nav.Item>
             <Nav.Item><Nav.Link eventKey="Completed"><CheckCircleFill className="me-1" />Completed</Nav.Link></Nav.Item>

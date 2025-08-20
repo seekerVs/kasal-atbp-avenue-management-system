@@ -12,3 +12,26 @@
   background-color: #fff;
   border-left: none;
 }
+
+.sortable-header {
+  cursor: pointer;
+  user-select: none; /* Prevents text selection when clicking */
+}
+
+.sortable-header:hover {
+  background-color: #f8f9fa; /* A subtle hover effect */
+}
+
+/* This container will stack the up/down icons vertically */
+.sort-icon-container {
+  display: inline-flex;
+  flex-direction: column;
+  margin-left: 0.5rem;
+  line-height: 0.7; /* Reduces the space between the two icons */
+  vertical-align: middle; /* Aligns the icon group nicely with the text */
+}
+
+/* This class makes an icon appear faded/inactive */
+.sort-icon-muted {
+  color: #d3d3d3; /* A light grey color */
+}

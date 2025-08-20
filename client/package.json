@@ -23,6 +23,7 @@
     "react-bootstrap": "^2.10.9",
     "react-bootstrap-icons": "^1.11.5",
     "react-bootstrap-typeahead": "^6.4.1",
+    "react-date-range": "^2.0.1",
     "react-datepicker": "^8.4.0",
     "react-dom": "^19.0.0",
     "react-dropzone": "^14.3.8",
@@ -36,6 +37,7 @@
   "devDependencies": {
     "@eslint/js": "^9.22.0",
     "@types/react": "^19.0.10",
+    "@types/react-date-range": "^1.4.10",
     "@types/react-dom": "^19.0.4",
     "@vitejs/plugin-react": "^4.3.4",
     "eslint": "^9.22.0",

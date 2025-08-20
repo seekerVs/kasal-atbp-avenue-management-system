@@ -50,6 +50,7 @@ const PackageFulfillmentSchema = new mongoose.Schema({
 }, { _id: false });
 
 const PackageRentItemSchema = new mongoose.Schema({
+  _id: { type: String, required: true },
   name: { type: String, required: true },
   price: { type: Number, required: true },
   quantity: { type: Number, default: 1 },
@@ -115,7 +116,7 @@ const RentalSchema = new mongoose.Schema({
   status: {
     type: String,
     required: true,
-    enum: ['To Process', 'To Pickup', 'To Return', 'Returned', 'Completed', 'Cancelled'],
+    enum: ['Pending', 'To Pickup', 'To Return', 'Returned', 'Completed', 'Cancelled'],
     default: 'To Process',
   },
 }, {

@@ -6,10 +6,10 @@ import { Container, Card, Nav, Spinner, Alert, InputGroup, Form, Button, Row, Co
 import { Search, EyeFill, CalendarPlus } from 'react-bootstrap-icons';
 import { format } from 'date-fns';
 
-import { Appointment } from '../../types'; // Use the new Appointment type
+import { Appointment } from '../../types';
 import api from '../../services/api';
 
-type TabStatus = 'Pending' | 'Confirmed' | 'Completed' | 'Cancelled' | 'No Show' | 'All';
+type TabStatus = 'Pending' | 'Confirmed' | 'Completed' | 'Cancelled';
 type BadgeVariant = 'primary' | 'secondary' | 'success' | 'danger' | 'warning' | 'info';
 
 function ManageAppointments() {
@@ -51,18 +51,19 @@ function ManageAppointments() {
     return allAppointments.filter(appointment => {
       if (!appointment || !appointment.status) return false;
 
-      // 3. Add 'No Show' to the filter logic
-      const tabMatch = activeTab === 'All' ? true : appointment.status === activeTab;
-      if (!tabMatch) return false;
+      const tabMatch = appointment.status === activeTab;
 
-      if (!searchTerm.trim()) return true;
-      const lowercasedSearch = searchTerm.toLowerCase();
+      if (searchTerm.trim()) {
+        const lowercasedSearch = searchTerm.toLowerCase();
+        return (
+          appointment.customerInfo?.name?.toLowerCase().includes(lowercasedSearch) ||
+          appointment._id.toLowerCase().includes(lowercasedSearch) ||
+          appointment.customerInfo?.phoneNumber?.includes(lowercasedSearch)
+        );
+      }
 
-      return (
-        appointment.customerInfo?.name?.toLowerCase().includes(lowercasedSearch) ||
-        appointment._id.toLowerCase().includes(lowercasedSearch) ||
-        appointment.customerInfo?.phoneNumber?.includes(lowercasedSearch)
-      );
+      // If no search term, just filter by the active tab.
+      return tabMatch;
     });
   }, [allAppointments, activeTab, searchTerm]);
 
@@ -72,7 +73,7 @@ function ManageAppointments() {
         <Card.Header className="d-flex justify-content-between align-items-center bg-light">
           <div>
             <strong>Appointment ID: {appointment._id}</strong>
-            <small className="text-muted ms-2">(Date: {format(new Date(appointment.appointmentDate), 'MMM dd, yyyy, h:mm a')})</small>
+            <small className="text-muted ms-2">(Date: {appointment.appointmentDate ? format(new Date(appointment.appointmentDate), 'MMM dd, yyyy, h:mm a') : 'N/A'})</small>
           </div>
           <Badge bg={getStatusBadgeVariant(appointment.status)} pill>{appointment.status.toUpperCase()}</Badge>
         </Card.Header>
@@ -99,7 +100,7 @@ function ManageAppointments() {
   };
 
   return (
-    <div style={{ backgroundColor: "#F8F9FA", minHeight: "100vh", paddingTop: '1rem', paddingBottom: '1rem' }}>
+    <div style={{minHeight: "100vh", paddingTop: '1rem', paddingBottom: '1rem' }}>
       <Container fluid="lg">
         <Card className="shadow-sm">
           <Card.Header className="bg-white border-bottom-0 pt-3 px-3">
@@ -122,12 +123,10 @@ function ManageAppointments() {
             </div>
           </Card.Header>
           <Nav variant="tabs" activeKey={activeTab} onSelect={(k) => setActiveTab(k as TabStatus)} className="px-3 pt-2">
-            <Nav.Item><Nav.Link eventKey="All">All</Nav.Link></Nav.Item>
             <Nav.Item><Nav.Link eventKey="Pending">Pending</Nav.Link></Nav.Item>
             <Nav.Item><Nav.Link eventKey="Confirmed">Confirmed</Nav.Link></Nav.Item>
             <Nav.Item><Nav.Link eventKey="Completed">Completed</Nav.Link></Nav.Item>
             <Nav.Item><Nav.Link eventKey="Cancelled">Cancelled</Nav.Link></Nav.Item>
-            <Nav.Item><Nav.Link eventKey="No Show">No Show</Nav.Link></Nav.Item>
           </Nav>
           <Card.Body className="p-4">
             {loading ? (

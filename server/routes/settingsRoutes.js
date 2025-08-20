@@ -17,15 +17,29 @@ router.get('/', protect, asyncHandler(async (req, res) => {
 
 // PUT /api/settings - Updates the shop settings
 router.put('/', protect, asyncHandler(async (req, res) => {
-    const { appointmentSlotsPerHour } = req.body;
-    if (typeof appointmentSlotsPerHour !== 'number' || appointmentSlotsPerHour < 0) {
-        res.status(400);
-        throw new Error('A valid, non-negative number for slots is required.');
+    // 1. Destructure all possible settings from the request body.
+    const { appointmentSlotsPerHour, gcashName, gcashNumber } = req.body;
+
+    // 2. Build an update object dynamically to avoid overwriting fields with 'undefined'.
+    const updateData = {};
+    if (appointmentSlotsPerHour !== undefined) {
+        if (typeof appointmentSlotsPerHour !== 'number' || appointmentSlotsPerHour < 0) {
+            res.status(400);
+            throw new Error('A valid, non-negative number for slots is required.');
+        }
+        updateData.appointmentSlotsPerHour = appointmentSlotsPerHour;
+    }
+    if (gcashName !== undefined) {
+        updateData.gcashName = gcashName;
+    }
+    if (gcashNumber !== undefined) {
+        updateData.gcashNumber = gcashNumber;
     }
 
+    // 3. Find and update the settings document using the dynamically built object.
     const updatedSettings = await Settings.findByIdAndUpdate(
         'shopSettings',
-        { $set: { appointmentSlotsPerHour } },
+        { $set: updateData },
         { new: true, upsert: true }
     );
     res.status(200).json(updatedSettings);

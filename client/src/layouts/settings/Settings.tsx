@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Card, Tabs, Tab, Alert, Row, Col, Form, Button, Spinner } from 'react-bootstrap';
-import { PersonBadge, CalendarWeek } from 'react-bootstrap-icons';
+import { Container, Card, Row, Col, Form, Button, Spinner, Tab, Nav } from 'react-bootstrap';
+import { PersonBadge, CalendarWeek, GearFill } from 'react-bootstrap-icons';
 import { ShopSettings } from '../../types';
 import api from '../../services/api';
 import { useAlert } from '../../contexts/AlertContext';
@@ -12,6 +12,9 @@ function Settings() {
   const [settings, setSettings] = useState<ShopSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
+  const [activeTab, setActiveTab] = useState('general');
+  const [slotsInput, setSlotsInput] = useState('0');
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -19,6 +22,7 @@ function Settings() {
       try {
         const response = await api.get('/settings');
         setSettings(response.data);
+        setSlotsInput(String(response.data.appointmentSlotsPerHour || '0'));
       } catch (error) {
         addAlert('Could not load shop settings.', 'danger');
       } finally {
@@ -28,21 +32,67 @@ function Settings() {
     fetchSettings();
   }, [addAlert]);
 
-  const handleSlotsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!settings) return;
-    const value = parseInt(e.target.value, 10);
-    setSettings({ ...settings, appointmentSlotsPerHour: isNaN(value) ? 0 : value });
+  const handleSettingsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+
+    if (formErrors[name]) {
+      setFormErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[name];
+        return newErrors;
+      });
+    }
+
+    if (name === 'appointmentSlotsPerHour') {
+      if (value === '' || /^\d+$/.test(value)) {
+        setSlotsInput(value);
+      }
+    } else if (settings) {
+      setSettings({ ...settings, [name]: value });
+    }
+  };
+
+  const handleSlotsBlur = () => {
+    const numericValue = parseInt(slotsInput, 10) || 0;
+    setSlotsInput(String(numericValue)); // Ensure the input shows '0' if empty
+    if (settings) {
+      setSettings({ ...settings, appointmentSlotsPerHour: numericValue });
+    }
+  };
+
+  const validateSettings = (): boolean => {
+    if (!settings) return false;
+    const errors: { [key: string]: string } = {};
+
+    if (settings.appointmentSlotsPerHour < 0) {
+      errors.appointmentSlotsPerHour = "Slots per hour cannot be a negative number.";
+    }
+
+    // Only validate the phone number if it's not empty
+    if (settings.gcashNumber && !/^09\d{9}$/.test(settings.gcashNumber)) {
+      errors.gcashNumber = "Please enter a valid 11-digit phone number starting with 09.";
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
   const handleSaveSettings = async () => {
+    if (!validateSettings()) {
+      addAlert("Please correct the validation errors.", "warning");
+      return;
+    }
+
     if (!settings) return;
     setIsSaving(true);
     try {
       const response = await api.put('/settings', { 
-        appointmentSlotsPerHour: settings.appointmentSlotsPerHour 
+        appointmentSlotsPerHour: settings.appointmentSlotsPerHour,
+        gcashName: settings.gcashName,
+        gcashNumber: settings.gcashNumber
       });
       setSettings(response.data);
-      addAlert('Settings saved successfully!', 'success');
+      addAlert('General settings saved successfully!', 'success');
     } catch (error) {
       addAlert('Failed to save settings.', 'danger');
     } finally {
@@ -53,50 +103,116 @@ function Settings() {
   return (
     <Container fluid>
       <h2 className="mb-4">Settings</h2>
-      <Card className="shadow-sm">
-        <Card.Body className="p-0">
-          <Tabs defaultActiveKey="profile" id="settings-tabs" className="px-3 pt-2" fill>
-            {/* --- 2. UPDATE THE "GENERAL" TAB to "PROFILE" --- */}
-            <Tab
-              eventKey="profile"
-              title={<span className="d-flex align-items-center"><PersonBadge className="me-2" /> My Profile</span>}
-              className="p-4"
-            >
-              {/* --- 3. RENDER THE NEW COMPONENT --- */}
-              <ProfileSettings />
-            </Tab>
-            <Tab
-              eventKey="schedule"
-              title={<span className="d-flex align-items-center"><CalendarWeek className="me-2" /> Shop Closures</span>}
-              className="p-4"
-            >
-              <h5 className="mb-3">Shop Schedule & Closures</h5>
-              <p className="text-muted">Set the default number of slots available per hour for all open business days. Use the calendar to mark specific dates as closed.</p>
-              <hr />
-              {isLoading ? <Spinner /> : settings && (
-                <Row className="mb-4">
-                  <Col md={6}>
-                    <Form.Group>
-                      <Form.Label className="fw-bold">Default Slots per Hour</Form.Label>
-                      <Form.Control 
-                        type="number" 
-                        min="0"
-                        value={settings.appointmentSlotsPerHour}
-                        onChange={handleSlotsChange}
-                      />
-                      <Form.Text>This is the number of available for any open time slot.</Form.Text>
-                    </Form.Group>
-                    <Button className="mt-3" size='sm' onClick={handleSaveSettings} disabled={isSaving}>
-                      {isSaving ? 'Saving...' : 'Save Default Slots'}
+      
+      {/* --- This is the new Vertical Tab Layout --- */}
+      <Tab.Container id="settings-tabs" activeKey={activeTab} onSelect={(k) => setActiveTab(k || 'general')}>
+        <Row>
+          {/* --- LEFT COLUMN: NAVIGATION --- */}
+          <Col md={4} lg={3}>
+            <Nav variant="pills" className="flex-column">
+              <Nav.Item>
+                <Nav.Link eventKey="general">
+                  <GearFill className="me-2" /> General
+                </Nav.Link>
+              </Nav.Item>
+              <Nav.Item>
+                <Nav.Link eventKey="profile">
+                  <PersonBadge className="me-2" /> My Profile
+                </Nav.Link>
+              </Nav.Item>
+              <Nav.Item>
+                <Nav.Link eventKey="schedule">
+                  <CalendarWeek className="me-2" /> Schedule & Closures
+                </Nav.Link>
+              </Nav.Item>
+            </Nav>
+          </Col>
+
+          {/* --- RIGHT COLUMN: CONTENT --- */}
+          <Col md={8} lg={9}>
+            <Tab.Content>
+              <Tab.Pane eventKey="general">
+                <Card className="shadow-sm">
+                  <Card.Header as="h5">General Shop Settings</Card.Header>
+                  <Card.Body>
+                    <p className="text-muted">Set the default shop parameters for appointments and payments.</p>
+                    <hr />
+                    {isLoading ? <Spinner /> : settings && (
+                      <Form noValidate onSubmit={(e) => { e.preventDefault(); handleSaveSettings(); }}>
+                        <Row>
+                          <Col md={10} lg={8}>
+                            <Form.Group className="mb-3">
+                              <Form.Label className="fw-bold">Default Appointment Slots per Hour</Form.Label>
+                              <Form.Control 
+                                type="text"
+                                inputMode="numeric"
+                                name="appointmentSlotsPerHour"
+                                value={slotsInput}
+                                onChange={handleSettingsChange}
+                                onBlur={handleSlotsBlur}
+                                isInvalid={!!formErrors.appointmentSlotsPerHour}
+                              />
+                              <Form.Control.Feedback type="invalid">
+                                {formErrors.appointmentSlotsPerHour}
+                              </Form.Control.Feedback>
+                              <Form.Text>The number of available slots for any open time slot.</Form.Text>
+                            </Form.Group>
+                            <Form.Group className="mb-3">
+                              <Form.Label className="fw-bold">GCash Account Name</Form.Label>
+                              <Form.Control 
+                                type="text" 
+                                name="gcashName"
+                                placeholder="e.g., Juan Dela Cruz"
+                                value={settings.gcashName || ''}
+                                onChange={handleSettingsChange}
+                              />
+                            </Form.Group>
+                            <Form.Group className="mb-3">
+                              <Form.Label className="fw-bold">GCash Account Number</Form.Label>
+                              <Form.Control 
+                                type="text" 
+                                name="gcashNumber"
+                                placeholder="e.g., 09171234567"
+                                value={settings.gcashNumber || ''}
+                                onChange={handleSettingsChange}
+                                isInvalid={!!formErrors.gcashNumber}
+                              />
+                              <Form.Control.Feedback type="invalid">
+                                {formErrors.gcashNumber}
+                              </Form.Control.Feedback>
+                            </Form.Group>
+                          </Col>
+                        </Row>
+                      </Form>
+                    )}
+                  </Card.Body>
+                  <Card.Footer className="text-end">
+                    <Button type="submit" onClick={handleSaveSettings} disabled={isSaving}>
+                      {isSaving ? 'Saving...' : 'Save'}
                     </Button>
-                  </Col>
-                </Row>
-              )}
-              <ShopScheduleEditor />
-            </Tab>
-          </Tabs>
-        </Card.Body>
-      </Card>
+                  </Card.Footer>
+                </Card>
+              </Tab.Pane>
+              
+              <Tab.Pane eventKey="profile">
+                {/* The ProfileSettings component is already structured like a Card */}
+                <ProfileSettings />
+              </Tab.Pane>
+
+              <Tab.Pane eventKey="schedule">
+                <Card className="shadow-sm">
+                   <Card.Header as="h5">Shop Schedule & Closures</Card.Header>
+                   <Card.Body>
+                    <p className="text-muted">Use the calendar to mark specific dates (e.g., holidays) as closed for appointments and reservations.</p>
+                    <hr />
+                    <ShopScheduleEditor />
+                   </Card.Body>
+                </Card>
+              </Tab.Pane>
+            </Tab.Content>
+          </Col>
+        </Row>
+      </Tab.Container>
     </Container>
   );
 }

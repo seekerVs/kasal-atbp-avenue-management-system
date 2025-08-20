@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Container, Row, Col, Button, Card, Image as BsImage, Spinner, Alert, Modal, ListGroup } from 'react-bootstrap';
-import { BoxSeam, Tag, ExclamationTriangleFill, Hash, Palette } from 'react-bootstrap-icons';
+import { BoxSeam, Tag, ExclamationTriangleFill, Hash, Palette, PencilSquare, Trash } from 'react-bootstrap-icons';
 import { useNavigate } from 'react-router-dom';
 
 import CustomerDetailsCard from '../../components/CustomerDetailsCard';
@@ -15,6 +15,12 @@ const initialCustomerDetails: CustomerInfo = {
   name: '', phoneNumber: '', email: '', 
   address: { province: 'Camarines Norte', city: '', barangay: '', street: '' } 
 };
+
+type ItemToDelete = {
+  productId: string;
+  variationKey: string;
+  name: string;
+} | null;
 
 function SingleRent() {
   const navigate = useNavigate();
@@ -37,6 +43,10 @@ function SingleRent() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [modalData, setModalData] = useState({ rentalId: '', itemName: '', quantity: 0 });
   const [errors, setErrors] = useState<FormErrors>({}); 
+  const [itemToEdit, setItemToEdit] = useState<SelectedItemData | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<ItemToDelete>(null);
+
 
   useEffect(() => {
     // This effect now only fetches data not related to the inventory, like all rentals for the customer search.
@@ -85,24 +95,70 @@ function SingleRent() {
     setShowItemModal(false);
   };
 
-  // --- ADD THIS FUNCTION: Removes an item by its unique key ---
-  const handleRemoveItem = (product_id: string, variation_key: string) => {
+  const handleOpenEditor = (item: SelectedItemData) => {
+    setItemToEdit(item);
+    setShowItemModal(true);
+  };
+
+  // --- 4. CREATE HANDLER TO PROCESS THE UPDATED ITEM ---
+  const handleItemUpdate = (newSelection: SelectedItemData) => {
+    if (!itemToEdit) return;
+
+    // A unique key for a selection instance (product ID + original variation)
+    const originalItemKey = `${itemToEdit.product._id}-${itemToEdit.variation.color.hex}-${itemToEdit.variation.size}`;
+    
+    setSelections(prev => {
+        // Remove the original item being edited
+        const filtered = prev.filter(s => `${s.product._id}-${s.variation.color.hex}-${s.variation.size}` !== originalItemKey);
+        
+        // Check if another item with the *new* variation already exists
+        const existingIndex = filtered.findIndex(s => 
+            s.product._id === newSelection.product._id &&
+            s.variation.color.hex === newSelection.variation.color.hex &&
+            s.variation.size === newSelection.variation.size
+        );
+
+        if (existingIndex > -1) {
+            // If it exists, merge quantities
+            filtered[existingIndex].quantity += newSelection.quantity;
+            addAlert(`Merged quantities for ${newSelection.product.name}.`, 'info');
+            return filtered;
+        } else {
+            // Otherwise, add the new selection to the list
+            // addAlert(`${newSelection.product.name} variation updated.`, 'success');
+            return [...filtered, newSelection];
+        }
+    });
+
+    // Clean up
+    setShowItemModal(false);
+    setItemToEdit(null);
+  };
+
+  const handleRemoveItem = (product_id: string, variation_key: string, name: string) => {
+    setItemToDelete({ productId: product_id, variationKey: variation_key, name: name });
+    setShowDeleteModal(true);
+  };
+
+  const confirmRemoveItem = () => {
+    if (!itemToDelete) return;
+    
     setSelections(prev => prev.filter(item => 
-      !(item.product._id === product_id && `${item.variation.color}-${item.variation.size}` === variation_key)
+      !(item.product._id === itemToDelete.productId && `${item.variation.color.hex}-${item.variation.size}` === itemToDelete.variationKey)
     ));
+    
+    setShowDeleteModal(false);
+    setItemToDelete(null);
   };
 
   const handleQuantityChange = (product_id: string, variation_key: string, newQuantity: number) => {
     setSelections(prevSelections => 
       prevSelections.map(item => {
-        const currentVariationKey = `${item.variation.color}-${item.variation.size}`;
+        // Use the correct key generation with .hex
+        const currentVariationKey = `${item.variation.color.hex}-${item.variation.size}`;
         if (item.product._id === product_id && currentVariationKey === variation_key) {
           
-          // --- THIS IS THE FIX ---
-          // The 'item' object itself contains the original variation data, including the stock.
-          // No need to search the separate allProducts array.
           const maxStock = item.variation.quantity || 1;
-          
           const clampedQuantity = Math.max(1, Math.min(newQuantity, maxStock));
           
           return { ...item, quantity: clampedQuantity };
@@ -115,7 +171,7 @@ function SingleRent() {
   const handleSelectCustomer = (selectedRental: RentalOrder) => {
     setCustomerDetails(selectedRental.customerInfo[0]);
     setSelectedRentalForDisplay(selectedRental);
-    setExistingOpenRental(selectedRental.status === 'To Process' ? selectedRental : null);
+    setExistingOpenRental(selectedRental.status === 'Pending' ? selectedRental : null);
   };
   
   const validateForm = () => {
@@ -256,11 +312,19 @@ function SingleRent() {
                             <Col xs="auto" className="text-end">
                               <p className="fw-bold mb-1">₱{(item.product.price * item.quantity).toLocaleString()}</p>
                               <Button
+                                variant="outline-secondary"
+                                size="sm"
+                                className="me-2"
+                                onClick={() => handleOpenEditor(item)}
+                              >
+                                <PencilSquare />
+                              </Button>
+                              <Button
                                 variant="outline-danger"
                                 size="sm"
-                                onClick={() => handleRemoveItem(item.product._id, variationKey)}
+                                onClick={() => handleRemoveItem(item.product._id, variationKey, item.product.name)}
                               >
-                                Remove
+                                <Trash />
                               </Button>
                             </Col>
                           </Row>
@@ -271,7 +335,6 @@ function SingleRent() {
 
                   <hr />
                   
-                  {/* --- NEW: Running subtotal and Add More button --- */}
                   <div className="d-flex justify-content-between align-items-center mb-3">
                     <h5 className="mb-0">Subtotal:</h5>
                     <h5 className="mb-0 text-danger fw-bold">₱{subtotal.toLocaleString()}</h5>
@@ -312,14 +375,32 @@ function SingleRent() {
       </Row>
       )}
 
-      {/* --- THE NEW MODAL --- */}
       <SingleItemSelectionModal
         show={showItemModal}
-        onHide={() => setShowItemModal(false)}
-        onSelect={handleAddItem} // <-- RENAMED PROP from onConfirm
+        onHide={() => { setShowItemModal(false); setItemToEdit(null); }}
+        onSelect={itemToEdit ? handleItemUpdate : handleAddItem} // Conditional onSelect
         addAlert={addAlert}
         mode="rental"
+        preselectedItemId={itemToEdit?.product._id}
+        preselectedVariation={itemToEdit ? `${itemToEdit.variation.color.name}, ${itemToEdit.variation.size}` : undefined}
       />
+
+      <Modal show={showDeleteModal} onHide={() => setShowDeleteModal(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Confirm Removal</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          Are you sure you want to remove <strong>{itemToDelete?.name}</strong> from the list?
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowDeleteModal(false)}>
+            Cancel
+          </Button>
+          <Button onClick={confirmRemoveItem}>
+            Remove
+          </Button>
+        </Modal.Footer>
+      </Modal>
 
       <Modal show={showReminderModal} onHide={() => setShowReminderModal(false)} centered>
         <Modal.Header closeButton><Modal.Title><ExclamationTriangleFill className="me-2 text-warning" />Create New Rental?</Modal.Title></Modal.Header>

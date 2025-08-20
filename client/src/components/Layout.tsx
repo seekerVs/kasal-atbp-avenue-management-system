@@ -58,7 +58,7 @@ export const Layout = () => {
         if (isCoreAdminPage) {
           // --- 2. ADMIN IS ON A DASHBOARD PAGE ---
           return (
-            <div className="d-lg-flex" style={{ minHeight: '100vh' }}>
+            <div className="d-lg-flex " style={{ minHeight: '100vh' }}>
               <Sidebar />
               <main className="main-content">
                 <Outlet />

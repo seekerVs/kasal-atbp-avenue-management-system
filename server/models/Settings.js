@@ -13,6 +13,16 @@ const SettingsSchema = new mongoose.Schema({
     default: 2,
     min: 0,
   },
+  gcashName: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  gcashNumber: {
+    type: String,
+    trim: true,
+    default: ''
+  },
 }, { _id: false }); // Prevent Mongoose from creating its own ObjectId
 
 module.exports = mongoose.model('Settings', SettingsSchema);

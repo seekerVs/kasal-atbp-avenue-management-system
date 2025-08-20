@@ -124,13 +124,31 @@ export const SingleItemSelectionModal: React.FC<ItemSelectionModalProps> = ({
   
   const handleSelectItem = (item: InventoryItem) => {
     setSelectedItem(item);
-    if (mode === 'assignment' && assignmentScope === 'matching' && filterByColorHex) {
-      const motifVariation = item.variations.find(v => v.color.hex === filterByColorHex);
-      setSelectedVariation(motifVariation || null);
-    } else {
-      const firstAvailable = item.variations.find(v => v.quantity > 0);
-      setSelectedVariation(firstAvailable || item.variations[0] || null);
+
+    let initialVariation: ItemVariation | null = null;
+
+    // 1. Prioritize the preselected variation if it exists
+    if (preselectedVariation) {
+      const [colorName, size] = preselectedVariation.split(',').map(s => s.trim());
+      const foundVar = item.variations.find(
+        v => v.color.name === colorName && v.size === size
+      );
+      if (foundVar) {
+        initialVariation = foundVar;
+      }
     }
+
+    // 2. If no preselected variation was found or provided, use other logic
+    if (!initialVariation) {
+      if (mode === 'assignment' && assignmentScope === 'matching' && filterByColorHex) {
+        initialVariation = item.variations.find(v => v.color.hex === filterByColorHex) || null;
+      } else {
+        // Fallback to the very first available variation
+        initialVariation = item.variations.find(v => v.quantity > 0) || item.variations[0] || null;
+      }
+    }
+    
+    setSelectedVariation(initialVariation);
   };
   
   const handleConfirmSelection = () => {
