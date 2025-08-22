@@ -89,8 +89,7 @@ const PaymentDetailSchema = new mongoose.Schema({
 const FinancialsSchema = new mongoose.Schema({
   shopDiscount: { type: Number, default: 0 },
   depositAmount: { type: Number, default: 0 },
-  downPayment: { type: PaymentDetailSchema },
-  finalPayment: { type: PaymentDetailSchema },
+  payments: [PaymentDetailSchema],
   depositReimbursed: { type: Number, default: 0 },
 }, { _id: false });
 
@@ -117,7 +116,7 @@ const RentalSchema = new mongoose.Schema({
     type: String,
     required: true,
     enum: ['Pending', 'To Pickup', 'To Return', 'Returned', 'Completed', 'Cancelled'],
-    default: 'To Process',
+    default: 'Pending',
   },
 }, {
   timestamps: true,

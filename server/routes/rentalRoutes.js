@@ -68,7 +68,7 @@ router.post('/', asyncHandler(async (req, res) => {
             financials: { shopDiscount: 0, depositAmount: 0 },
             rentalStartDate: startDate.toISOString().split('T')[0],
             rentalEndDate: endDate.toISOString().split('T')[0],
-            status: "To Process",
+            status: "Pending",
         };
 
         // --- 3. Process each item type and update stock ---
@@ -193,7 +193,7 @@ router.put('/:id/process', asyncHandler(async (req, res) => {
         shopDiscount,
         depositAmount,
         depositReimbursed,
-        payment
+        payment // This is the payment object from the frontend
     } = req.body;
 
     const session = await mongoose.startSession();
@@ -205,46 +205,31 @@ router.put('/:id/process', asyncHandler(async (req, res) => {
             throw new Error("Rental not found.");
         }
 
+        // (Stock restoration logic remains the same)
         const originalStatus = rental.status;
-
-        // --- NEW LOGIC FOR STOCK RESTORATION ---
-        // Check if the status is changing TO 'Returned' from a non-returned state
         if (status === 'Returned' && originalStatus !== 'Returned') {
             const stockUpdateOperations = [];
-
             if (depositReimbursed !== undefined) {
                 if (parseFloat(depositReimbursed) > rental.financials.depositAmount) {
                      throw new Error(`Reimbursement amount of ${depositReimbursed} exceeds the paid deposit of ${rental.financials.depositAmount}.`);
                 }
                 rental.financials.depositReimbursed = parseFloat(depositReimbursed);
             }
-
-            // 1. Restore stock for singleRents
             if (rental.singleRents?.length > 0) {
                 rental.singleRents.forEach(item => {
-                    const nameParts = item.name.split(',');
-                    if (nameParts.length < 3) {
-                        console.warn(`Skipping stock restoration for malformed item name: ${item.name}`);
-                        return;
-                    }
-                    const size = nameParts.pop().trim();
-                    const color = nameParts.pop().trim();
-                    const productName = nameParts.join(',').trim();
                     stockUpdateOperations.push({
                         updateOne: {
-                            filter: { name: productName, "variations.color": color, "variations.size": size },
+                            filter: { _id: item.itemId, "variations.color.hex": item.variation.color.hex, "variations.size": item.variation.size },
                             update: { $inc: { "variations.$.quantity": item.quantity } }
                         }
                     });
                 });
             }
-
-            // 2. Restore stock for packageRents
             if (rental.packageRents?.length > 0) {
                 rental.packageRents.forEach(pkg => {
                     pkg.packageFulfillment?.forEach(fulfillment => {
                         const item = fulfillment.assignedItem;
-                        if (item && item.itemId && item.variation) {
+                        if (!fulfillment.isCustom && item && item.itemId && item.variation) {
                             const [color, size] = item.variation.split(',').map(s => s.trim());
                             stockUpdateOperations.push({
                                 updateOne: {
@@ -256,85 +241,52 @@ router.put('/:id/process', asyncHandler(async (req, res) => {
                     });
                 });
             }
-
-            // 3. Execute all stock updates if any were generated
             if (stockUpdateOperations.length > 0) {
                 await ItemModel.bulkWrite(stockUpdateOperations, { session });
             }
         }
-        // --- END OF STOCK RESTORATION LOGIC ---
-
-        // --- Update general rental info ---
+        
+        // (General rental info update remains the same)
         if (status) rental.status = status;
         if (rentalStartDate) rental.rentalStartDate = rentalStartDate;
         if (rentalEndDate) rental.rentalEndDate = rentalEndDate;
-        
-        // Ensure financials object exists before modification
         if (!rental.financials) rental.financials = {};
+        if (shopDiscount !== undefined) rental.financials.shopDiscount = parseFloat(shopDiscount) || 0;
+        if (depositAmount !== undefined) rental.financials.depositAmount = parseFloat(depositAmount) || 0;
         
-        if (shopDiscount !== undefined) {
-            rental.financials.shopDiscount = parseFloat(shopDiscount) || 0;
-        }
-        if (depositAmount !== undefined) {
-            rental.financials.depositAmount = parseFloat(depositAmount) || 0;
-        }
-        
-        // --- Handle payment recording ---
         if (payment && typeof payment.amount === 'number' && payment.amount > 0) {
-            const paymentDetail = {
+            const newPayment = {
                 amount: payment.amount,
                 date: new Date(),
                 referenceNumber: payment.referenceNumber || null,
+                receiptImageUrl: payment.receiptImageUrl || undefined, 
             };
 
-            // First, get the calculated financials for the rental AS IT CURRENTLY STANDS
-            // (including any discount/deposit changes made in this same request).
-            // We create a temporary rental object for the calculator.
-            const tempRentalForCalc = {
-                ...rental.toObject(),
-                financials: {
-                    ...rental.financials,
-                    shopDiscount: parseFloat(shopDiscount) || rental.financials.shopDiscount,
-                    depositAmount: parseFloat(depositAmount) || rental.financials.depositAmount
-                }
-            };
-            const calculatedFinancials = calculateFinancials(tempRentalForCalc);
-            const grandTotal = calculatedFinancials.grandTotal;
-
-            // --- THIS IS THE NEW LOGIC ---
-            // If this is the very first payment...
-            if (!rental.financials.downPayment && !rental.financials.finalPayment) {
-                // ...check if the payment amount covers the entire grand total.
-                if (payment.amount >= grandTotal) {
-                    // If it's a full payment, store it in the 'finalPayment' field
-                    // to signify that the rental is paid in full from the start.
-                    rental.financials.finalPayment = paymentDetail;
-                } else {
-                    // Otherwise, it's a partial payment, so store it as a 'downPayment'.
-                    rental.financials.downPayment = paymentDetail;
-                }
-            } else {
-                // If a down payment already exists, this new payment must be the final one.
-                rental.financials.finalPayment = paymentDetail;
+            // Initialize the payments array if it doesn't exist.
+            if (!rental.financials.payments) {
+                rental.financials.payments = [];
             }
+            
+            // Simply push the new payment object into the array.
+            rental.financials.payments.push(newPayment);
         }
-        // --- Save all changes ---
+        // --- END OF NEW PAYMENT LOGIC ---
+        
         const updatedRental = await rental.save({ session });
-
         await session.commitTransaction();
-        const calculatedFinancials = calculateFinancials(updatedRental.toObject());
 
+        // Recalculate and send the final response
+        const calculatedFinancials = calculateFinancials(updatedRental.toObject());
         const finalResponse = {
             ...updatedRental.toObject(),
             financials: calculatedFinancials,
         };
-
         res.status(200).json(finalResponse);
 
     } catch (error) {
         await session.abortTransaction();
         console.error(`Error processing rental ${id}:`, error);
-        throw error; // Let the global error handler manage the response
+        throw error;
     } finally {
         session.endSession();
     }
@@ -1034,7 +986,7 @@ router.post('/from-booking', asyncHandler(async (req, res) => {
             financials: { shopDiscount: 0, depositAmount: 0 },
             rentalStartDate: booking.reserveStartDate,
             rentalEndDate: booking.reserveEndDate,
-            status: "To Process",
+            status: "Pending",
         };
 
         const newRental = new RentalModel(rentalData);
@@ -1181,7 +1133,7 @@ router.post('/from-reservation', protect, asyncHandler(async (req, res) => {
       financials: reservation.financials,
       rentalStartDate: startDate.toISOString().split('T')[0],
       rentalEndDate: endDate.toISOString().split('T')[0],
-      status: "To Process",
+      status: "Pending",
     });
     
     reservation.status = 'Completed';

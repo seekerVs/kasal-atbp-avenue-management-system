@@ -6,6 +6,7 @@ import api from '../../../services/api';
 import PackageCard from '../../packageCard/PackageCard';
 import namer from 'color-namer';
 import './packageSelectionModal.css';
+import { useAlert } from '../../../contexts/AlertContext';
 
 const normalizeHex = (hex: string): string => {
   if (!hex || typeof hex !== 'string') return '';
@@ -19,7 +20,7 @@ const normalizeHex = (hex: string): string => {
 // The data structure this modal returns on success
 export interface PackageSelectionData {
   pkg: Package;
-  motifHex: string;
+  motifId: string;
 }
 
 interface PackageSelectionModalProps {
@@ -30,6 +31,7 @@ interface PackageSelectionModalProps {
 
 export const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({ show, onHide, onSelect }) => {
   const [allPackages, setAllPackages] = useState<Package[]>([]);
+  const {addAlert} = useAlert()
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -153,6 +155,7 @@ export const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({ sh
         console.warn(`Could not name color for hex: ${motif.motifHex}`, e);
       }
       return {
+        _id: motif._id, // <-- ADD THIS LINE
         name: generatedName,
         hex: motif.motifHex,
       };
@@ -163,13 +166,18 @@ export const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({ sh
   const handleGoBack = () => { setSelectedPackage(null); setSelectedMotifHex(''); };
 
   const handleConfirm = () => {
-    if (!selectedPackage || !selectedMotifHex.trim()) return;
+    // The logic here is now simpler, as we just find the selected motif by its ID
+    const selectedMotif = availableMotifs.find(m => m.hex === selectedMotifHex);
+    
+    if (!selectedPackage || !selectedMotif || !selectedMotif._id) {
+        addAlert("Please select a valid motif.", "danger");
+        return;
+    }
 
     onSelect({ 
       pkg: selectedPackage, 
-      motifHex: selectedMotifHex,
+      motifId: selectedMotif._id, // <-- CHANGE THIS from motifHex
     });
-    // We no longer call onHide() here. The parent will close this modal.
   };
 
   const renderGridView = () => (

@@ -6,7 +6,7 @@ import { BoxSeam, Tag, ExclamationTriangleFill, Hash, Palette, PencilSquare, Tra
 import { useNavigate } from 'react-router-dom';
 
 import CustomerDetailsCard from '../../components/CustomerDetailsCard';
-import { CustomerInfo, InventoryItem, RentalOrder, ItemVariation, FormErrors } from '../../types';
+import { CustomerInfo, RentalOrder, FormErrors } from '../../types';
 import api from '../../services/api';
 import { useAlert } from '../../contexts/AlertContext';
 import { SelectedItemData, SingleItemSelectionModal } from '../../components/modals/singleItemSelectionModal/SingleItemSelectionModal';
@@ -100,7 +100,7 @@ function SingleRent() {
     setShowItemModal(true);
   };
 
-  // --- 4. CREATE HANDLER TO PROCESS THE UPDATED ITEM ---
+  // --- 4. CREATE HANDLER PENDING THE UPDATED ITEM ---
   const handleItemUpdate = (newSelection: SelectedItemData) => {
     if (!itemToEdit) return;
 
@@ -149,23 +149,6 @@ function SingleRent() {
     
     setShowDeleteModal(false);
     setItemToDelete(null);
-  };
-
-  const handleQuantityChange = (product_id: string, variation_key: string, newQuantity: number) => {
-    setSelections(prevSelections => 
-      prevSelections.map(item => {
-        // Use the correct key generation with .hex
-        const currentVariationKey = `${item.variation.color.hex}-${item.variation.size}`;
-        if (item.product._id === product_id && currentVariationKey === variation_key) {
-          
-          const maxStock = item.variation.quantity || 1;
-          const clampedQuantity = Math.max(1, Math.min(newQuantity, maxStock));
-          
-          return { ...item, quantity: clampedQuantity };
-        }
-        return item;
-      })
-    );
   };
 
   const handleSelectCustomer = (selectedRental: RentalOrder) => {
@@ -272,45 +255,23 @@ function SingleRent() {
             <Card.Body className="d-flex flex-column">
               {selections.length > 0 ? (
                 <>
-                  {/* --- NEW: List of selected items --- */}
                   <ListGroup variant="flush" className="flex-grow-1" style={{ overflowY: 'auto', maxHeight: '400px' }}>
-                    {selections.map((item) => {
-                      const variationKey = `${item.variation.color.hex}-${item.variation.size}`;
-                      return (
-                        <ListGroup.Item key={`${item.product._id}-${variationKey}`} className="px-2 py-3"> 
-                          <Row className="align-items-center gx-0"> 
-                            <Col xs="auto" className="me-3">
-                              <BsImage src={item.variation.imageUrl} thumbnail style={{ width: '70px', height: '70px', objectFit: 'cover' }} />
-                            </Col>
-                            <Col>
-                              <p className="fw-bold mb-0">{item.product.name}</p>
-                              <p className="text-muted small mb-1">{item.variation.color.name}, {item.variation.size}</p>
-                              
-                              {/* --- NEW: Quantity Stepper --- */}
-                              <div className="d-flex align-items-center gap-2">
-                                <Button 
-                                  variant="outline-secondary" 
-                                  size="sm" 
-                                  style={{ borderRadius: '50%', width: '28px', height: '28px', lineHeight: '1' }}
-                                  onClick={() => handleQuantityChange(item.product._id, variationKey, item.quantity - 1)}
-                                >
-                                  -
-                                </Button>
-                                <span className="fw-bold">{item.quantity}</span>
-                                <Button 
-                                  variant="outline-secondary" 
-                                  size="sm"
-                                  style={{ borderRadius: '50%', width: '28px', height: '28px', lineHeight: '1' }}
-                                  onClick={() => handleQuantityChange(item.product._id, variationKey, item.quantity + 1)}
-                                >
-                                  +
-                                </Button>
-                              </div>
-                              {/* --- END of Stepper --- */}
-
-                            </Col>
-                            <Col xs="auto" className="text-end">
-                              <p className="fw-bold mb-1">₱{(item.product.price * item.quantity).toLocaleString()}</p>
+                  {selections.map((item) => {
+                    const variationKey = `${item.variation.color.hex}-${item.variation.size}`;
+                    return (
+                      <ListGroup.Item key={`${item.product._id}-${variationKey}`} className="px-2 py-3 border-bottom">
+                        <Row className="align-items-center gx-0">
+                          <Col xs="auto">
+                            <BsImage src={item.variation.imageUrl} thumbnail style={{ width: '80px', height: '80px', objectFit: 'cover', marginRight:'1rem' }} />
+                          </Col>
+                          <Col>
+                            <p className="fw-bold mb-1">{item.product.name}</p>
+                            <p className="text-muted small mb-0">Variation: {item.variation.color.name} - {item.variation.size}</p>
+                            <p className="text-muted small mb-0">Qty: {item.quantity}</p>
+                          </Col>
+                          <Col xs="auto" className="text-end">
+                            <p className="fw-bold h5 text-success mb-2">₱{(item.product.price * item.quantity).toLocaleString()}</p>
+                            <>
                               <Button
                                 variant="outline-secondary"
                                 size="sm"
@@ -326,13 +287,13 @@ function SingleRent() {
                               >
                                 <Trash />
                               </Button>
-                            </Col>
-                          </Row>
-                        </ListGroup.Item>
-                      );
-                    })}
-                  </ListGroup>
-
+                            </>
+                          </Col>
+                        </Row>
+                      </ListGroup.Item>
+                    );
+                  })}
+                </ListGroup>
                   <hr />
                   
                   <div className="d-flex justify-content-between align-items-center mb-3">
@@ -404,7 +365,7 @@ function SingleRent() {
 
       <Modal show={showReminderModal} onHide={() => setShowReminderModal(false)} centered>
         <Modal.Header closeButton><Modal.Title><ExclamationTriangleFill className="me-2 text-warning" />Create New Rental?</Modal.Title></Modal.Header>
-        <Modal.Body>This customer does not have a "To Process" rental. Do you want to create a completely new rental transaction for them?</Modal.Body>
+        <Modal.Body>This customer does not have a "Pending" rental. Do you want to create a completely new rental transaction for them?</Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowReminderModal(false)}>Cancel</Button>
           <Button variant="primary" onClick={createNewRental}>Yes, Create New Rental</Button>

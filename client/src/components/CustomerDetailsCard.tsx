@@ -158,7 +158,7 @@ function CustomerDetailsCard({
         <div className="d-grid gap-2 mt-auto">
           {(existingOpenRental && !isNewCustomerMode) ? (
             <>
-              <Alert variant="info" className="text-center mb-2 small py-2">This customer has a rental "To Process".</Alert>
+              <Alert variant="info" className="text-center mb-2 small py-2">This customer has a rental "Pending".</Alert>
               <Button variant="info" size="lg" onClick={() => onSubmit('add')} disabled={!canSubmit || isSubmitting}>
                 {isSubmitting ? <Spinner as="span" size="sm" /> : <PlusCircle className="me-2" />}
                 Add to Existing Rental

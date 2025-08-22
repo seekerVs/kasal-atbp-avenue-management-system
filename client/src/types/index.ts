@@ -165,9 +165,7 @@ export interface Financials {
   shopDiscount: number;
   depositAmount: number;
   depositReimbursed?: number; 
-  downPayment?: PaymentDetail;
-  finalPayment?: PaymentDetail;
-  // Calculated values (from backend)
+  payments?: PaymentDetail[];
   subtotal?: number;
   itemsTotal?: number;
   requiredDeposit?: number;
@@ -189,6 +187,21 @@ export interface RentalOrder {
   status: RentalStatus;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface NormalizedFulfillmentItem {
+  role: string;
+  wearerName?: string;
+  isCustom: boolean;
+  notes?: string;
+  assignedItem: {
+    itemId?: string;
+    name?: string;
+    variation?: string;
+    imageUrl?: string;
+    outfitCategory?: string; // For custom items
+    referenceImages?: string[]; // For custom items
+  };
 }
 
 // ===================================================================

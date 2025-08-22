@@ -5,10 +5,8 @@ import {
   Container,
   Row,
   Col,
-  Form,
   Button,
   Card,
-  ListGroup,
   Spinner,
   Alert,
   Image as BsImage,
@@ -18,8 +16,6 @@ import {
   BoxSeam,
   ExclamationTriangleFill,
   Palette,
-  PencilSquare,
-  PlusCircle
 } from 'react-bootstrap-icons';
 import { useNavigate } from 'react-router-dom';
 import CustomerDetailsCard from '../../components/CustomerDetailsCard';
@@ -34,13 +30,15 @@ import {
   MeasurementRef,
   CustomTailoringItem,
   FormErrors,
-  ColorMotif
+  NormalizedFulfillmentItem
 } from '../../types';
 import { SingleItemSelectionModal, SelectedItemData } from '../../components/modals/singleItemSelectionModal/SingleItemSelectionModal';
 import CreateEditCustomItemModal from '../../components/modals/createEditCustomItemModal/CreateEditCustomItemModal';
 import api from '../../services/api';
 import { useAlert } from '../../contexts/AlertContext';
 import namer from 'color-namer';
+import { PackageFulfillmentForm } from '../../components/forms/packageFulfillmentForm/PackageFulfillmentForm';
+import { PackageSelectionData, PackageSelectionModal } from '../../components/modals/packageSelectionModal/PackageSelectionModal';
 
 const initialCustomerDetails: CustomerInfo = { 
   name: '', 
@@ -54,19 +52,17 @@ const initialCustomerDetails: CustomerInfo = {
   } 
 };
 
-// ===================================================================================
-// --- MAIN COMPONENT ---
-// ===================================================================================
 function PackageRent() {
   const navigate = useNavigate();
   const { addAlert } = useAlert();
 
   // State Management
-  const [allPackages, setAllPackages] = useState<Package[]>([]);
+  const [selectedPackage, setSelectedPackage] = useState<Package | null>(null);
+  const [selectedMotifId, setSelectedMotifId] = useState<string>('');
+  const [showPackageSelectionModal, setShowPackageSelectionModal] = useState(false);
   const [allInventory, setAllInventory] = useState<InventoryItem[]>([]);
   const [allRentals, setAllRentals] = useState<RentalOrder[]>([]);
   const [selectedPackageId, setSelectedPackageId] = useState<string>('');
-  const [selectedMotifId, setSelectedMotifId] = useState<string>('');
   const [measurementRefs, setMeasurementRefs] = useState<MeasurementRef[]>([]);
   const [fulfillmentData, setFulfillmentData] = useState<PackageFulfillment[]>([]);
   const [showCustomItemModal, setShowCustomItemModal] = useState(false);
@@ -94,6 +90,11 @@ function PackageRent() {
   
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const selectedMotif = useMemo(() => {
+    if (!selectedPackage || !selectedMotifId) return null;
+    return selectedPackage.colorMotifs.find(m => m._id === selectedMotifId);
+  }, [selectedPackage, selectedMotifId]);
   
   useEffect(() => {
     const pendingItemJSON = sessionStorage.getItem('pendingCustomItem');
@@ -124,13 +125,11 @@ function PackageRent() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [packagesRes, inventoryRes, rentalsRes, refsRes] = await Promise.all([
-          api.get('/packages'),
-          api.get('/inventory'),
+        const [inventoryRes, rentalsRes, refsRes] = await Promise.all([
+          api.get('/inventory?limit=1000'),
           api.get('/rentals'),
           api.get('/measurementrefs'),
         ]);
-        setAllPackages(packagesRes.data || []);
         setAllInventory(inventoryRes.data.items || []);
         setAllRentals(rentalsRes.data || []);
         setMeasurementRefs(refsRes.data || []);
@@ -142,83 +141,97 @@ function PackageRent() {
       }
     };
     fetchData();
-  }, []);
-
-  const selectedPackage = useMemo(() => allPackages.find(p => p._id === selectedPackageId), [selectedPackageId, allPackages]);
-
-  const motifsWithNames = useMemo(() => {
-    if (!selectedPackage) return [];
-
-    return selectedPackage.colorMotifs.map((motif: ColorMotif) => {
-      let generatedName = 'Custom Color';
-      try {
-        const names = namer(motif.motifHex);
-        generatedName = names.ntc[0]?.name || 'Custom Color';
-        generatedName = generatedName.replace(/\b\w/g, char => char.toUpperCase());
-      } catch (e) {
-        console.warn(`Could not name color for hex: ${motif.motifHex}`, e);
-      }
-      return {
-        ...motif, // includes _id, motifHex, etc.
-        displayName: generatedName, // add the new display property
-      };
-    });
-  }, [selectedPackage]);
-
-  
-  const selectedMotif = useMemo(() => selectedPackage?.colorMotifs.find(m => m._id === selectedMotifId), [selectedPackage, selectedMotifId]);
+  }, [addAlert]);
 
   useEffect(() => {
+    // If no package is selected, reset the form and exit.
     if (!selectedPackage) {
-        setFulfillmentData([]);
-        return;
+      setFulfillmentData([]);
+      return;
     }
-    
-    const initialFulfillment = selectedPackage.inclusions.flatMap(inclusion => {
+    const newFulfillmentStructure: PackageFulfillment[] = selectedPackage.inclusions.flatMap(inclusion => {
         return Array.from({ length: inclusion.wearerNum }, (_, i) => {
             const roleName = inclusion.wearerNum > 1 ? `${inclusion.name} ${i + 1}` : inclusion.name;
             return {
-                role: roleName, wearerName: '',
+                role: roleName,
+                wearerName: '',
                 isCustom: !!inclusion.isCustom,
                 assignedItem: {},
                 sourceInclusionId: inclusion._id,
-            } as PackageFulfillment; // Added type assertion for clarity
+            };
         });
     });
 
     if (selectedMotif) {
-      const inventoryMap = new Map(allInventory.map(item => [item._id, item]));
+      const inventoryMapForPrefill = new Map(allInventory.map(item => [item._id.toString(), item]));
       selectedMotif.assignments.forEach(assignment => {
-        const targetFulfillmentSlots = initialFulfillment.filter(
-          fulfill => fulfill.sourceInclusionId === assignment.inclusionId
-        );
-        
-        // --- (2) THE FIX IS HERE: We now loop over `assignedItems` ---
-        assignment.assignedItems.forEach((assignedItem, wearerIndex) => {
-          // Check if assignedItem is not null and has an itemId
-          if (assignedItem && assignedItem.itemId && targetFulfillmentSlots[wearerIndex]) {
-            const itemDetails = inventoryMap.get(assignedItem.itemId);
-            if (itemDetails) {
-              // Find the specific variation image, or use the first one as a fallback.
-              const variationDetails = itemDetails.variations.find(v => 
-                v.color.hex === assignedItem.color.hex && v.size === assignedItem.size
-              );
+        const sourceInclusion = selectedPackage.inclusions.find(inc => String(inc._id) === String(assignment.inclusionId));
+        if (!sourceInclusion) {
+          return;
+        }
 
-              targetFulfillmentSlots[wearerIndex].assignedItem = {
-                itemId: assignedItem.itemId,
-                name: itemDetails.name,
-                // We can now pre-fill the variation string directly!
-                variation: `${assignedItem.color.name}, ${assignedItem.size}`,
-                imageUrl: variationDetails?.imageUrl || itemDetails.variations[0]?.imageUrl,
-              };
+        const targetSlots = newFulfillmentStructure
+            .map((fulfill, index) => ({ ...fulfill, originalIndex: index }))
+            .filter(fulfill => fulfill.role.startsWith(sourceInclusion.name));
+
+        assignment.assignedItems.forEach((assignedItem, wearerIndex) => {
+            if (assignedItem && targetSlots[wearerIndex]) {
+                const originalFulfillmentIndex = targetSlots[wearerIndex].originalIndex;
+                const itemDetails = inventoryMapForPrefill.get(assignedItem.itemId);
+
+                if (itemDetails) {
+                    const variationDetails = itemDetails.variations.find(v => 
+                        v.color.hex === assignedItem.color.hex && v.size === assignedItem.size
+                    );
+
+                    newFulfillmentStructure[originalFulfillmentIndex].assignedItem = {
+                        itemId: assignedItem.itemId,
+                        name: itemDetails.name,
+                        variation: `${assignedItem.color.name}, ${assignedItem.size}`,
+                        imageUrl: variationDetails?.imageUrl || itemDetails.variations[0]?.imageUrl,
+                    };
+                }
             }
-          }
         });
       });
     }
 
-    setFulfillmentData(initialFulfillment);
+    setFulfillmentData(newFulfillmentStructure);
   }, [selectedPackage, selectedMotif, allInventory]);
+
+
+  const normalizedDataForForm = useMemo((): NormalizedFulfillmentItem[] => {
+    return fulfillmentData.map(fulfill => {
+      const assigned = fulfill.assignedItem || {};
+      return {
+        role: fulfill.role,
+        wearerName: fulfill.wearerName,
+        isCustom: fulfill.isCustom ?? false,
+        assignedItem: {
+          itemId: 'itemId' in assigned ? assigned.itemId : undefined,
+          name: 'name' in assigned ? assigned.name : undefined,
+          variation: 'variation' in assigned ? assigned.variation : undefined,
+          imageUrl: 'imageUrl' in assigned ? assigned.imageUrl : undefined,
+          outfitCategory: 'outfitCategory' in assigned ? (assigned as any).outfitCategory : undefined,
+          referenceImages: 'referenceImages' in assigned ? (assigned as any).referenceImages : undefined
+        }
+      };
+    });
+  }, [fulfillmentData]);
+
+  const handlePackageSelect = (selection: PackageSelectionData) => {
+    setSelectedPackage(selection.pkg);
+    setSelectedMotifId(selection.motifId);
+    setShowPackageSelectionModal(false); // Close the modal on selection
+  };
+
+  const getMotifName = (motifHex: string) => {
+    if (!motifHex) return 'N/A';
+    try {
+        const names = namer(motifHex);
+        return names.ntc[0]?.name.replace(/\b\w/g, char => char.toUpperCase()) || 'Custom Color';
+    } catch { return 'Custom Color'; }
+  };
 
   const validateCustomerDetails = (): boolean => {
     const newErrors: FormErrors = { address: {} };
@@ -232,11 +245,7 @@ function PackageRent() {
     setErrors(newErrors);
     return Object.keys(newErrors).length === 1 && Object.keys(newErrors.address).length === 0;
   };
-  
-  const handlePackageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedPackageId(e.target.value);
-    setSelectedMotifId('');
-  };
+
 
   const handleOpenCustomItemModal = (index: number) => {
     const fulfillItem = fulfillmentData[index];
@@ -278,7 +287,7 @@ function PackageRent() {
     const customer = selectedRental.customerInfo[0];
     setCustomerDetails(customer);
     setSelectedRentalForDisplay(selectedRental);
-    if (selectedRental.status === 'To Process') {
+    if (selectedRental.status === 'Pending') {
       setExistingOpenRental(selectedRental);
     } else {
       setExistingOpenRental(null);
@@ -346,6 +355,7 @@ function PackageRent() {
     return {
       customerInfo: [customerDetails],
       packageRents: [{
+         _id: `pkg_${uuidv4()}`,
         packageId: selectedPackage._id, // <-- THE CRUCIAL FIX: Send the ID
         motifHex: selectedMotifObject?.motifHex, // <-- Send the HEX
         price: selectedPackage.price,
@@ -471,7 +481,8 @@ function PackageRent() {
     newFulfillmentData[fulfillmentIndex].assignedItem = {
       itemId: product._id,
       name: product.name,
-      variation: `${variation.color}, ${variation.size}`,
+      // FIX IS HERE: Was `variation.color`, should be `variation.color.name`
+      variation: `${variation.color.name}, ${variation.size}`, 
       imageUrl: variation.imageUrl
     };
 
@@ -503,6 +514,18 @@ function PackageRent() {
     return { itemId: undefined, variation: undefined };
   }, [assignmentContext, fulfillmentData]);
 
+  const handleClearAssignment = (index: number) => {
+    setFulfillmentData(prev => {
+      const updated = [...prev];
+      if (updated[index]) {
+        // Clear the assignment by setting it to an empty object
+        updated[index].assignedItem = {}; 
+      }
+      return updated;
+    });
+    addAlert('Assignment cleared.', 'info');
+  };
+
   return (
     <Container fluid>
       <h2 className="mb-4">Create Package Rental</h2>
@@ -513,117 +536,64 @@ function PackageRent() {
           <Card className="mb-4">
             <Card.Header as="h5"><BoxSeam className="me-2" />Select Package</Card.Header>
             <Card.Body>
-              <Row>
-                <Col md={6}>
-                  <Form.Group className="mb-3">
-                    <Form.Label>Available Packages</Form.Label>
-                    <Form.Select value={selectedPackageId} onChange={handlePackageChange}>
-                      <option value="">-- Choose a Package --</option>
-                      {allPackages.map(pkg => (
-                        <option key={pkg._id} value={pkg._id}>
-                          {pkg.name} - ₱{pkg.price.toLocaleString()}
-                        </option>
-                      ))}
-                    </Form.Select>
-                  </Form.Group>
-                </Col>
-                <Col md={6}>
-                  <Form.Group className="mb-3">
-                    <Form.Label><Palette className="me-2" />Color Motif</Form.Label>
-                    <Form.Select 
-                      value={selectedMotifId} 
-                      onChange={e => setSelectedMotifId(e.target.value)}
-                      disabled={!selectedPackageId} // <-- KEY CHANGE: Disabled if no package ID
-                    >
-                      <option value="">
-                        {selectedPackageId ? '-- Manual Assignment --' : '-- Select a Package First --'}
-                      </option>
-                      
-                      {/* This part remains conditional to prevent errors */}
-                      {motifsWithNames.map(motif => (
-                        <option key={motif._id} value={motif._id}>
-                          {motif.displayName}
-                        </option>
-                      ))}
-                    </Form.Select>
-                  </Form.Group>
-                </Col>
-              </Row>
+              {selectedPackage ? (
+                // --- DISPLAY VIEW (when a package is selected) ---
+                <div>
+                  <Row className="g-3">
+                    <Col xs="auto">
+                      <BsImage 
+                        src={selectedPackage.imageUrls[0] || 'https://placehold.co/120x150'} 
+                        style={{ width: '120px', height: '150px', objectFit: 'cover', borderRadius: '0.375rem' }} 
+                      />
+                    </Col>
+                    <Col>
+                      <h5 className="mb-1">{selectedPackage.name}</h5>
+                      <p className="text-danger fw-bold fs-5 mb-2">₱{selectedPackage.price.toLocaleString()}</p>
+                      <div className="d-flex align-items-center">
+                        <Palette className="me-2 text-muted" />
+                        <span>Motif: <strong>{getMotifName(selectedMotif?.motifHex || '')}</strong></span>
+                      </div>
+                    </Col>
+                  </Row>
+                  <div className="d-grid mt-3">
+                    <Button variant="outline-secondary" onClick={() => setShowPackageSelectionModal(true)}>
+                      Change Package or Motif...
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                // --- PROMPT VIEW (when no package is selected) ---
+                <div className="text-center p-4">
+                  <p className="text-muted fs-5">No package has been selected.</p>
+                  <Button variant="primary" onClick={() => setShowPackageSelectionModal(true)}>
+                    Select a Package
+                  </Button>
+                </div>
+              )}
             </Card.Body>
           </Card>
           <Card>
             <Card.Header as="h5">Fulfillment Details</Card.Header>
-              <ListGroup variant="flush" style={{ height: '80vh', overflowY: 'auto' }}>
-                {fulfillmentData.map((fulfill, index) => {
-                  
-                  // --- THIS IS THE FIX (Type-Safe Variable Declarations) ---
-                  const assigned = fulfill.assignedItem || {};
-                  const isCustomSlot = !!fulfill.isCustom;
-
-                  let isInventoryItem = false;
-                  let customItemHasData = false;
-                  let variation = '';
-                  let imageUrl = 'https://placehold.co/80x80/e9ecef/adb5bd?text=N/A';
-
-                  // Type Guard for Inventory Item
-                  if (assigned && 'itemId' in assigned) {
-                      isInventoryItem = true;
-                      variation = assigned.variation || '';
-                      imageUrl = assigned.imageUrl || imageUrl;
-                  }
-                  // Type Guard for Custom Item
-                  else if (assigned && 'outfitCategory' in assigned) {
-                      customItemHasData = true;
-                      // You could use a reference image if available
-                      imageUrl = assigned.referenceImages?.[0] || 'https://placehold.co/80x80/6c757d/white?text=Custom';
-                  }
-                  // -------------------------------------------------------------
-
-                  return (
-                    <ListGroup.Item key={index}>
-                      <Row className="align-items-center g-3">
-                        <Col>
-                          <strong>{fulfill.role}</strong>
-                          <Form.Control size="sm" type="text" placeholder="Enter Wearer's Name" value={fulfill.wearerName || ''} onChange={e => handleWearerNameChange(index, e.target.value)} className="mt-1"/>
-                        </Col>
-                        <Col md="auto" className="text-center">
-                          <BsImage src={imageUrl} rounded style={{width: 80, height: 80, objectFit: 'cover'}}/>
-                        </Col>
-                        <Col>
-                          <div>{assigned.name || 'Not Assigned'}</div>
-                          {isInventoryItem && <div className="text-muted small">{variation}</div>}
-                          {customItemHasData && <div className="text-info small fst-italic">Custom Details Added</div>}
-                          {isCustomSlot && !customItemHasData && <div className="text-info small fst-italic">Custom Tailoring Slot</div>}
-                        </Col>
-                        <Col md="auto" className="text-end">
-                          {fulfill.isCustom ? (
-                              // For a custom role, we call the handler that opens our new CreateEditCustomItemModal
-                              <Button 
-                                  variant={"outfitCategory" in fulfill.assignedItem ? "outline-success" : "outline-info"} 
-                                  size="sm" 
-                                  onClick={() => handleOpenCustomItemModal(index)}
-                              >
-                                  <PlusCircle className="me-1"/> 
-                                  {/* The text changes if the item details have been filled out */}
-                                  {"outfitCategory" in fulfill.assignedItem ? 'Edit Details' : 'Create Item'}
-                              </Button>
-                          ) : (
-                              // For a standard role, we call the handler for the inventory assignment modal
-                              <Button 
-                                  variant="outline-primary" 
-                                  size="sm" 
-                                  onClick={() => handleOpenAssignmentModal(index)}
-                              >
-                                  <PencilSquare className="me-1"/> 
-                                  {"itemId" in fulfill.assignedItem ? 'Change' : 'Assign'}
-                              </Button>
-                          )}
-                        </Col>
-                      </Row>
-                    </ListGroup.Item>
-                  );
-                })}
-              </ListGroup>
+            <Card.Body className="p-0">
+              {fulfillmentData.length > 0 ? (
+                <div style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+                    <PackageFulfillmentForm
+                      mode="rental"
+                      fulfillmentData={normalizedDataForForm}
+                      onWearerNameChange={handleWearerNameChange}
+                      onOpenAssignmentModal={handleOpenAssignmentModal}
+                      onOpenCustomItemModal={handleOpenCustomItemModal}
+                      onClearAssignment={handleClearAssignment}
+                      errors={[]} // Pass errors if you add validation here later
+                    />
+                </div>
+              ) : (
+                <div className="text-center p-5 text-muted">
+                  <p>Select a package and motif to see fulfillment details here.</p>
+                </div>
+              )}
+              {/* --- MODIFICATION END --- */}
+            </Card.Body>
           </Card>
         </Col>
 
@@ -646,6 +616,12 @@ function PackageRent() {
         </Col>
       </Row>
       )}
+
+      <PackageSelectionModal
+        show={showPackageSelectionModal}
+        onHide={() => setShowPackageSelectionModal(false)}
+        onSelect={handlePackageSelect}
+      />
 
       {showCustomItemModal && customItemContext && (
         <CreateEditCustomItemModal
@@ -673,7 +649,7 @@ function PackageRent() {
 
       <Modal show={showReminderModal} onHide={() => setShowReminderModal(false)} centered>
         <Modal.Header closeButton><Modal.Title><ExclamationTriangleFill className="me-2 text-warning" />Customer Has Open Rental</Modal.Title></Modal.Header>
-        <Modal.Body>This customer has a rental "To Process". Are you sure you want to create a separate new rental transaction?</Modal.Body>
+        <Modal.Body>This customer has a rental "Pending". Are you sure you want to create a separate new rental transaction?</Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowReminderModal(false)}>Cancel</Button>
           <Button variant="primary" onClick={createNewRental}>Yes, Create New Rental</Button>

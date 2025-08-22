@@ -1,161 +1,132 @@
-// client\src\components\forms\packageFulfillmentForm\PackageFulfillmentForm.tsx
-
 import React, { useMemo } from 'react';
-import DatePicker from 'react-datepicker';
-import { setHours, setMinutes, getDay, startOfDay } from 'date-fns';
-import { Row, Col, Form, Button, ListGroup, Image } from 'react-bootstrap';
-import { PencilSquare } from 'react-bootstrap-icons';
-import { FulfillmentPreview, PackageFulfillment } from '../../../types';
+import { Form, Button, Table, Image, Badge } from 'react-bootstrap';
+import { PencilSquare, PlusCircle, Trash } from 'react-bootstrap-icons';
+import { NormalizedFulfillmentItem } from '../../../types';
 import './packageFulfillmentForm.css';
 import { DateTimePicker } from '../../dateTimePicker/DateTimePicker';
 
-
-type FulfillmentItem = PackageFulfillment | FulfillmentPreview;
-
 export interface FulfillmentError {
   index: number;
-  field: 'wearerName' | 'notes'; // Specify which field has the error
+  field: 'wearerName' | 'notes';
   message: string;
 }
 
 interface PackageFulfillmentFormProps {
-  fulfillmentData: FulfillmentItem[];
-  appointmentDate: Date | null;
-  unavailableDates: Date[];
-  errors: FulfillmentError[]; 
+  fulfillmentData: NormalizedFulfillmentItem[];
+  errors: FulfillmentError[];
   onWearerNameChange: (index: number, name: string) => void;
-  onOpenSizeSelectionModal: (index: number) => void;
-  onAppointmentDateChange: (date: Date | null) => void;
-  onCustomItemNoteChange: (index: number, note: string) => void;
+  mode: 'reservation' | 'rental';
+  appointmentDate?: Date | null;
+  unavailableDates?: Date[];
+  onAppointmentDateChange?: (date: Date | null) => void;
+  onCustomItemNoteChange?: (index: number, note: string) => void;
+  onOpenSizeSelectionModal?: (index: number) => void;
+  onOpenAssignmentModal?: (index: number) => void;
+  onOpenCustomItemModal?: (index: number) => void;
+  onClearAssignment?: (index: number) => void;
 }
-
 export const PackageFulfillmentForm: React.FC<PackageFulfillmentFormProps> = ({
   fulfillmentData,
-  appointmentDate,
-  unavailableDates,
+  errors,
   onWearerNameChange,
-  onOpenSizeSelectionModal,
+  mode,
+  appointmentDate,
+  unavailableDates = [],
   onAppointmentDateChange,
   onCustomItemNoteChange,
-  errors,
+  onOpenSizeSelectionModal,
+  onOpenAssignmentModal,
+  onOpenCustomItemModal,
+  onClearAssignment,
 }) => {
-    // Helper to check if there are any custom items in the package
-  const hasCustomItems = useMemo(() => 
-    fulfillmentData.some(item => (item as FulfillmentPreview).isCustom), 
-    [fulfillmentData]
-  );
+  const hasCustomItems = fulfillmentData.some(item => item.isCustom);
 
   return (
     <>
-      <ListGroup variant="flush" className="fulfillment-form-container">
-        {/* --- NEW: Conditional DatePicker for Custom Items --- */}
-        {hasCustomItems && (
-            <Form.Group className="mb-2 p-3 bg-light border rounded">
-            <Form.Label className="fw-bold">
-                Select Appointment Date & Time
-            </Form.Label>
-            <DateTimePicker
-                selectedDate={appointmentDate}
-                onChange={onAppointmentDateChange}
-                unavailableDates={unavailableDates}
-                minDate={new Date()}
-            />
-            <Form.Text>This single appointment will be for all custom-made items in this package.</Form.Text>
-            </Form.Group>
-        )}
+      {mode === 'reservation' && hasCustomItems && (
+        <Form.Group className="mb-3 p-3 bg-light border rounded">
+          <Form.Label className="fw-bold">Select Appointment Date & Time</Form.Label>
+          <DateTimePicker
+              selectedDate={appointmentDate || null}
+              onChange={onAppointmentDateChange || (() => {})}
+              unavailableDates={unavailableDates}
+              minDate={new Date()}
+          />
+          <Form.Text>This single appointment will be for all custom-made items in this package.</Form.Text>
+        </Form.Group>
+      )}
 
-        {fulfillmentData.map((fulfillItem, index) => {
-          const isDesignatedAsCustom = (fulfillItem as FulfillmentPreview).isCustom === true;
-          const assigned = (fulfillItem as PackageFulfillment).assignedItem || {};
-          
-          let isLinkedToItem = false;
-          let imageUrl = 'https://placehold.co/80x80/e9ecef/adb5bd?text=N/A';
-          let displayName = 'Not Assigned';
-          let displayVariation = '';
+      <div className="table-responsive">
+        <Table hover responsive className="align-middle mb-0">
+          <thead className="table-light">
+            <tr>
+              <th style={{ width: '25%' }}>Role</th>
+              <th style={{ width: '25%' }}>Wearer Name</th>
+              <th style={{ width: '35%' }}>Assigned Item</th>
+              <th style={{ width: '15%' }} className="text-end">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {fulfillmentData.map((fulfillItem, index) => {
+              const wearerNameError = errors.find(e => e.index === index && e.field === 'wearerName');
+              const notesError = errors.find(e => e.index === index && e.field === 'notes');
+              const { isCustom, assignedItem } = fulfillItem;
+              const hasAssignedInventoryItem = !!assignedItem.itemId && !!assignedItem.variation;
+              const hasAssignedCustomItem = !!assignedItem.outfitCategory;
 
-          if (assigned && 'itemId' in assigned && assigned.itemId) {
-              isLinkedToItem = true;
-              displayName = assigned.name || 'Assigned Item';
-              displayVariation = assigned.variation || 'Variation not selected';
-              imageUrl = assigned.imageUrl || imageUrl;
-          }
-
-          const wearerNameError = errors.find(e => e.index === index && e.field === 'wearerName');
-          const notesError = errors.find(e => e.index === index && e.field === 'notes');
-
-          return (
-            <ListGroup.Item key={index} className="px-0 py-3">
-              {/* --- THIS IS THE CORRECTED STRUCTURE --- */}
-              <Row className="g-3">
-                <Col md={4}>
-                  <Form.Group>
-                    <Form.Label className="fw-bold">{fulfillItem.role}</Form.Label>
-                    <Form.Control
-                      id={`wearer-name-${index}`}
-                      size="sm"
-                      type="text"
-                      placeholder="Enter wearer's name"
-                      value={fulfillItem.wearerName || ''}
+              return (
+                <tr key={index}>
+                  <td className="fw-medium">{fulfillItem.role}</td>
+                  <td>
+                    <Form.Control 
+                      size="sm" 
+                      type="text" 
+                      placeholder="Enter wearer's name" 
+                      value={fulfillItem.wearerName || ''} 
                       onChange={(e) => onWearerNameChange(index, e.target.value)}
                       isInvalid={!!wearerNameError}
                     />
-                    <Form.Control.Feedback type="invalid">
-                      {wearerNameError?.message}
-                    </Form.Control.Feedback>
-                  </Form.Group>
-                </Col>
-
-                {isDesignatedAsCustom ? (
-                  // Layout for Custom Items (no image)
-                  <Col md={8} className='align-self-end'>
-                    <Form.Group>
-                      <Form.Label className="fw-bold small text-muted">Notes</Form.Label>
-                      <Form.Control
-                        as="textarea"
-                        rows={2}
-                        placeholder="Notes for customization..."
-                        value={(fulfillItem as FulfillmentPreview).notes || ''}
-                        onChange={(e) => onCustomItemNoteChange(index, e.target.value)}
-                        size="sm"
-                        isInvalid={!!notesError}
-                        
-                      />
-                      <Form.Control.Feedback type="invalid">
-                          {notesError?.message}
-                      </Form.Control.Feedback>
-                    </Form.Group>
-                  </Col>
-                ) : (
-                  // Layout for Standard Items (with image)
-                  <>
-                    <Col xs={4} md={2} className="text-center align-self-center">
-                      <Image src={imageUrl} rounded style={{width: 60, height: 60, objectFit: 'cover'}}/>
-                    </Col>
-                    <Col xs={8} md={4} className="align-self-center">
-                      <div className="assignment-details">
-                        <p className="fw-bold mb-0 text-truncate" title={displayName}>{displayName}</p>
-                        <p className="small text-muted mb-0">{displayVariation}</p>
+                    {wearerNameError && <Form.Control.Feedback type="invalid" className="small">{wearerNameError.message}</Form.Control.Feedback>}
+                  </td>
+                  <td>
+                    <div className="d-flex align-items-center">
+                      <Image src={assignedItem.imageUrl || 'https://placehold.co/50x50/e9ecef/adb5bd?text=N/A'} rounded style={{ width: '50px', height: '50px', objectFit: 'cover', marginRight: '0.75rem' }} />
+                      <div className="lh-1">
+                        <p className={`mb-1 ${hasAssignedInventoryItem || hasAssignedCustomItem ? 'fw-medium' : 'text-muted fst-italic'}`}>{assignedItem.name || 'Not Assigned'}</p>
+                        {hasAssignedInventoryItem && <small className="text-muted">{assignedItem.variation}</small>}
+                        {mode === 'reservation' && isCustom && <Form.Control as="textarea" rows={1} size="sm" placeholder="Notes..." value={fulfillItem.notes || ''} onChange={(e) => onCustomItemNoteChange?.(index, e.target.value)} isInvalid={!!notesError} />}
+                        {hasAssignedCustomItem && <Badge pill bg="info">Custom Details Added</Badge>}
+                        {isCustom && !hasAssignedCustomItem && <Badge bg="light" text="dark">Custom Tailoring Slot</Badge>}
                       </div>
-                    </Col>
-                    <Col md={2} className="text-end align-self-center p-0">
-                      {isLinkedToItem && (
-                        <Button 
-                          variant="outline-primary" 
-                          size="sm" 
-                          onClick={() => onOpenSizeSelectionModal(index)}
-                        >
-                          <PencilSquare className="me-1"/>
-                          Change Size
-                        </Button>
-                      )}
-                    </Col>
-                  </>
-                )}
-              </Row>
-            </ListGroup.Item>
-          );
-        })}
-      </ListGroup>
+                    </div>
+                  </td>
+                  <td className="text-end">
+                    {mode === 'rental' ? (
+                      <div className="d-flex gap-2 justify-content-end">
+                        {isCustom && onOpenCustomItemModal && (
+                           <Button variant={hasAssignedCustomItem ? "outline-success" : "outline-info"} size="sm" onClick={() => onOpenCustomItemModal(index)} title={hasAssignedCustomItem ? 'Edit Details' : 'Create Item'}><PlusCircle /></Button>
+                        )}
+                        {!isCustom && onOpenAssignmentModal && (
+                           <Button variant="outline-primary" size="sm" onClick={() => onOpenAssignmentModal(index)} title={hasAssignedInventoryItem ? 'Change Item' : 'Assign Item'}><PencilSquare /></Button>
+                        )}
+                        {(hasAssignedInventoryItem || hasAssignedCustomItem) && onClearAssignment && (
+                           <Button variant="outline-danger" size="sm" onClick={() => onClearAssignment(index)} title="Clear Assignment"><Trash /></Button>
+                        )}
+                      </div>
+                    ) : ( // Reservation Mode
+                       !isCustom && hasAssignedInventoryItem && onOpenSizeSelectionModal && (
+                         <Button variant="outline-primary" size="sm" onClick={() => onOpenSizeSelectionModal(index)}>
+                           <PencilSquare className="me-1"/> Change Size
+                         </Button>
+                       )
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </Table>
+      </div>
     </>
   );
 };

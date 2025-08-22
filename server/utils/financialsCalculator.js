@@ -1,10 +1,5 @@
 // server/utils/financialsCalculator.js
 
-/**
- * THIS FILE IS THE SINGLE SOURCE OF TRUTH FOR ALL BUSINESS LOGIC
- * RELATED TO PRICING, DEPOSITS, AND TOTALS.
- */
-
 // --- CONFIGURATION: Define your business rules here ---
 const DEPOSIT_RULES = {
     // For single items, the deposit is the item's price, but it will not exceed this value.
@@ -76,8 +71,11 @@ function calculateFinancials(rentalData) {
     const itemsTotal = subtotal - shopDiscount;
     const grandTotal = itemsTotal + finalDepositAmount;
 
-    // Calculate total paid from down and final payments, if they exist.
-    const totalPaid = (rentalData.financials?.downPayment?.amount || 0) + (rentalData.financials?.finalPayment?.amount || 0);
+    const totalPaid = (rentalData.financials?.payments || []).reduce(
+      (sum, payment) => sum + (payment.amount || 0),
+      0
+    );
+    
     const remainingBalance = grandTotal - totalPaid;
 
     // Return a clean, fully-calculated object.
@@ -85,14 +83,13 @@ function calculateFinancials(rentalData) {
         subtotal: parseFloat(subtotal.toFixed(2)),
         shopDiscount: parseFloat(shopDiscount.toFixed(2)),
         itemsTotal: parseFloat(itemsTotal.toFixed(2)),
-        requiredDeposit: parseFloat(requiredDeposit.toFixed(2)), // The calculated minimum based on rules.
-        depositAmount: parseFloat(finalDepositAmount.toFixed(2)),   // The actual deposit being used.
+        requiredDeposit: parseFloat(requiredDeposit.toFixed(2)),
+        depositAmount: parseFloat(finalDepositAmount.toFixed(2)),
         grandTotal: parseFloat(grandTotal.toFixed(2)),
         totalPaid: parseFloat(totalPaid.toFixed(2)),
         remainingBalance: parseFloat(remainingBalance.toFixed(2)),
-        // Carry over existing payment details if they exist.
-        downPayment: rentalData.financials?.downPayment,
-        finalPayment: rentalData.financials?.finalPayment,
+        // Carry over the full payments array and other financial details.
+        payments: rentalData.financials?.payments,
         depositReimbursed: rentalData.financials?.depositReimbursed || 0,
     };
 }

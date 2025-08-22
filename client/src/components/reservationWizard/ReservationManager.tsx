@@ -107,17 +107,27 @@ export const ReservationManager: React.FC<ReservationManagerProps> = ({ reservat
   };
 
   const handleAddPackage = (selection: PackageSelectionData) => {
-    // 1. Store the data from the first modal
-    setPackageToConfigure(selection.pkg);
-    setMotifToConfigure(selection.motifHex);
+    // 1. Find the motif object using the new motifId
+    const selectedMotif = selection.pkg.colorMotifs.find(m => m._id === selection.motifId);
+    
+    if (!selectedMotif) {
+        addAlert("Selected motif could not be found.", "danger");
+        return;
+    }
 
-    // 2. Close the first modal and open the second
+    // 2. Store the data needed for the configuration modal
+    setPackageToConfigure(selection.pkg);
+    setMotifToConfigure(selectedMotif._id || ''); // <-- Pass the motif ID
+    
+    // 3. Close the first modal and open the second
     setShowPackageModal(false);
     setShowConfigModal(true);
   };
 
   const handleSaveConfiguration = (config: PackageConfigurationData) => {
     if (!packageToConfigure) return;
+
+    const selectedMotif = packageToConfigure.colorMotifs.find(m => m._id === motifToConfigure);
 
     setReservation(prev => {
       const updatedReservations = [...prev.packageReservations];
@@ -142,7 +152,7 @@ export const ReservationManager: React.FC<ReservationManagerProps> = ({ reservat
           packageId: packageToConfigure._id,
           packageName: packageToConfigure.name,
           price: packageToConfigure.price,
-          motifHex: motifToConfigure,
+          motifHex: selectedMotif?.motifHex,
           fulfillmentPreview: config.packageReservation,
           imageUrl: packageToConfigure.imageUrls?.[0],
         };
@@ -294,7 +304,7 @@ export const ReservationManager: React.FC<ReservationManagerProps> = ({ reservat
         onHide={() => setShowConfigModal(false)}
         onSave={handleSaveConfiguration}
         pkg={packageToConfigure}
-        motifHex={motifToConfigure}
+        motifId={motifToConfigure}
         initialFulfillmentData={fulfillmentToEdit}
       />
     </>

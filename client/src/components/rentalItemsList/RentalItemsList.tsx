@@ -40,17 +40,17 @@ const RentalItemsList: React.FC<RentalItemsListProps> = ({
           <Image src={item.imageUrl} thumbnail style={{ width: '80px', height: '80px', objectFit: 'cover' }} />
         </Col>
         <Col>
-          <p className="fw-bold mb-1">{item.name}</p>
+          <p className="fw-medium mb-1">{item.name}</p>
           <p className="text-muted small mb-0">Variation: {item.variation.color.name} - {item.variation.size}</p>
           <p className="text-muted small mb-0">Qty: {item.quantity}</p>
         </Col>
         <Col xs="auto" className="text-end">
-          <p className="fw-bold h5 text-success mb-2">₱{(item.price * item.quantity).toFixed(2)}</p>
+          <p className="fw-semibold h5 text-success mb-2">₱{(item.price * item.quantity).toFixed(2)}</p>
           {canEditDetails && (
-            <ButtonGroup size="sm">
-              <Button variant="outline-primary" onClick={() => onOpenEditItemModal(item)}><PencilSquare /></Button>
-              <Button variant="outline-danger" onClick={() => onOpenDeleteItemModal(item)}><Trash /></Button>
-            </ButtonGroup>
+            <>
+              <Button variant="outline-secondary" size="sm" className="me-2" onClick={() => onOpenEditItemModal(item)}><PencilSquare /></Button>
+              <Button variant="outline-danger" size="sm" onClick={() => onOpenDeleteItemModal(item)}><Trash /></Button>
+            </>
           )}
         </Col>
       </Row>
@@ -63,22 +63,20 @@ const RentalItemsList: React.FC<RentalItemsListProps> = ({
         <Image src={pkg.imageUrl} thumbnail style={{ width: '80px', height: '80px', objectFit: 'cover' }} />
       </Col>
       <Col>
-        <p className="fw-bold mb-1">{pkg.name.split(',')[0]}</p>
+        <p className="fw-medium mb-1">{pkg.name.split(',')[0]}</p>
         <p className="text-muted small mb-0">Motif: {pkg.name.split(',')[1] || 'N/A'}</p>
       </Col>
       <Col xs="auto" className="text-end">
-        <p className="fw-bold h5 text-success mb-2">₱{(pkg.price).toFixed(2)}</p>
+        <p className="fw-semibold h5 text-success mb-2">₱{(pkg.price).toFixed(2)}</p>
         {canEditDetails && (
-          <ButtonGroup size="sm">
-            {/* --- THIS IS THE FIX --- */}
-            {/* The onClick handler now correctly calls the prop meant for packages. */}
-            <Button variant="outline-primary" onClick={() => onOpenEditPackageModal(pkg)}>
+          <>
+            <Button variant="outline-secondary" size="sm" className="me-2" onClick={() => onOpenEditPackageModal(pkg)}>
               <PencilSquare />
             </Button>
-            <Button variant="outline-danger" onClick={() => onOpenDeletePackageModal(pkg)}>
+            <Button variant="outline-danger" size="sm" onClick={() => onOpenDeletePackageModal(pkg)}>
               <Trash />
             </Button>
-          </ButtonGroup>
+          </>
         )}
       </Col>
     </Row>
@@ -99,18 +97,18 @@ const RentalItemsList: React.FC<RentalItemsListProps> = ({
                 <Image src={displayImage} thumbnail style={{ width: '80px', height: '80px', objectFit: 'cover' }} />
             </Col>
             <Col>
-                <p className="fw-bold mb-1">{item.name}</p>
+                <p className="mb-1 fw-medium">{item.name}</p>
                 <p className="text-muted small mb-0">Qty: {item.quantity}</p>
                 {/* You can add more details here if needed, like status or type */}
                 <Badge bg="info" pill className="mt-1">{statusText}</Badge>
             </Col>
             <Col xs="auto" className="text-end">
-                <p className="fw-bold h5 text-success mb-2">₱{(item.price * item.quantity).toFixed(2)}</p>
+                <p className="fw-semibold h5 text-success mb-2">₱{(item.price * item.quantity).toFixed(2)}</p>
                 {canEditDetails && (
-                    <ButtonGroup size="sm">
-                        <Button variant="outline-primary" onClick={() => onOpenEditCustomItemModal(item)}><PencilSquare /></Button>
-                        <Button variant="outline-danger" onClick={() => onOpenDeleteCustomItemModal(item)}><Trash /></Button>
-                    </ButtonGroup>
+                    <>
+                      <Button variant="outline-secondary" size="sm" className="me-2" onClick={() => onOpenEditCustomItemModal(item)}><PencilSquare /></Button>
+                      <Button variant="outline-danger" size="sm" onClick={() => onOpenDeleteCustomItemModal(item)}><Trash /></Button>
+                    </>
                 )}
             </Col>
         </Row>

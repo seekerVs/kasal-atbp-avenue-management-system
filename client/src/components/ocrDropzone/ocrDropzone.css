@@ -24,7 +24,7 @@
   background-color: #e9f7ef;
 }
 
-/* --- Result State --- */
+/* --- Result State (Desktop First) --- */
 .result-area {
   display: flex;
   gap: 1rem;
@@ -48,4 +48,30 @@
   margin-bottom: 0.5rem;
   font-size: 0.9rem;
   color: var(--bs-primary);
+}
+
+@media (max-width: 768px) {
+  .result-area {
+    /* Stack the image and input vertically */
+    flex-direction: column;
+    /* Center the items horizontally */
+    align-items: center;
+    /* Increase the gap for better vertical spacing */
+    gap: 1.5rem;
+  }
+
+  .receipt-preview {
+    /* Make the image a bit more prominent on mobile */
+    width: 150px;
+  }
+
+  .status-and-input {
+    /* Ensure the input section takes the full width */
+    width: 100%;
+  }
+
+  .processing-status {
+    /* Center the "Reading receipt..." text */
+    justify-content: center;
+  }
 }

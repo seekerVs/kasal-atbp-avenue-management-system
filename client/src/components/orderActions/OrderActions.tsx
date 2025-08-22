@@ -12,10 +12,12 @@ import {
   CashCoin,
   CashStack,
 } from 'react-bootstrap-icons';
-import { RentalStatus, Financials, RentalOrder, CustomTailoringItem } from '../../types'; // Import from centralized types
+import { RentalStatus, Financials, RentalOrder, CustomTailoringItem, PaymentDetail } from '../../types'; // Import from centralized types
 import { formatCurrency } from '../../utils/formatters';
 import { useAlert } from '../../contexts/AlertContext';
 import './orderActions.css'
+import { format } from 'date-fns';
+import { OcrDropzone } from '../ocrDropzone/OcrDropzone';
 
 // --- HELPER FUNCTIONS ---
 const getStatusIcon = (status: RentalStatus) => {
@@ -41,7 +43,6 @@ interface OrderActionsProps {
   editableStartDate: string;
   onStartDateChange: (value: string) => void;
   editableEndDate: string;
-  onEndDateChange: (value: string) => void;
   canEditDetails: boolean;
   paymentUiMode: 'Cash' | 'Gcash';
   onPaymentUiModeChange: (mode: 'Cash' | 'Gcash') => void;
@@ -50,6 +51,7 @@ interface OrderActionsProps {
   onPaymentAmountBlur: () => void;
   gcashRef: string;
   onGcashRefChange: (value: string) => void;
+  onReceiptFileChange: (file: File | null) => void;
   editableDeposit: string;
   onDepositChange: (value: string) => void;
   onDepositBlur: () => void;
@@ -75,7 +77,6 @@ const OrderActions: React.FC<OrderActionsProps> = ({
   editableStartDate,
   onStartDateChange,
   editableEndDate,
-  onEndDateChange,
   canEditDetails,
   paymentUiMode,
   onPaymentUiModeChange,
@@ -84,6 +85,7 @@ const OrderActions: React.FC<OrderActionsProps> = ({
   onPaymentAmountBlur,
   gcashRef,
   onGcashRefChange,
+  onReceiptFileChange,
   editableDeposit,
   onDepositChange,
   onDepositBlur,
@@ -102,12 +104,16 @@ const OrderActions: React.FC<OrderActionsProps> = ({
 
   const grandTotal = itemsTotal + depositAmount;
   
-  const totalPaid = (financials.downPayment?.amount || 0) + (financials.finalPayment?.amount || 0);
+  const totalPaid = (financials.payments || []).reduce((acc, p) => acc + p.amount, 0);
   const remainingBalance = grandTotal - totalPaid;
   
   const isPaid = totalPaid > 0;
-  // "Fully Paid" is now correctly checked against the Grand Total
   const isFullyPaid = isPaid && totalPaid >= grandTotal;
+
+  const handleOcrUpdate = (refNumber: string, file: File | null) => {
+    onGcashRefChange(refNumber);
+    onReceiptFileChange(file);
+  };
 
   const handleGcashRefInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = e.target.value.toUpperCase();
@@ -182,15 +188,15 @@ const OrderActions: React.FC<OrderActionsProps> = ({
   return (
     <Card className="shadow-sm">
       <Card.Header as="h5">Order Status & Actions</Card.Header>
-      <Card.Body className="p-4">
-        <div className="text-center mb-4">
-          <Button variant="dark" className="p-3 fs-6 w-100 d-flex align-items-center justify-content-center" style={{ cursor: 'default' }} disabled>
+      <Card.Body className="p-3 lh-sm">
+        <div className="text-center mb-3">
+          <Button variant="dark" className="p-2 fs-6 w-100 d-flex align-items-center justify-content-center" style={{ cursor: 'default' }} disabled>
             {getStatusIcon(status)}
             {status.toUpperCase()}
           </Button>
         </div>
         <div className="mb-3">
-          <p className="mb-2 fw-bold"><CalendarCheck className="me-2" />Rental Period</p>
+          <p className="mb-2 fw-medium"><CalendarCheck className="me-2" />Rental Period</p>
           <Row className="g-2"> {/* g-2 adds a small gap between columns */}
             <Col md={6}> {/* Takes 50% width on medium screens and up */}
               <Form.Label className="small text-muted">Start Date</Form.Label>
@@ -206,8 +212,8 @@ const OrderActions: React.FC<OrderActionsProps> = ({
               <Form.Control 
                 type="date" 
                 value={editableEndDate} 
-                onChange={e => onEndDateChange(e.target.value)} 
-                disabled={!canEditDetails} 
+                disabled // Always disabled
+                readOnly // Good for accessibility
               />
             </Col>
           </Row>
@@ -251,7 +257,7 @@ const OrderActions: React.FC<OrderActionsProps> = ({
         {isStandardDeposit && canEditDetails && hasDepositBreakdown && (
           <Row >
             <Col > {/* Indent the accordion */}
-              <Accordion flush className="mt-0 mb-2 w-100 ">
+              <Accordion flush className="m-2 p-0 w-100 ">
                 <Accordion.Item eventKey="0">
                   <Accordion.Header as="div">
                     <span className="small text-primary fst-italic text-end" style={{cursor: 'pointer'}}>
@@ -260,10 +266,6 @@ const OrderActions: React.FC<OrderActionsProps> = ({
                   </Accordion.Header>
                   <Accordion.Body className="p-2 border-top">
                     <ListGroup variant="flush">
-                      {/* --- THIS IS THE NEW LOGIC --- */}
-                      {/* We calculate the breakdown on the fly from the rental's item arrays. */}
-
-                      {/* Breakdown for Single Rent Items */}
                       {rental.singleRents?.map((item, index) => (
                         <ListGroup.Item key={`single-dep-${index}`} className="d-flex justify-content-between small text-muted p-1 border-0">
                           <span>{item.name.split(',')[0]} (x{item.quantity})</span>
@@ -312,52 +314,35 @@ const OrderActions: React.FC<OrderActionsProps> = ({
         </div>
         
         <div className="d-flex justify-content-between align-items-baseline mb-3">
-          <p className="mb-0 fs-5 fw-bold">Total Amount:</p>
-          <p className="h4 fw-bold text-danger">₱{formatCurrency(grandTotal)}</p>
+          <p className="mb-0 fw-medium">Total Amount:</p>
+          <p className="h4 fw-semibold text-danger">₱{formatCurrency(grandTotal)}</p>
         </div>
         <hr />
         
         {isPaid && (
           <div className="mb-3">
             <p className="mb-2 fw-bold d-flex justify-content-between align-items-center">
-              <span><CashCoin className="me-2 text-muted"/>Payment Details</span>
+              <span><CashCoin className="me-2 text-muted"/>Payment History</span>
               <Badge bg={paymentStatusInfo.variant} pill>{paymentStatusInfo.text}</Badge>
             </p>
             <div className="border-top pt-2">
-              
-              {/* --- Display Down Payment --- */}
-              {financials.downPayment && (
-                <div className="mb-2 pb-1 border-bottom">
+              {(financials.payments || []).map((payment: PaymentDetail, index: number) => (
+                <div key={index} className="mb-2 pb-1 border-bottom">
                   <div className="d-flex justify-content-between small">
-                    <span className="text-muted">Down Payment ({financials.downPayment.referenceNumber ? 'GCash' : 'Cash'}):</span>
-                    <span className="fw-bold">₱{formatCurrency(financials.downPayment.amount)}</span>
+                    <span className="text-muted">
+                      Payment #{index + 1} ({payment.referenceNumber ? 'GCash' : 'Cash'})
+                      {payment.date && ` on ${format(new Date(payment.date), 'MM/dd/yy')}`}
+                    </span>
+                    <span className="fw-bold">₱{formatCurrency(payment.amount)}</span>
                   </div>
-                  {/* --- NEW: Conditionally display reference number --- */}
-                  {financials.downPayment.referenceNumber && (
+                  {payment.referenceNumber && (
                     <div className="d-flex justify-content-between small text-muted fst-italic">
                         <span>Ref #:</span>
-                        <span>{financials.downPayment.referenceNumber}</span>
+                        <span>{payment.referenceNumber}</span>
                     </div>
                   )}
                 </div>
-              )}
-
-              {/* --- Display Final Payment --- */}
-              {financials.finalPayment && (
-                <div className="mb-2 pb-1 border-bottom">
-                   <div className="d-flex justify-content-between small">
-                    <span className="text-muted">Final Payment ({financials.finalPayment.referenceNumber ? 'GCash' : 'Cash'}):</span>
-                    <span className="fw-bold">₱{formatCurrency(financials.finalPayment.amount)}</span>
-                  </div>
-                   {/* --- NEW: Conditionally display reference number --- */}
-                   {financials.finalPayment.referenceNumber && (
-                    <div className="d-flex justify-content-between small text-muted fst-italic">
-                        <span>Ref #:</span>
-                        <span>{financials.finalPayment.referenceNumber}</span>
-                    </div>
-                  )}
-                </div>
-              )}
+              ))}
             </div>
           </div>
         )}
@@ -375,7 +360,7 @@ const OrderActions: React.FC<OrderActionsProps> = ({
                 <Alert variant='info' className='p-2 text-center small'>Awaiting final payment to complete pickup.</Alert>
             )}
             <Form.Group className="mb-3">
-              <Form.Label className="fw-bold">Payment Method</Form.Label>
+              <Form.Label className="fw-medium">Payment Method</Form.Label>
               <div className="d-flex">
                 <Button variant={paymentUiMode === 'Cash' ? 'success' : 'outline-success'} className="flex-fill me-1" onClick={() => onPaymentUiModeChange('Cash')}>Cash</Button>
                 <Button variant={paymentUiMode === 'Gcash' ? 'success' : 'outline-success'} className="flex-fill ms-1" onClick={() => onPaymentUiModeChange('Gcash')}>Gcash</Button>
@@ -398,17 +383,7 @@ const OrderActions: React.FC<OrderActionsProps> = ({
             </Form.Group>
             {paymentUiMode === 'Gcash' && (
               <Form.Group className="mb-3">
-                <Form.Label className="small text-muted">GCash Reference #</Form.Label>
-                <Form.Control 
-                  type="text" 
-                  placeholder="Enter reference no." 
-                  value={gcashRef} 
-                  onChange={handleGcashRefInputChange} // Use the new handler
-                  maxLength={13} // Enforce max length
-                  pattern="[A-Z0-9]{13}" // HTML5 validation pattern
-                  title="Must be 13 alphanumeric characters." // Tooltip on validation failure
-                  required // Make it required if GCash is the selected method
-                />
+                <OcrDropzone onUpdate={handleOcrUpdate} />
               </Form.Group>
             )}
           </>

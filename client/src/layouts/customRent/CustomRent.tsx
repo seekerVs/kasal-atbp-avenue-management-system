@@ -134,7 +134,7 @@ function CustomRent() {
   const handleSelectCustomer = (selectedRental: RentalOrder) => {
     setFormData(prev => ({ ...prev, customer: selectedRental.customerInfo[0] }));
     setSelectedRentalForDisplay(selectedRental);
-    setExistingOpenRental(selectedRental.status === 'To Process' ? selectedRental : null);
+    setExistingOpenRental(selectedRental.status === 'Pending' ? selectedRental : null);
   };
   
   const handleDynamicListChange = (listType: 'materials' | 'referenceImages', index: number, value: string) => {
@@ -274,7 +274,7 @@ const checkForIssues = () => {
               setTimeout(() => navigate(`/rentals/${response.data._id}`), 1500);
           }
       } catch (err: any) {
-          addAlert(err.response?.data?.message || "Failed to process request.", 'danger');
+          addAlert(err.response?.data?.message || "Failed to pending request.", 'danger');
       } finally {
           setIsSubmitting(false);
       }

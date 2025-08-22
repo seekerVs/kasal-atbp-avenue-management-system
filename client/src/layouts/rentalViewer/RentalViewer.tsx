@@ -13,13 +13,11 @@ import {
   ListGroup,
 } from 'react-bootstrap';
 
-import { ExclamationTriangleFill } from 'react-bootstrap-icons';
+import { EnvelopeFill, ExclamationTriangleFill, GeoAltFill, PencilSquare, PersonFill, TelephoneFill } from 'react-bootstrap-icons';
 
 // Import Child Components
-import CustomerInfoCard from '../../components/customerInfoCard/CustomerInfoCard';
 import RentalItemsList from '../../components/rentalItemsList/RentalItemsList';
 import OrderActions from '../../components/orderActions/OrderActions';
-import EditItemModal from '../../components/modals/editItemModal/EditItemModal';
 import EditPackageModal from '../../components/modals/editPackageModal/EditPackageModal';
 import { useAlert } from '../../contexts/AlertContext';
 
@@ -36,10 +34,13 @@ import {
   Package,
   ItemVariation
 } from '../../types';
-import api from '../../services/api';
+import api, { uploadFile } from '../../services/api';
 import { formatCurrency } from '../../utils/formatters';
 import AddItemFromCustomModal from '../../components/modals/addItemFromCustomModal/AddItemFromCustomModal';
 import CreateEditCustomItemModal from '../../components/modals/createEditCustomItemModal/CreateEditCustomItemModal';
+import { EditCustomerInfoModal } from '../../components/modals/editCustomerInfoModal/EditCustomerInfoModal';
+import { SelectedItemData, SingleItemSelectionModal } from '../../components/modals/singleItemSelectionModal/SingleItemSelectionModal';
+import { addDays, format } from 'date-fns';
 
 // ===================================================================================
 // --- MAIN COMPONENT ---
@@ -67,6 +68,7 @@ function RentalViewer() {
   const [editableDeposit, setEditableDeposit] = useState('0');
   const [reimburseAmount, setReimburseAmount] = useState('0');
   const [showReturnConfirmModal, setShowReturnConfirmModal] = useState(false);
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
 
   // State for modals
   const [showDeleteItemModal, setShowDeleteItemModal] = useState(false);
@@ -78,6 +80,7 @@ function RentalViewer() {
   const [showDeleteCustomItemModal, setShowDeleteCustomItemModal] = useState(false);
   const [showEditCustomItemModal, setShowEditCustomItemModal] = useState(false);
   const [customItemToModify, setCustomItemToModify] = useState<CustomTailoringItem | null>(null);
+  const [showEditCustomerModal, setShowEditCustomerModal] = useState(false);
 
   const [showValidationModal, setShowValidationModal] = useState(false);
   const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
@@ -122,13 +125,31 @@ function RentalViewer() {
         // The deposit amount is now directly from the server's calculation
         setEditableDeposit(String(rental.financials?.depositAmount || '0'));
 
-        if (rental.financials?.downPayment?.referenceNumber) {
-            setPaymentUiMode('Gcash');
-        }
+        if (rental.financials?.payments?.[0]?.referenceNumber) {
+          setPaymentUiMode('Gcash');
+      }
 
         setPaymentAmount('0');
     }
   }, [rental]); 
+
+  useEffect(() => {
+  // Only calculate if there's a valid start date
+  if (editableStartDate) {
+    try {
+      const startDateObj = new Date(editableStartDate);
+      // Add 3 days to get a 4-day inclusive period (e.g., 4th to 7th is +3 days)
+      const endDateObj = addDays(startDateObj, 3);
+      const formattedEndDate = format(endDateObj, 'yyyy-MM-dd');
+      setEditableEndDate(formattedEndDate);
+    } catch (e) {
+      console.error("Invalid start date provided", e);
+      setEditableEndDate(''); // Clear end date if start date is invalid
+    }
+  } else {
+    setEditableEndDate(''); // Clear end date if start date is cleared
+  }
+}, [editableStartDate]); 
 
   // --- EVENT HANDLERS ---
   const handleInitiatePickup = () => {
@@ -141,7 +162,6 @@ function RentalViewer() {
     setShowMarkAsPickedUpConfirmModal(true);
   };
 
-  // REPLACE THIS FUNCTION
   const handleConfirmReturn = async () => {
     setShowReturnConfirmModal(false);
     if (!rental) return;
@@ -163,6 +183,33 @@ function RentalViewer() {
     }
   };
 
+  const handleUpdateItemFromSelection = async (selection: SelectedItemData) => {
+    if (!itemToModify || !rental) {
+      addAlert("Could not update item: context is missing.", "danger");
+      return;
+    }
+
+    const { variation: newVariation, quantity: newQuantity } = selection;
+
+    const payload = { 
+      quantity: newQuantity, 
+      newVariation: newVariation // The backend expects a 'newVariation' object
+    };
+    
+    try {
+      const response = await api.put(`/rentals/${rental._id}/items/${itemToModify._id}`, payload);
+      setRental(response.data);
+      addAlert('Item updated successfully!', 'success');
+    } catch (err: any) { 
+      addAlert(err.response?.data?.message || "Failed to update item.", 'danger'); 
+    }
+    finally { 
+      // Close the modal and reset the state
+      setShowEditItemModal(false); 
+      setItemToModify(null); 
+    }
+  };
+
   const processNextInQueue = (queue: CustomTailoringItem[]) => {
     if (queue.length > 0) {
       // If there are items left, open the modal for the next one.
@@ -175,41 +222,45 @@ function RentalViewer() {
     }
   };
 
-  const handleUpdateAndPay = async (payload: { status?: RentalStatus; rentalStartDate?: string; rentalEndDate?: string; shopDiscount?: number; depositAmount?: number; depositReimbursed?: number; payment?: { amount: number; referenceNumber: string | null; } }) => {
+  const handleUpdateAndPay = async (payload: { status?: RentalStatus; rentalStartDate?: string; rentalEndDate?: string; shopDiscount?: number; depositAmount?: number; depositReimbursed?: number; payment?: { amount: number; referenceNumber: string | null; receiptImageUrl?: string; } }) => {
     if (!rental) return;
 
-    // --- NEW: Validate the deposit amount before sending ---
-    const depositInput = parseFloat(editableDeposit) || 0;
-    const requiredMinDeposit = rental.financials.requiredDeposit || 0; 
-    if (depositInput < requiredMinDeposit) {
-      addAlert(`Deposit amount cannot be less than the required total of ₱${requiredMinDeposit.toFixed(2)}.`, 'danger');
-      return;
-    }
-    
-    // Add the validated deposit to the payload
-    payload.depositAmount = depositInput;
-    // ----------------------------------------------------
-
     try {
+      // If a payment is being made via GCash and a receipt file exists, upload it.
+      if (payload.payment && paymentUiMode === 'Gcash' && receiptFile) {
+        addAlert('Uploading receipt...', 'info');
+        const uploadedUrl = await uploadFile(receiptFile);
+        payload.payment.receiptImageUrl = uploadedUrl;
+      }
+      
+      const depositInput = parseFloat(editableDeposit) || 0;
+      const requiredMinDeposit = rental.financials.requiredDeposit || 0; 
+      if (depositInput < requiredMinDeposit) {
+        addAlert(`Deposit amount cannot be less than the required total of ₱${requiredMinDeposit.toFixed(2)}.`, 'danger');
+        return;
+      }
+      payload.depositAmount = depositInput;
+    
       const response = await api.put(`/rentals/${rental._id}/process`, payload);
       setRental(response.data);
       addAlert('Rental updated successfully!', 'success');
+      
     } catch (err: any) { 
       addAlert(err.response?.data?.message || "Failed to update details.", 'danger');
+    } finally {
+      // Clear the staged file after any submission attempt
+      setReceiptFile(null);
     }
   };
 
-  // --- NEW: Validation and Pickup Flow ---
   const handleConfirmPickup = async () => {
     setShowPickupConfirmModal(false);
     if (!rental) return;
 
     try {
-      // 1. Call the validation endpoint to get server-side warnings
       const validationResponse = await api.get(`/rentals/${rental._id}/pre-pickup-validation`);
       const warnings: string[] = validationResponse.data.warnings || [];
-
-      // 2. NEW LOGIC: Check if at least one package role is complete
+      
       let isAnyRoleComplete = false;
       if (rental.packageRents && rental.packageRents.length > 0) {
         isAnyRoleComplete = rental.packageRents.some(pkg => 
@@ -222,17 +273,13 @@ function RentalViewer() {
         );
       }
       
-      // 3. Set the state that the modal will use
       setValidationWarnings(warnings);
-      setCanProceedWithWarnings(isAnyRoleComplete); // This controls the "Proceed" button
-
-      // 4. Decide the next step
+      setCanProceedWithWarnings(isAnyRoleComplete);
+      
       if (warnings.length > 0) {
-        // If there are warnings, show the modal.
         setShowValidationModal(true);
       } else {
-        // If there are no warnings, proceed directly by calling the helper function.
-        proceedToUpdateStatus();
+        await proceedToUpdateStatus(); // Await this call now
       }
 
     } catch (err: any) {
@@ -240,15 +287,13 @@ function RentalViewer() {
     }
   };
 
-  const proceedToUpdateStatus = () => {
+  const proceedToUpdateStatus = async () => { // Make this async
     if (!rental) return;
-
-    // Hide the modal if it was open
     setShowValidationModal(false);
 
     const amountToPay = parseFloat(paymentAmount) || 0;
     const discountAmount = parseFloat(editableDiscount) || 0;
-    const isPaid = (rental.financials.downPayment?.amount || 0) > 0;
+    const isPaid = (rental.financials.totalPaid || 0) > 0;
 
     const payload: Parameters<typeof handleUpdateAndPay>[0] = {
         status: 'To Pickup',
@@ -264,22 +309,17 @@ function RentalViewer() {
         };
     }
     
-    handleUpdateAndPay(payload);
+    await handleUpdateAndPay(payload); // Await this call now
   };
 
 
-  // --- NEW HANDLER FOR THE COMBINED ACTION ---
-  const handleConfirmMarkAsPickedUp = () => {
+  const handleConfirmMarkAsPickedUp = async () => { // Make this async
     setShowMarkAsPickedUpConfirmModal(false);
     if (!rental) return;
 
-    // The validation is now handled in the OrderActions component.
-    // We can proceed directly to building the payload.
-    
     const finalPaymentInput = parseFloat(paymentAmount) || 0;
-
     const payload: Parameters<typeof handleUpdateAndPay>[0] = {
-        status: 'To Return', // The target status
+        status: 'To Return',
         shopDiscount: parseFloat(editableDiscount) || 0,
         depositAmount: parseFloat(editableDeposit) || 0,
     };
@@ -291,8 +331,8 @@ function RentalViewer() {
       };
     }
 
-    handleUpdateAndPay(payload);
-};
+    await handleUpdateAndPay(payload); // Await this call now
+  };
 
   const handleOpenDeleteItemModal = (item: SingleRentItem) => { setItemToModify(item); setShowDeleteItemModal(true); };
   const handleOpenEditItemModal = (item: SingleRentItem) => { setItemToModify(item); setShowEditItemModal(true); };
@@ -340,29 +380,6 @@ function RentalViewer() {
       addAlert("Failed to remove item.", 'danger'); 
     }
     finally { setShowDeleteItemModal(false); setItemToModify(null); }
-  };
-
-  const handleSaveItemChanges = async (newQuantity: number, newVariationObject: ItemVariation) => {
-    if (!itemToModify || !rental) return;
-
-    // The new payload now sends a structured `newVariation` object
-    const payload = { 
-        quantity: newQuantity, 
-        newVariation: newVariationObject 
-    };
-    
-    try {
-        // The endpoint remains the same, but the payload it expects has changed
-        const response = await api.put(`/rentals/${rental._id}/items/${itemToModify._id}`, payload);
-        setRental(response.data);
-        addAlert('Item updated successfully!', 'success');
-    } catch (err: any) { 
-      addAlert(err.response?.data?.message || "Failed to update item.", 'danger'); 
-    }
-    finally { 
-      setShowEditItemModal(false); 
-      setItemToModify(null); 
-    }
   };
 
   const handleOpenEditPackageModal = (pkg: RentedPackage) => { setPackageToModify(pkg); setShowEditPackageModal(true); };
@@ -671,11 +688,18 @@ function RentalViewer() {
     }
   };
 
+  const handlePaymentUiModeChange = (mode: 'Cash' | 'Gcash') => {
+    setPaymentUiMode(mode);
+
+    setReceiptFile(null);
+    setGcashRef('');
+  };
+
   if (loading) { return <Container className="text-center py-5"><Spinner /></Container>; }
   // --- IMPORTANT: Update the check here to use `rental.customerInfo[0]` ---
   if (!rental || !rental.customerInfo[0]) { return <Container><Alert variant="info">Rental data could not be displayed.</Alert></Container>; }
   
-  const canEditDetails = rental.status === 'To Process' ;
+  const canEditDetails = rental.status === 'Pending' ;
 
   return (
     <Container fluid>
@@ -686,18 +710,41 @@ function RentalViewer() {
       <h2 className="mb-4">Rental Details</h2>
 
       <Row>
-        <Col md={8}>
+        <Col md={7}>
           <Card className="mb-4">
             <Card.Header as="h5" className="d-flex justify-content-between align-items-center">
               <span>Rental ID: {rental._id}</span>
               <small className="text-muted">Created: {new Date(rental.createdAt).toLocaleDateString()}</small>
             </Card.Header>
             <Card.Body >
-              <CustomerInfoCard
-                customer={rental.customerInfo[0]}
-                canEdit={canEditDetails}
-                onSave={handleCustomerSave}
-              />
+              <div className="d-flex justify-content-between align-items-center mb-1">
+                <h5 className="mb-0 fw-semibold"><PersonFill className="me-2" />Customer Information</h5>
+                {canEditDetails && (
+                  <Button
+                    variant="outline-secondary"
+                    size="sm"
+                    onClick={() => setShowEditCustomerModal(true)}
+                  >
+                    <PencilSquare className="me-1" /> Edit
+                  </Button>
+                )}
+              </div>
+              <div>
+                <p className='mb-0'><span className='fw-medium'>Name:</span> {rental.customerInfo[0].name}</p>
+                <p className='mb-0'><span className='fw-medium'>Contact:</span> {rental.customerInfo[0].phoneNumber}</p>
+                <p className='mb-0'><span className='fw-medium'>Email:</span> {rental.customerInfo[0].email || 'N/A'}</p>
+                <div className="d-flex">
+                  <div>
+                    <span className='fw-medium'>Address:</span>
+                    <div className="lh-1">
+                      {rental.customerInfo[0].address.street},{" "}
+                      {rental.customerInfo[0].address.barangay},{" "}
+                      {rental.customerInfo[0].address.city},{" "}
+                      {rental.customerInfo[0].address.province}
+                    </div>
+                  </div>
+                </div>
+              </div>
               <RentalItemsList
                 singleRents={rental.singleRents}
                 packageRents={rental.packageRents}
@@ -714,7 +761,7 @@ function RentalViewer() {
           </Card>
         </Col>
 
-        <Col md={4}>
+        <Col md={5}>
           <OrderActions
             rental={rental}
             status={rental.status}
@@ -726,15 +773,15 @@ function RentalViewer() {
             editableStartDate={editableStartDate}
             onStartDateChange={setEditableStartDate}
             editableEndDate={editableEndDate}
-            onEndDateChange={setEditableEndDate}
             canEditDetails={canEditDetails}
             paymentUiMode={paymentUiMode}
-            onPaymentUiModeChange={setPaymentUiMode}
+            onPaymentUiModeChange={handlePaymentUiModeChange} 
             paymentAmount={paymentAmount}
             onPaymentAmountChange={setPaymentAmount}
             onPaymentAmountBlur={handlePaymentAmountBlur}
             gcashRef={gcashRef}
             onGcashRefChange={setGcashRef}
+            onReceiptFileChange={setReceiptFile}
             editableDeposit={editableDeposit}
             onDepositChange={handleDepositChange}
             onDepositBlur={handleDepositBlur}
@@ -885,15 +932,6 @@ function RentalViewer() {
       <Button variant="info" onClick={handleConfirmMarkAsPickedUp}>Yes, Mark as Picked Up</Button>
     </Modal.Footer>
   </Modal>
-
-      {showEditItemModal && itemToModify && (
-        <EditItemModal 
-          show={showEditItemModal} 
-          onHide={() => setShowEditItemModal(false)}
-          item={itemToModify}
-          onSave={handleSaveItemChanges}
-        />
-      )}
       
       {showEditPackageModal && packageToModify && (
         <EditPackageModal
@@ -904,6 +942,23 @@ function RentalViewer() {
           onSave={handleSavePackageChanges}
           allPackages={allPackages}
           customItems={rental.customTailoring || []} 
+        />
+      )}
+
+      {showEditItemModal && itemToModify && (
+        <SingleItemSelectionModal
+          show={showEditItemModal}
+          onHide={() => {
+            setShowEditItemModal(false);
+            setItemToModify(null);
+          }}
+          // Connect to our new handler function
+          onSelect={handleUpdateItemFromSelection}
+          addAlert={addAlert}
+          mode="rental"
+          // Pre-select the item the user is editing
+          preselectedItemId={itemToModify?.itemId}
+          preselectedVariation={`${itemToModify?.variation.color.name}, ${itemToModify?.variation.size}`}
         />
       )}
 
@@ -928,17 +983,20 @@ function RentalViewer() {
           show={showEditCustomItemModal}
           onHide={() => setShowEditCustomItemModal(false)}
           item={customItemToModify}
-          // The 'itemName' prop is mainly for creating new items, but passing the
-          // existing name here is good practice and satisfies the prop requirement.
           itemName={customItemToModify.name}
-          // In 'edit' mode, this modal doesn't use the measurement refs, so we can
-          // safely pass an empty array to satisfy the prop requirement.
           measurementRefs={[]}
           onSave={handleSaveCustomItemChanges}
           isForPackage={isEditingItemForPackage}
           uploadMode="immediate" 
         />
       )}
+
+      <EditCustomerInfoModal
+        show={showEditCustomerModal}
+        onHide={() => setShowEditCustomerModal(false)}
+        customer={rental.customerInfo[0]}
+        onSave={handleCustomerSave}
+      />
     </Container>
   );
 }
