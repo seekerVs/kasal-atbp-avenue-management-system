@@ -61,7 +61,7 @@ function CustomerDetailsCard({
   }, [searchTerm, allRentals]);
 
   return (
-    <Card className="shadow-sm">
+    <Card className="shadow-sm lh-sm">
       <Card.Header as="h5" className="d-flex align-items-center justify-content-between">
         <div><PersonFill className="me-2" />Customer Details</div>
         <Button variant="outline-secondary" size="sm" onClick={() => onSetIsNewCustomerMode(!isNewCustomerMode)}>

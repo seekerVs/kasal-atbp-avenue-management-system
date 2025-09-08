@@ -16,15 +16,13 @@ interface DetailViewProps {
   // State setters from parent
   onVariationChange: (variation: ItemVariation | null) => void;
   onQuantityChange: (quantity: number) => void;
-  
-  // Contextual props
-  isColorSelectionDisabled: (colorHex: string) => boolean;
   availableSizesForDisplay: ItemVariation[];
+  isQuantityDisabled?: boolean;
 }
 
 export const DetailView: React.FC<DetailViewProps> = ({
   item, mode = 'full', selectedVariation, quantity, onVariationChange, onQuantityChange,
-  isColorSelectionDisabled, availableSizesForDisplay
+  availableSizesForDisplay, isQuantityDisabled
 }) => {
   const [carouselIndex, setCarouselIndex] = useState(0);
   
@@ -84,7 +82,6 @@ export const DetailView: React.FC<DetailViewProps> = ({
                 className={`modal-color-swatch ${selectedVariation?.color.hex === color.hex ? 'active' : ''}`}
                 style={{ backgroundColor: color.hex }}
                 title={color.name}
-                disabled={mode === 'size-only' || isColorSelectionDisabled(color.hex)}
               />
             ))}
           </div>
@@ -101,9 +98,9 @@ export const DetailView: React.FC<DetailViewProps> = ({
           <div className="mb-4">
             <Form.Label className="modal-selector-label">Quantity:</Form.Label>
             <div className="d-flex align-items-center gap-3 mt-1 modal-quantity-selector">
-              <Button variant="outline-dark" size="sm" onClick={() => onQuantityChange(Math.max(1, quantity - 1))} disabled={!selectedVariation}>-</Button>
+              <Button variant="outline-dark" size="sm" onClick={() => onQuantityChange(Math.max(1, quantity - 1))} disabled={!selectedVariation || isQuantityDisabled}>-</Button>
               <span className="fw-bold fs-5">{quantity}</span>
-              <Button variant="outline-dark" size="sm" onClick={() => onQuantityChange(Math.min(selectedVariation?.quantity || 1, quantity + 1))} disabled={!selectedVariation}>+</Button>
+              <Button variant="outline-dark" size="sm" onClick={() => onQuantityChange(Math.min(selectedVariation?.quantity || 1, quantity + 1))} disabled={!selectedVariation || isQuantityDisabled}>+</Button>
               <small className="text-muted">{selectedVariation?.quantity || 0} pieces available</small>
             </div>
           </div>

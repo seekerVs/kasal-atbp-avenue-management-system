@@ -7,10 +7,10 @@ const SettingsSchema = new mongoose.Schema({
     type: String,
     default: 'shopSettings', // Fixed ID for the single settings document
   },
-  appointmentSlotsPerHour: {
+  appointmentSlotsPerDay: {
     type: Number,
     required: true,
-    default: 2,
+    default: 8, // A more sensible default for a full day
     min: 0,
   },
   gcashName: {

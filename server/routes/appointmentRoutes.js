@@ -19,7 +19,7 @@ router.post(
   '/',
   sanitizeRequestBody,
   asyncHandler(async (req, res) => {
-    const { customerInfo, appointmentDate } = req.body;
+    const { customerInfo, appointmentDate, notes, timeBlock } = req.body;
 
     // Backend Validation
     if (!customerInfo?.name || !customerInfo?.phoneNumber) {
@@ -30,10 +30,18 @@ router.post(
       res.status(400).json({ message: 'An appointment date is required.' });
       return;
     }
+
+    if (!timeBlock || !['morning', 'afternoon'].includes(timeBlock)) {
+      res.status(400).json({ message: 'A valid time block (morning/afternoon) is required.'});
+      return;
+    }
     
     const newAppointment = new Appointment({
       _id: `APT-${nanoid_appointment()}`,
-      ...req.body,
+      customerInfo: customerInfo,
+      appointmentDate: new Date(appointmentDate),
+      timeBlock: timeBlock,
+      notes: notes,
       status: 'Pending',
     });
 
@@ -43,7 +51,7 @@ router.post(
 );
 
 router.get(
-  '/booked-slots',
+  '/day-availability', // Changed route name
   asyncHandler(async (req, res) => {
     const { date } = req.query;
     if (!date) {
@@ -51,46 +59,48 @@ router.get(
       throw new Error('A date query parameter is required.');
     }
 
-    // A. Define the start and end of the target day in UTC
     const startOfDay = new Date(date);
     startOfDay.setUTCHours(0, 0, 0, 0);
 
     const endOfDay = new Date(date);
     endOfDay.setUTCHours(23, 59, 59, 999);
-
-    // B. Fetch settings and active appointments in parallel
+    
+    // 1. Fetch settings and active appointments in parallel.
     const [settings, appointmentsOnDate] = await Promise.all([
       Settings.findById('shopSettings').lean(),
       Appointment.find({
         appointmentDate: { $gte: startOfDay, $lte: endOfDay },
-        status: { $in: ['Pending', 'Confirmed', 'Completed'] } // Exclude cancelled/no-shows
+        status: { $in: ['Pending', 'Confirmed'] } // Exclude completed/cancelled
       }).lean()
     ]);
 
-    // C. Get the maximum allowed slots per hour from settings
-    const slotsPerHour = settings?.appointmentSlotsPerHour || 2; // Default to 2 if not set
+    // 2. Get the total slots for the day and calculate per-block slots.
+    const totalSlots = settings?.appointmentSlotsPerDay || 8; // Default to 8 if not set
+    const morningSlots = Math.ceil(totalSlots / 2);
+    const afternoonSlots = Math.floor(totalSlots / 2);
 
-    // D. Count the number of appointments for each hour
-    const hourlyCounts = {};
+    // 3. Tally the number of appointments already booked in each block.
+    let morningBooked = 0;
+    let afternoonBooked = 0;
+    
     for (const apt of appointmentsOnDate) {
-      // Get the hour (0-23) in the server's local timezone (or UTC if configured)
-      const hour = new Date(apt.appointmentDate).getHours(); 
-      hourlyCounts[hour] = (hourlyCounts[hour] || 0) + 1;
-    }
-
-    // E. Identify and collect the hours that are fully booked
-    const fullyBookedSlots = [];
-    for (const hour in hourlyCounts) {
-      if (hourlyCounts[hour] >= slotsPerHour) {
-        // Format the hour as a two-digit string (e.g., "09:00", "14:00")
-        const formattedHour = hour.padStart(2, '0');
-        fullyBookedSlots.push(`${formattedHour}:00`);
-        fullyBookedSlots.push(`${formattedHour}:30`); // Also block the half-hour slot
+      const appointmentHour = new Date(apt.appointmentDate).getHours();
+      if (appointmentHour < 12) { // Morning is any hour before 12 PM
+        morningBooked++;
+      } else { // Afternoon is 12 PM and onwards
+        afternoonBooked++;
       }
     }
 
-    // F. Send the array of fully booked time strings to the frontend
-    res.status(200).json(fullyBookedSlots);
+    // 4. Determine if each block has available slots.
+    const isMorningAvailable = morningBooked < morningSlots;
+    const isAfternoonAvailable = afternoonBooked < afternoonSlots;
+
+    // 5. Send the new, simplified response object.
+    res.status(200).json({
+      morning: { available: isMorningAvailable, booked: morningBooked, total: morningSlots },
+      afternoon: { available: isAfternoonAvailable, booked: afternoonBooked, total: afternoonSlots }
+    });
   })
 );
 
@@ -100,8 +110,29 @@ router.get(
   '/',
   protect,
   asyncHandler(async (req, res) => {
-    const appointments = await Appointment.find({}).sort({ appointmentDate: -1 }).lean();
-    res.status(200).json(appointments);
+    // --- (1) Get pagination and filter parameters ---
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10; // Default to 10 per page
+    const skip = (page - 1) * limit;
+
+    const filter = {}; // You can add status/search filters here in the future if needed
+
+    // --- (2) Execute two queries in parallel for efficiency ---
+    const [appointments, totalAppointments] = await Promise.all([
+      Appointment.find(filter)
+        .sort({ appointmentDate: -1 })
+        .limit(limit)
+        .skip(skip)
+        .lean(),
+      Appointment.countDocuments(filter)
+    ]);
+    
+    // --- (3) Send the paginated response object ---
+    res.status(200).json({
+        appointments: appointments,
+        currentPage: page,
+        totalPages: Math.ceil(totalAppointments / limit)
+    });
   })
 );
 
@@ -117,6 +148,41 @@ router.get(
       return;
     }
     res.status(200).json(appointment);
+  })
+);
+
+// METHOD: PUT /api/appointments/:id/cancel
+router.put(
+  '/:id/cancel',
+  protect,
+  sanitizeRequestBody,
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    if (!reason || typeof reason !== 'string' || reason.trim() === '') {
+      res.status(400);
+      throw new Error('A cancellation reason is required.');
+    }
+
+    const appointment = await Appointment.findById(id);
+    if (!appointment) {
+      res.status(404);
+      throw new Error('Appointment not found.');
+    }
+
+    // Prevent cancelling an already completed or cancelled appointment
+    if (['Completed', 'Cancelled'].includes(appointment.status)) {
+        res.status(400);
+        throw new Error(`Cannot cancel an appointment with status "${appointment.status}".`);
+    }
+
+    // Update the document
+    appointment.status = 'Cancelled';
+    appointment.cancellationReason = reason;
+    const updatedAppointment = await appointment.save();
+
+    res.status(200).json(updatedAppointment);
   })
 );
 

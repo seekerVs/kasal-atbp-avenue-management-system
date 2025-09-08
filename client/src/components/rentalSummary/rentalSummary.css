@@ -1,0 +1,35 @@
+.rental-summary-container {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  color: #333;
+  background-color: #fff;
+  width: 800px; /* A standard A4-like width for capturing */
+  line-height: 1.5;
+}
+
+.summary-section-title {
+  font-weight: bold;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  letter-spacing: 1px;
+  border-bottom: 2px solid #eee;
+  padding-bottom: 4px;
+  margin-bottom: 1rem;
+  color: var(--bs-primary);
+}
+
+.financial-summary-table td {
+  padding-top: 0.1rem;
+  padding-bottom: 0.1rem;
+}
+
+.grand-total-row td {
+  border-top: 2px solid #333;
+  border-bottom: 2px solid #333;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+.summary-footer {
+  border-top: 1px solid #eee;
+  padding-top: 1rem;
+}

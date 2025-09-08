@@ -47,6 +47,7 @@ const ItemReservationSchema = new mongoose.Schema({
   },
   quantity: { type: Number, required: true, min: 1 },
   price: { type: Number, required: true },
+  imageUrl: { type: String, trim: true },
 }, { _id: false });
 
 const FulfillmentPreviewSchema = new mongoose.Schema({
@@ -69,27 +70,10 @@ const PackageReservationSchema = new mongoose.Schema({
   fulfillmentPreview: [FulfillmentPreviewSchema],
 }, { _id: false });
 
-// --- Appointments Sub-Schemas ---
-const ProcessedItemSchema = new mongoose.Schema({
-  _id: { type: String, required: true },
-  name: { type: String, required: true, trim: true },
-  price: { type: Number, required: true },
-  quantity: { type: Number, required: true, min: 1 },
-  notes: { type: String, trim: true },
-  outfitCategory: { type: String, required: true, trim: true },
-  outfitType: { type: String, required: true, trim: true },
-  tailoringType: { type: String, required: true, enum: ['Tailored for Purchase', 'Tailored for Rent-Back'] },
-  measurements: { type: Object, required: true },
-  materials: { type: [String], required: true },
-  designSpecifications: { type: String, required: true, trim: true },
-  referenceImages: [String],
-}, { _id: false });
-
 module.exports = {
   AddressSchema,
     CustomerInfoSchema,
     FinancialsSchema,
     ItemReservationSchema,
-    PackageReservationSchema,
-    ProcessedItemSchema
+    PackageReservationSchema
 };

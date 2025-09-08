@@ -7,20 +7,14 @@ import { Appointment, CustomerInfo, PackageReservation, Reservation } from '../.
 import api from '../../services/api';
 import { useAlert } from '../../contexts/AlertContext';
 import { ReservationItemsList } from '../../components/reservationItemsList/ReservationItemsList';
-import { PersonFill, CalendarEvent, GeoAltFill, CheckCircleFill, CashCoin, ExclamationTriangleFill, XCircleFill, Phone, Telephone, TelephoneFill, PencilSquare, Image as ImageIcon } from 'react-bootstrap-icons';
+import { PersonFill, CalendarEvent, GeoAltFill, CheckCircleFill, CashCoin, ExclamationTriangleFill, XCircleFill, Phone, Telephone, TelephoneFill, PencilSquare, Image as ImageIcon, CalendarWeek } from 'react-bootstrap-icons';
 import { formatCurrency } from '../../utils/formatters';
 import { LinkedAppointmentsList } from '../../components/linkedAppointmentsList/LinkedAppointmentsList';
 import { calculateItemDeposit, calculatePackageDeposit } from '../../utils/financials';
 import { ReservedPackageDetailsModal } from '../../components/modals/reservedPackageDetailsModal/ReservedPackageDetailsModal';
 import { EditCustomerInfoModal } from '../../components/modals/editCustomerInfoModal/EditCustomerInfoModal';
-
-const CANCELLATION_REASONS = [
-  "Customer Request",
-  "Payment Not Received / Invalid Receipt",
-  "Scheduling Conflict / Unavailable Staff",
-  "Item/Stock Unavailability",
-  "Other", // This will be a special case
-];
+import { CancellationReasonModal } from '../../components/modals/cancellationReasonModal/CancellationReasonModal';
+import { RescheduleReservationModal } from '../../components/modals/rescheduleReservationModal/RescheduleReservationModal';
 
 type BadgeVariant = 'primary' | 'secondary' | 'success' | 'danger' | 'warning' | 'info';
 
@@ -39,8 +33,7 @@ function ReservationViewer() {
   const [showPackageDetailsModal, setShowPackageDetailsModal] = useState(false);
   const [selectedPackageForModal, setSelectedPackageForModal] = useState<PackageReservation | null>(null);
   const [showEditCustomerModal, setShowEditCustomerModal] = useState(false);
-  const [selectedReasons, setSelectedReasons] = useState<string[]>([]);
-  const [otherReasonText, setOtherReasonText] = useState('');
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -75,18 +68,6 @@ function ReservationViewer() {
     fetchFullReservationDetails();
   }, [id]);
 
-  const handleReasonChange = (reason: string, isChecked: boolean) => {
-    if (isChecked) {
-      setSelectedReasons(prev => [...prev, reason]);
-    } else {
-      setSelectedReasons(prev => prev.filter(r => r !== reason));
-      // If "Other" is unchecked, also clear its text
-      if (reason === "Other") {
-        setOtherReasonText('');
-      }
-    }
-  };
-
   const handleSaveCustomerInfo = async (updatedCustomer: CustomerInfo) => {
     if (!reservation) return;
 
@@ -119,45 +100,38 @@ function ReservationViewer() {
     }
   };
 
-  const handleCancelReservation = async () => {
+  const handleConfirmCancellation = async (reason: string) => {
     if (!reservation) return;
-    let finalReason = selectedReasons
-      .filter(r => r !== "Other") // Exclude "Other" from the main list
-      .join(', ');
-
-    if (selectedReasons.includes("Other") && otherReasonText.trim()) {
-      if (finalReason) {
-        finalReason += ` - Other: ${otherReasonText.trim()}`;
-      } else {
-        finalReason = `Other: ${otherReasonText.trim()}`;
-      }
-    }
-
-    if (selectedReasons.includes("Other") && !otherReasonText.trim()) {
-        addAlert('Please specify a reason for "Other".', 'warning');
-        return;
-    }
-    if (selectedReasons.length === 0) {
-        addAlert('Please select at least one reason for cancellation.', 'warning');
-        return;
-    }
-
-    setShowCancelModal(false);
+    
+    // The modal is now responsible for showing alerts if the reason is empty.
+    
+    setShowCancelModal(false); // Close the modal
     setIsSaving(true);
     try {
+      // Call the updated backend route with the reason
       const response = await api.put(`/reservations/${reservation._id}/cancel`, {
-        reason: finalReason
+        reason: reason
       });
       setReservation(response.data);
       addAlert('Reservation has been successfully cancelled.', 'success');
-      // Reset state for the next time the modal opens
-      setSelectedReasons([]);
-      setOtherReasonText('');
     } catch (err: any) {
       addAlert(err.response?.data?.message || "Failed to cancel reservation.", 'danger');
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleConfirmReschedule = async (newDate: Date) => {
+    if (!reservation) {
+        throw new Error("Reservation data is missing.");
+    }
+    // The onConfirm prop in the modal expects a Promise, so we make this async
+    const response = await api.put(`/reservations/${reservation._id}/reschedule`, {
+      newDate: format(newDate, 'yyyy-MM-dd')
+    });
+    setReservation(response.data); // Update the state with the final data
+    addAlert('Reservation has been successfully rescheduled!', 'success');
+    // The modal will handle closing itself
   };
 
   // --- 2. RENAME THE ORIGINAL FUNCTION ---
@@ -236,6 +210,8 @@ function ReservationViewer() {
   const canBeConfirmed = reservation.status === 'Pending';
   const canBeConverted = reservation.status === 'Confirmed';
   const canBeCancelled = reservation.status === 'Pending' || reservation.status === 'Confirmed';
+  const canBeRescheduled = reservation.status === 'Pending' || reservation.status === 'Confirmed';
+  const canEditCustomerInfo = reservation.status === 'Pending' || reservation.status === 'Confirmed';
 
   return (
     <>
@@ -249,8 +225,11 @@ function ReservationViewer() {
           <Col lg={7} className='lh-sm'>
             <ReservationItemsList items={reservation.itemReservations} packages={reservation.packageReservations} onViewPackage={handleViewPackageDetails}/>
             {linkedAppointments.length > 0 && (
-              <LinkedAppointmentsList appointments={linkedAppointments} />
-            )}
+            <LinkedAppointmentsList 
+              appointments={linkedAppointments}
+              reservation={reservation} // Pass the full reservation object
+            />
+          )}
           </Col>
 
           <Col lg={5}>
@@ -259,7 +238,7 @@ function ReservationViewer() {
                 <div>
                   <p className="fw-semibold mb-0">ID: {reservation._id}</p>
                   <small className="text-muted mb-0">
-                    Created: {format(new Date(reservation.createdAt), 'MMM dd, yyyy')}
+                    Created: {format(new Date(reservation.createdAt), 'MMM dd, yyyy, h:mm a')}
                   </small>
                 </div>
                 <Badge bg={getStatusBadgeVariant(reservation.status)} pill>{reservation.status}</Badge>
@@ -268,9 +247,11 @@ function ReservationViewer() {
                 <div className="small">
                   <div className="d-flex justify-content-between align-items-center mb-1">
                     <h5 className="mb-0"><PersonFill className="me-2 text-muted"/>Customer Info</h5>
-                    <Button variant="outline-secondary" size="sm" onClick={() => setShowEditCustomerModal(true)}>
-                      <PencilSquare className="me-1" /> Edit
-                    </Button>
+                    {canEditCustomerInfo && (
+                      <Button variant="outline-secondary" size="sm" onClick={() => setShowEditCustomerModal(true)}>
+                        <PencilSquare className="me-1" /> Edit
+                      </Button>
+                    )}
                   </div>
                   <div className=''>
                     <p className="mb-1"><span className='fw-semibold'>Name: </span>{reservation.customerInfo.name}</p>
@@ -324,7 +305,7 @@ function ReservationViewer() {
                     )}
                 </div>
                 
-                <div className="d-grid gap-2 mt-4">
+                <div className="d-grid gap-2 mt-2">
                   {canBeConfirmed && (
                     <Button variant="info" onClick={handleConfirmReservation} disabled={isSaving}>
                       {isSaving ? <Spinner as="span" size="sm" /> : <><CheckCircleFill className="me-2"/>Confirm Reservation</>}
@@ -338,6 +319,12 @@ function ReservationViewer() {
                     </Button>
                   )}
 
+                  {canBeRescheduled && (
+                    <Button variant="secondary" onClick={() => setShowRescheduleModal(true)} disabled={isSaving}>
+                      <CalendarWeek className="me-2"/>Reschedule
+                    </Button>
+                  )}
+
                   {canBeCancelled && (
                     <Button variant="outline-danger" onClick={() => setShowCancelModal(true)} disabled={isSaving}>
                       <XCircleFill className="me-2"/>Cancel Reservation
@@ -345,7 +332,7 @@ function ReservationViewer() {
                   )}
 
                   {reservation.status === 'Completed' && reservation.rentalId && (
-                      <Alert variant="success" className="mt-4 text-center">
+                      <Alert variant="success" className="mt-0 text-center">
                           <p className="mb-1 fw-bold">Reservation Completed</p>
                           <Button variant="link" size="sm" onClick={() => navigate(`/rentals/${reservation.rentalId}`)}>
                               View Rental: {reservation.rentalId}
@@ -354,7 +341,7 @@ function ReservationViewer() {
                   )}
 
                   {reservation.status === 'Cancelled' && (
-                    <Alert variant="danger" className="mt-4 text-center">
+                    <Alert variant="danger" className="mt-0 text-center">
                         <p className="fw-bold mb-1">Reservation Cancelled</p>
                         {reservation.cancellationReason && (
                           <p className="small mb-0 fst-italic">
@@ -370,6 +357,13 @@ function ReservationViewer() {
         </Row>
       </Container>
 
+      <RescheduleReservationModal
+        show={showRescheduleModal}
+        onHide={() => setShowRescheduleModal(false)}
+        onConfirm={handleConfirmReschedule}
+        reservation={reservation}
+      />
+
       <EditCustomerInfoModal 
         show={showEditCustomerModal}
         onHide={() => setShowEditCustomerModal(false)}
@@ -383,51 +377,14 @@ function ReservationViewer() {
         packageReservation={selectedPackageForModal}
       />
       
-      <Modal show={showCancelModal} onHide={() => setShowCancelModal(false)} centered>
-        <Modal.Header closeButton>
-          <Modal.Title>
-            <ExclamationTriangleFill className="me-2 text-warning" />
-            Confirm Cancellation
-          </Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <p>
-            Please select the reason(s) for cancelling reservation <strong>{reservation?._id}</strong>. This action will restore inventory stock and cannot be undone.
-          </p>
-          <Form>
-            {CANCELLATION_REASONS.map((reason) => (
-              <Form.Check 
-                key={reason}
-                type="checkbox"
-                id={`reason-${reason}`}
-                label={reason}
-                checked={selectedReasons.includes(reason)}
-                onChange={(e) => handleReasonChange(reason, e.target.checked)}
-              />
-            ))}
-            {/* Conditionally render the text input for "Other" */}
-            {selectedReasons.includes("Other") && (
-              <Form.Control
-                as="textarea"
-                rows={2}
-                className="mt-2 ms-4"
-                style={{ width: 'calc(100% - 24px)'}}
-                placeholder="Please specify the reason..."
-                value={otherReasonText}
-                onChange={(e) => setOtherReasonText(e.target.value)}
-              />
-            )}
-          </Form>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowCancelModal(false)}>
-            Back
-          </Button>
-          <Button variant="danger" onClick={handleCancelReservation}>
-            Yes
-          </Button>
-        </Modal.Footer>
-      </Modal>
+      <CancellationReasonModal
+        show={showCancelModal}
+        onHide={() => setShowCancelModal(false)}
+        onConfirm={handleConfirmCancellation}
+        title="Confirm Reservation Cancellation"
+        itemType="reservation"
+        itemId={reservation._id}
+      />
 
       {/* --- 5. ADD THE NEW DATE WARNING MODAL --- */}
       <Modal show={showDateWarningModal} onHide={() => setShowDateWarningModal(false)} centered>

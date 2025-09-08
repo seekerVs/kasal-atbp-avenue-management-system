@@ -26,10 +26,11 @@ const ADMIN_CORE_ROUTES = [
   '/reservations', // Base for /reservations/:id
   '/manage-appointments',
   '/appointments', // Base for /appointments/:id
+  "/damaged-items",
 ];
 
 export const Layout = () => {
-  const { isAuthenticated, setIsAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth();
   const location = useLocation();
 
   // Determine if the current path is a core admin-only page

@@ -85,7 +85,7 @@ export interface Package {
 //
 // ===================================================================
 
-export type RentalStatus = 'Pending' | 'To Pickup' | 'To Return' | 'Returned' | 'Completed' | 'Cancelled';
+export type RentalStatus = 'Pending' | 'To Pickup' | 'To Return' | 'Completed' | 'Cancelled';
 
 export interface BaseRentItem {
   _id: string;
@@ -157,6 +157,7 @@ export interface PaymentDetail {
   amount: number;
   date?: Date | string;
   referenceNumber?: string | null;
+  receiptImageUrl?: string;
 }
 
 // --- Financial data for a rental, including server-calculated fields ---
@@ -198,9 +199,9 @@ export interface NormalizedFulfillmentItem {
     itemId?: string;
     name?: string;
     variation?: string;
-    imageUrl?: string;
+    imageUrl?: string | File;
     outfitCategory?: string; // For custom items
-    referenceImages?: string[]; // For custom items
+    referenceImages?: (string | File)[]; // For custom items
   };
 }
 
@@ -297,10 +298,11 @@ export interface Appointment {
   _id: string;
   customerInfo: CustomerInfo;
   appointmentDate: Date | null;
-  status: 'Pending' | 'Confirmed' | 'Completed' | 'Cancelled' | 'No Show';
-  statusNote?: string;
+  timeBlock: 'morning' | 'afternoon' | null;
+  status: 'Pending' | 'Confirmed' | 'Completed' | 'Cancelled' ;
+  notes?: string;
+  cancellationReason?: string;
   rentalId?: string | null;
-  processedItemData?: CustomTailoringItem | null;
   sourceReservationId?: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -368,6 +370,7 @@ export interface Reservation {
   packageReservations: PackageReservation[];
   appointments?: Appointment[];
   packageAppointmentDate?: Date | null;
+  packageAppointmentBlock?: 'morning' | 'afternoon' | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -384,7 +387,7 @@ export type FormErrors = {
 
 export interface ShopSettings {
   _id: 'shopSettings';
-  appointmentSlotsPerHour: number;
+  appointmentSlotsPerDay: number;
   gcashName?: string;
   gcashNumber?: string;
 }

@@ -1,23 +1,16 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 // --- 1. IMPORT NEW COMPONENTS AND ICONS ---
-import { Container, Card, Nav, Spinner, Alert, InputGroup, Form, Button, Row, Col, Badge, Image, Collapse } from 'react-bootstrap';
-import { Search, EyeFill, PersonCircle } from 'react-bootstrap-icons';
-import { format } from 'date-fns';
+import { Container, Card, Nav, Spinner, Alert, InputGroup, Form } from 'react-bootstrap';
+import { Search } from 'react-bootstrap-icons';
 
 import { Reservation } from '../../types';
 import api from '../../services/api';
-// --- 2. IMPORT UTILITIES ---
-import { formatCurrency } from '../../utils/formatters';
-import { calculateItemDeposit, calculatePackageDeposit } from '../../utils/financials';
-import namer from 'color-namer';
 import CustomPagination from '../../components/customPagination/CustomPagination';
+import { BookingCard } from '../../components/bookingCard/BookingCard';
 
 type TabStatus = 'Pending' | 'Confirmed' | 'Completed' | 'Cancelled';
-type BadgeVariant = 'primary' | 'secondary' | 'success' | 'danger' | 'warning' | 'info';
 
 function ManageReservations() {
-  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabStatus>('Pending');
   const [allReservations, setAllReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,26 +51,6 @@ function ManageReservations() {
     }
   }, [searchTerm, activeTab]);
 
-  const getMotifName = (hex: string) => {
-    try {
-      const names = namer(hex);
-      const name = names.ntc[0]?.name || 'Custom Color';
-      return name.replace(/\b\w/g, char => char.toUpperCase());
-    } catch {
-      return 'Custom Color';
-    }
-  };
-
-  const getStatusBadgeVariant = (status: Reservation['status']): BadgeVariant => {
-    switch (status) {
-      case 'Pending': return 'primary';
-      case 'Confirmed': return 'info';
-      case 'Completed': return 'success';
-      case 'Cancelled': return 'danger';
-      default: return 'secondary';
-    }
-  };
-
   const filteredReservations = useMemo(() => {
     // This logic now filters the data for the CURRENT PAGE only
     return allReservations.filter(reservation => {
@@ -94,133 +67,16 @@ function ManageReservations() {
     });
   }, [allReservations, activeTab, searchTerm]);
 
-  // --- 4. REWRITE THE RENDER FUNCTION TO MIMIC MANAGE RENTALS ---
-  const renderReservationCard = (reservation: Reservation) => {
-    const customer = reservation.customerInfo;
-
-    // Combine all items into a single list for easy rendering
-    const allItems = [
-      ...(reservation.itemReservations || []).map(item => ({
-        key: item.reservationId,
-        imageUrl: item.imageUrl,
-        name: item.itemName,
-        variation: `${(item.variation.color as any).name}, ${item.variation.size}`,
-        price: item.price * item.quantity,
-        quantity: item.quantity,
-      })),
-      ...(reservation.packageReservations || []).map(pkg => ({
-        key: pkg.packageReservationId,
-        imageUrl: pkg.imageUrl,
-        name: pkg.packageName,
-        variation: `Motif: ${getMotifName(pkg.motifHex || '#000000')}`,
-        price: pkg.price,
-        quantity: 1,
-      }))
-    ];
-
-    const subtotal = allItems.reduce((sum, item) => sum + item.price, 0);
-    const deposit = 
-      (reservation.itemReservations || []).reduce((sum, item) => sum + calculateItemDeposit(item), 0) +
-      (reservation.packageReservations || []).length * calculatePackageDeposit();
-    const grandTotal = subtotal + deposit;
-
-    const ITEMS_TO_SHOW_INITIALLY = 2;
-    const hasMoreItems = allItems.length > ITEMS_TO_SHOW_INITIALLY;
-    const isExpanded = expandedReservations.has(reservation._id);
-    const displayedItems = allItems.slice(0, ITEMS_TO_SHOW_INITIALLY);
-    const hiddenItems = allItems.slice(ITEMS_TO_SHOW_INITIALLY);
-
-    const toggleExpansion = () => {
-      setExpandedReservations(prev => {
-        const newSet = new Set(prev);
-        if (newSet.has(reservation._id)) {
-          newSet.delete(reservation._id);
-        } else {
-          newSet.add(reservation._id);
-        }
-        return newSet;
-      });
-    };
-
-    return (
-      <Card key={reservation._id} className="mb-4 shadow-sm">
-        <Card.Header className="d-flex justify-content-between align-items-center bg-light">
-          <div>
-            <strong>ID: {reservation._id}</strong>
-            <small className="text-muted ms-2">(Created: {format(new Date(reservation.createdAt), 'MMM dd, yyyy')})</small>
-          </div>
-          <Badge bg={getStatusBadgeVariant(reservation.status)} pill>{reservation.status.toUpperCase()}</Badge>
-        </Card.Header>
-        <Card.Body className="px-4 py-2">
-            <p className="mb-1"><span className='fw-medium'>Customer: </span>{customer.name}</p>
-            <p className="mb-1 text-muted small">Contact: {customer.phoneNumber}</p>
-            <hr className="my-2"/>
-
-            {displayedItems.map((item) => (
-              <Row key={item.key} className="align-items-center my-1">
-                <Col xs="auto" className="me-3">
-                  <Image src={item.imageUrl || 'https://placehold.co/80x80/e9ecef/adb5bd?text=Item'} fluid rounded style={{ width: "80px", height: "80px", objectFit: "cover" }} />
-                </Col>
-                <Col className='lh-sm'>
-                  <p className="mb-0 fw-bold">{item.name}</p>
-                  <p className="mb-0 text-muted small fst-italic">{item.variation}</p>
-                  <p className="mb-1 text-muted small">Qty: {item.quantity}</p>
-                </Col>
-                <Col xs="auto" className="text-end">
-                  <p className="mb-0 fw-bold text-danger fs-5">₱{formatCurrency(item.price)}</p>
-                </Col>
-              </Row>
-            ))}
-
-            {hasMoreItems && (
-              <>
-                <Collapse in={isExpanded}>
-                  <div id={`reservation-items-collapse-${reservation._id}`}>
-                    {hiddenItems.map((item) => (
-                      <Row key={item.key} className="align-items-center my-1">
-                        <Col xs="auto" className="me-3 ">
-                            <Image src={item.imageUrl || 'https://placehold.co/80x80/e9ecef/adb5bd?text=Item'} fluid rounded style={{ width: "80px", height: "80px", objectFit: "cover" }} />
-                        </Col>
-                        <Col className='lh-sm'>
-                            <p className="mb-0 fw-bold">{item.name}</p>
-                            <p className="mb-1 text-muted small fst-italic">{item.variation}</p>
-                        </Col>
-                        <Col xs="auto" className="text-end">
-                            <p className="mb-0 fw-bold text-danger fs-5">₱{formatCurrency(item.price)}</p>
-                        </Col>
-                      </Row>
-                    ))}
-                  </div>
-                </Collapse>
-                <Button variant="link" onClick={toggleExpansion} className="text-decoration-none p-0 mt-1">
-                  <span className='small'>{isExpanded
-                    ? 'Show Less'
-                    : `Show ${hiddenItems.length} more ${hiddenItems.length > 1 ? 'items' : 'item'}`}
-                  </span>
-                </Button>
-              </>
-            )}
-
-            <hr className="my-2"/>
-            <Row className="align-items-center">
-              <Col>
-                <p className="mb-0 text-muted small">Total Amount</p>
-                <p className="fw-bold fs-5 mb-0"><span className="text-danger">₱{formatCurrency(grandTotal)}</span></p>
-                <p className="text-muted fst-italic mb-0" style={{ fontSize: '0.75rem' }}>(Includes ₱{formatCurrency(deposit)} deposit)</p>
-                <p className="mb-1 text-muted small mt-2">Reservation Date: {format(new Date(reservation.reserveDate), 'MMM dd, yyyy')}</p>
-              </Col>
-              <Col className="d-flex justify-content-end align-items-center">
-                <Button
-                  variant="outline-primary"
-                  onClick={() => navigate(`/reservations/${reservation._id}`)}
-                >
-                  <EyeFill className="me-1" /> View Details
-                </Button>
-              </Col>
-            </Row>
-        </Card.Body>
-      </Card>
-    );
+  const handleToggleExpansion = (reservationId: string) => {
+    setExpandedReservations(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(reservationId)) {
+        newSet.delete(reservationId);
+      } else {
+        newSet.add(reservationId);
+      }
+      return newSet;
+    });
   };
 
   return (
@@ -260,7 +116,15 @@ function ManageReservations() {
                 }
               </Alert>
             ) : (
-              filteredReservations.map(renderReservationCard)
+              filteredReservations.map(reservation => (
+                <BookingCard 
+                  key={reservation._id}
+                  booking={reservation}
+                  type="reservation"
+                  isExpanded={expandedReservations.has(reservation._id)}
+                  onToggleExpansion={handleToggleExpansion}
+                />
+              ))
             )}
           </Card.Body>
           <Card.Footer className="bg-white">

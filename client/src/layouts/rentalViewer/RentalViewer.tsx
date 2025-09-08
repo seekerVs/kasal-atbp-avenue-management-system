@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Container,
@@ -13,7 +13,7 @@ import {
   ListGroup,
 } from 'react-bootstrap';
 
-import { EnvelopeFill, ExclamationTriangleFill, GeoAltFill, PencilSquare, PersonFill, TelephoneFill } from 'react-bootstrap-icons';
+import { Download, ExclamationTriangleFill, PencilSquare, PersonFill } from 'react-bootstrap-icons';
 
 // Import Child Components
 import RentalItemsList from '../../components/rentalItemsList/RentalItemsList';
@@ -30,17 +30,17 @@ import {
   PackageFulfillment,
   CustomTailoringItem,
   RentalStatus,
-  InventoryItem,
-  Package,
-  ItemVariation
+  MeasurementRef,
 } from '../../types';
 import api, { uploadFile } from '../../services/api';
-import { formatCurrency } from '../../utils/formatters';
-import AddItemFromCustomModal from '../../components/modals/addItemFromCustomModal/AddItemFromCustomModal';
 import CreateEditCustomItemModal from '../../components/modals/createEditCustomItemModal/CreateEditCustomItemModal';
 import { EditCustomerInfoModal } from '../../components/modals/editCustomerInfoModal/EditCustomerInfoModal';
 import { SelectedItemData, SingleItemSelectionModal } from '../../components/modals/singleItemSelectionModal/SingleItemSelectionModal';
-import { addDays, format } from 'date-fns';
+import { ProcessReturnModal, ReturnPayload  } from '../../components/modals/processReturnModal/ProcessReturnModal';
+import { CancellationReasonModal } from '../../components/modals/cancellationReasonModal/CancellationReasonModal';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
+import { RentalSummary } from '../../components/rentalSummary/RentalSummary';
 
 // ===================================================================================
 // --- MAIN COMPONENT ---
@@ -49,25 +49,23 @@ function RentalViewer() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { addAlert } = useAlert();
+  const [isDownloading, setIsDownloading] = useState(false);
+  const summaryRef = useRef<HTMLDivElement>(null);
   
   // --- STATE MANAGEMENT ---
   const [rental, setRental] = useState<RentalOrder | null>(null);
-  const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [measurementRefs, setMeasurementRefs] = useState<MeasurementRef[]>([]);
 
   // State for editing customer and order details
   const [editableDiscount, setEditableDiscount] = useState('0');
-  const [editableStartDate, setEditableStartDate] = useState('');
   const [editableEndDate, setEditableEndDate] = useState('');
-  const [rentBackQueue, setRentBackQueue] = useState<CustomTailoringItem[]>([]);
   
   // State for payment section
   const [paymentUiMode, setPaymentUiMode] = useState<'Cash' | 'Gcash'>('Cash');
   const [paymentAmount, setPaymentAmount] = useState('0');
   const [gcashRef, setGcashRef] = useState('');
   const [editableDeposit, setEditableDeposit] = useState('0');
-  const [reimburseAmount, setReimburseAmount] = useState('0');
-  const [showReturnConfirmModal, setShowReturnConfirmModal] = useState(false);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
 
   // State for modals
@@ -84,74 +82,88 @@ function RentalViewer() {
 
   const [showValidationModal, setShowValidationModal] = useState(false);
   const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
-  const [allPackages, setAllPackages] = useState<Package[]>([]);
   const [packageHasCustomItems, setPackageHasCustomItems] = useState(false);
   const [canProceedWithWarnings, setCanProceedWithWarnings] = useState(false);
   const [showPickupConfirmModal, setShowPickupConfirmModal] = useState(false);
   const [showMarkAsPickedUpConfirmModal, setShowMarkAsPickedUpConfirmModal] = useState(false);
-  const [showRentBackModal, setShowRentBackModal] = useState(false);
-  const [itemToRentBack, setItemToRentBack] = useState<CustomTailoringItem | null>(null);
   const [isEditingItemForPackage, setIsEditingItemForPackage] = useState(false);
+  const [showReturnModal, setShowReturnModal] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
 
   // --- DATA FETCHING & SYNCING ---
   useEffect(() => {
     if (!id) { addAlert("No rental ID provided.", 'danger'); setLoading(false); return; }
-    const fetchRentalAndInventory = async () => {
+    const fetchRentalData = async () => {
       setLoading(true);
       try {
-        const [rentalRes, inventoryRes, packagesRes] = await Promise.all([
+        const [rentalRes, refsRes] = await Promise.all([
           api.get(`/rentals/${id}`),
-          api.get('/inventory'),
-          api.get('/packages')
+          api.get('/measurementrefs')
         ]);
         setRental(rentalRes.data);
-        setInventory(inventoryRes.data.items || []);
-        setAllPackages(packagesRes.data);
+        setMeasurementRefs(refsRes.data);
       } catch (err) { 
         console.error("Error fetching data:", err); 
         addAlert("Failed to load rental details.", 'danger');
       } finally { setLoading(false); }
     };
-    fetchRentalAndInventory();
+    fetchRentalData();
   }, [id, addAlert]);
 
   useEffect(() => {
     if (rental) {
-        // Sync local state directly from the server-provided rental object
         setEditableDiscount(String(rental.financials?.shopDiscount || '0'));
-        setEditableStartDate(rental.rentalStartDate);
         setEditableEndDate(rental.rentalEndDate);
-        
-        // The deposit amount is now directly from the server's calculation
         setEditableDeposit(String(rental.financials?.depositAmount || '0'));
-
         if (rental.financials?.payments?.[0]?.referenceNumber) {
           setPaymentUiMode('Gcash');
-      }
+        } else {
+          setPaymentUiMode('Cash');
+        }
 
         setPaymentAmount('0');
     }
-  }, [rental]); 
-
-  useEffect(() => {
-  // Only calculate if there's a valid start date
-  if (editableStartDate) {
-    try {
-      const startDateObj = new Date(editableStartDate);
-      // Add 3 days to get a 4-day inclusive period (e.g., 4th to 7th is +3 days)
-      const endDateObj = addDays(startDateObj, 3);
-      const formattedEndDate = format(endDateObj, 'yyyy-MM-dd');
-      setEditableEndDate(formattedEndDate);
-    } catch (e) {
-      console.error("Invalid start date provided", e);
-      setEditableEndDate(''); // Clear end date if start date is invalid
-    }
-  } else {
-    setEditableEndDate(''); // Clear end date if start date is cleared
-  }
-}, [editableStartDate]); 
+  }, [rental]);
 
   // --- EVENT HANDLERS ---
+  const handleDownloadPdf = () => {
+    const input = summaryRef.current;
+    if (!input || !rental) {
+      addAlert('Could not generate PDF, content not found.', 'danger');
+      return;
+    }
+
+    setIsDownloading(true);
+
+    html2canvas(input, { scale: 2, backgroundColor: null })
+      .then((canvas) => {
+        const imgData = canvas.toDataURL('image/png');
+        // A4 page is 210mm wide. Use 190mm for content with 10mm margins.
+        const contentWidth = 190;
+        const canvasAspectRatio = canvas.width / canvas.height;
+        const contentHeight = contentWidth / canvasAspectRatio;
+        
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+
+        // Check if content is taller than one page
+        if (contentHeight > pdfHeight - 20) {
+            // This is a simplified handling for multi-page. More complex logic could be added.
+            console.warn("PDF content might be too long for a single page.");
+        }
+
+        pdf.addImage(imgData, 'PNG', 10, 10, contentWidth, contentHeight);
+        pdf.save(`rental-summary-${rental._id}.pdf`);
+      })
+      .catch((err) => {
+        console.error("PDF generation failed:", err);
+        addAlert('Could not generate PDF. Please try again.', 'danger');
+      })
+      .finally(() => {
+        setIsDownloading(false);
+      });
+  };
+  
   const handleInitiatePickup = () => {
     // You can perform any pre-modal checks here if needed in the future
     setShowPickupConfirmModal(true);
@@ -162,24 +174,18 @@ function RentalViewer() {
     setShowMarkAsPickedUpConfirmModal(true);
   };
 
-  const handleConfirmReturn = async () => {
-    setShowReturnConfirmModal(false);
-    if (!rental) return;
-    
-    try {
-      const response = await api.put(`/rentals/${rental?._id}/process`, {
-          status: 'Returned',
-          depositReimbursed: parseFloat(reimburseAmount) || 0,
-      });
-      
-      setRental(response.data);
-      addAlert('Rental successfully marked as returned!', 'success');
-      
-      // Since the process is complete, ensure the queue is empty.
-      setRentBackQueue([]);
 
+  const handleProcessReturn = async (payload: ReturnPayload) => {
+    if (!rental) return;
+
+    try {
+      const response = await api.put(`/rentals/${rental._id}/process-return`, payload);
+      setRental(response.data);
+      addAlert('Rental return processed successfully!', 'success');
     } catch (err: any) {
-      addAlert(err.response?.data?.message || "Failed to mark as returned.", 'danger');
+      addAlert(err.response?.data?.message || "Failed to process the return.", 'danger');
+    } finally {
+      setShowReturnModal(false);
     }
   };
 
@@ -210,23 +216,23 @@ function RentalViewer() {
     }
   };
 
-  const processNextInQueue = (queue: CustomTailoringItem[]) => {
-    if (queue.length > 0) {
-      // If there are items left, open the modal for the next one.
-      setItemToRentBack(queue[0]);
-      setShowRentBackModal(true);
-    } else {
-      // If the queue is empty, all items are processed.
-      // Now it's safe to show the final confirmation modal.
-      setShowReturnConfirmModal(true);
-    }
-  };
-
-  const handleUpdateAndPay = async (payload: { status?: RentalStatus; rentalStartDate?: string; rentalEndDate?: string; shopDiscount?: number; depositAmount?: number; depositReimbursed?: number; payment?: { amount: number; referenceNumber: string | null; receiptImageUrl?: string; } }) => {
+  const handleUpdateAndPay = async (updateFields: { status?: RentalStatus; rentalStartDate?: string; rentalEndDate?: string; shopDiscount?: number; depositAmount?: number; depositReimbursed?: number; }) => {
     if (!rental) return;
 
+    const payload: any = { ...updateFields };
+
+    // 2. Centrally handle adding the payment object if an amount is entered.
+    const amountToPay = parseFloat(paymentAmount) || 0;
+    if (amountToPay > 0) {
+        payload.payment = {
+            amount: amountToPay,
+            referenceNumber: paymentUiMode === 'Gcash' ? gcashRef : null,
+            // receiptImageUrl will be added below after upload
+        };
+    }
+    
     try {
-      // If a payment is being made via GCash and a receipt file exists, upload it.
+      // 3. Centrally handle the file upload.
       if (payload.payment && paymentUiMode === 'Gcash' && receiptFile) {
         addAlert('Uploading receipt...', 'info');
         const uploadedUrl = await uploadFile(receiptFile);
@@ -234,22 +240,19 @@ function RentalViewer() {
       }
       
       const depositInput = parseFloat(editableDeposit) || 0;
-      const requiredMinDeposit = rental.financials.requiredDeposit || 0; 
-      if (depositInput < requiredMinDeposit) {
-        addAlert(`Deposit amount cannot be less than the required total of ₱${requiredMinDeposit.toFixed(2)}.`, 'danger');
-        return;
-      }
       payload.depositAmount = depositInput;
     
       const response = await api.put(`/rentals/${rental._id}/process`, payload);
       setRental(response.data);
       addAlert('Rental updated successfully!', 'success');
+
+      setPaymentUiMode('Cash');
+      setPaymentAmount('0');
+      setGcashRef('');
+      setReceiptFile(null);
       
     } catch (err: any) { 
       addAlert(err.response?.data?.message || "Failed to update details.", 'danger');
-    } finally {
-      // Clear the staged file after any submission attempt
-      setReceiptFile(null);
     }
   };
 
@@ -287,51 +290,28 @@ function RentalViewer() {
     }
   };
 
-  const proceedToUpdateStatus = async () => { // Make this async
+  const proceedToUpdateStatus = async () => {
     if (!rental) return;
     setShowValidationModal(false);
 
-    const amountToPay = parseFloat(paymentAmount) || 0;
-    const discountAmount = parseFloat(editableDiscount) || 0;
-    const isPaid = (rental.financials.totalPaid || 0) > 0;
-
-    const payload: Parameters<typeof handleUpdateAndPay>[0] = {
+    // Just pass the fields that are changing for this specific action.
+    await handleUpdateAndPay({
         status: 'To Pickup',
-        rentalStartDate: editableStartDate,
-        rentalEndDate: editableEndDate,
-        shopDiscount: discountAmount,
-    };
-    
-    if (!isPaid && amountToPay > 0) {
-        payload.payment = {
-            amount: amountToPay,
-            referenceNumber: paymentUiMode === 'Gcash' ? gcashRef : null,
-        };
-    }
-    
-    await handleUpdateAndPay(payload); // Await this call now
+        shopDiscount: parseFloat(editableDiscount) || 0,
+    });
   };
 
 
-  const handleConfirmMarkAsPickedUp = async () => { // Make this async
+  const handleConfirmMarkAsPickedUp = async () => {
     setShowMarkAsPickedUpConfirmModal(false);
     if (!rental) return;
 
-    const finalPaymentInput = parseFloat(paymentAmount) || 0;
-    const payload: Parameters<typeof handleUpdateAndPay>[0] = {
+    // Just pass the fields that are changing for this specific action.
+    // The payment object will be constructed automatically by handleUpdateAndPay.
+    await handleUpdateAndPay({
         status: 'To Return',
         shopDiscount: parseFloat(editableDiscount) || 0,
-        depositAmount: parseFloat(editableDeposit) || 0,
-    };
-
-    if (finalPaymentInput > 0) {
-      payload.payment = {
-        amount: finalPaymentInput,
-        referenceNumber: paymentUiMode === 'Gcash' ? gcashRef : null
-      };
-    }
-
-    await handleUpdateAndPay(payload); // Await this call now
+    });
   };
 
   const handleOpenDeleteItemModal = (item: SingleRentItem) => { setItemToModify(item); setShowDeleteItemModal(true); };
@@ -630,6 +610,23 @@ function RentalViewer() {
     }
   };
 
+   const handleConfirmCancellation = async (reason: string) => {
+    if (!rental) return;
+
+    // The modal already validates that the reason is not empty.
+    
+    setShowCancelModal(false); // Close the modal immediately
+    // Consider adding an isSaving state if the API call is slow
+    try {
+      // Call the new backend route
+      const response = await api.put(`/rentals/${rental._id}/cancel`, { reason });
+      setRental(response.data);
+      addAlert('Rental has been successfully cancelled.', 'success');
+    } catch (err: any)      {
+      addAlert(err.response?.data?.message || "Failed to cancel rental.", 'danger');
+    }
+  };
+
   const handlePaymentAmountBlur = () => {
     // If the payment amount input is empty when the user clicks away,
     // set it back to "0" to prevent validation issues.
@@ -638,42 +635,8 @@ function RentalViewer() {
     }
   };
 
-  const handleReimburseDeposit = async (amount: number) => {
-    if (!rental) return;
-
-    try {
-      const response = await api.put(`/rentals/${rental._id}/reimburse`, { amount });
-      setRental(response.data); // Update the state with the final, "Completed" rental object
-      addAlert('Order completed and deposit reimbursement recorded!', 'success');
-    } catch (err: any) {
-      addAlert(err.response?.data?.message || "Failed to process reimbursement.", 'danger');
-    }
-  };
-
-  const handleReimburseAmountChange = (value: string) => {
-    const numValue = parseFloat(value);
-    const deposit = rental?.financials.depositAmount || 0;
-
-    if (isNaN(numValue) || numValue < 0) {
-      setReimburseAmount('0');
-    } else if (numValue > deposit) {
-      setReimburseAmount(String(deposit));
-    } else {
-      setReimburseAmount(value);
-    }
-  };
-
-  const handleInitiateReturn = (customItems: CustomTailoringItem[]) => {
-    // 1. Find all items that need to be processed.
-    const itemsToProcess = customItems.filter(
-      (item) => item.tailoringType === 'Tailored for Rent-Back'
-    );
-    
-    // 2. Populate our new client-side queue.
-    setRentBackQueue(itemsToProcess);
-
-    // 3. Start the processing flow with our new helper function.
-    processNextInQueue(itemsToProcess);
+  const handleInitiateReturn = () => {
+    setShowReturnModal(true);
   };
 
   const handleCustomerSave = async (updatedCustomer: CustomerInfo) => {
@@ -699,305 +662,284 @@ function RentalViewer() {
   // --- IMPORTANT: Update the check here to use `rental.customerInfo[0]` ---
   if (!rental || !rental.customerInfo[0]) { return <Container><Alert variant="info">Rental data could not be displayed.</Alert></Container>; }
   
-  const canEditDetails = rental.status === 'Pending' ;
+  const canEditDetails = rental.status === 'Pending' || rental.status === 'To Pickup';
+  const canDeleteItems = rental.status === 'Pending';
 
   return (
-    <Container fluid>
-      <Breadcrumb>
-        <Breadcrumb.Item onClick={() => navigate('/manageRentals')}>Manage Rentals</Breadcrumb.Item>
-        <Breadcrumb.Item active>View Rental</Breadcrumb.Item>
-      </Breadcrumb>
-      <h2 className="mb-4">Rental Details</h2>
+    <>
+      <div style={{ position: 'fixed', left: '-2000px', top: 0 }}>
+        <RentalSummary ref={summaryRef} rental={rental} />
+      </div>
 
-      <Row>
-        <Col md={7}>
-          <Card className="mb-4">
-            <Card.Header as="h5" className="d-flex justify-content-between align-items-center">
-              <span>Rental ID: {rental._id}</span>
-              <small className="text-muted">Created: {new Date(rental.createdAt).toLocaleDateString()}</small>
-            </Card.Header>
-            <Card.Body >
-              <div className="d-flex justify-content-between align-items-center mb-1">
-                <h5 className="mb-0 fw-semibold"><PersonFill className="me-2" />Customer Information</h5>
-                {canEditDetails && (
-                  <Button
-                    variant="outline-secondary"
-                    size="sm"
-                    onClick={() => setShowEditCustomerModal(true)}
-                  >
-                    <PencilSquare className="me-1" /> Edit
+      <Container fluid>
+        <Breadcrumb>
+          <Breadcrumb.Item onClick={() => navigate('/manageRentals')}>Manage Rentals</Breadcrumb.Item>
+          <Breadcrumb.Item active>View Rental</Breadcrumb.Item>
+        </Breadcrumb>
+        <Row>
+          <Col md={7}>
+            <Card className="mb-4">
+              <Card.Header as="h5" className="d-flex justify-content-between align-items-center">
+                <span>Rental ID: {rental._id}</span>
+                <div className="d-flex align-items-center gap-2">
+                  <small className="text-muted">Created: {new Date(rental.createdAt).toLocaleDateString()}</small>
+                  {/* --- (6) ADD THE DOWNLOAD BUTTON --- */}
+                  <Button variant="outline-primary" size="sm" onClick={handleDownloadPdf} disabled={isDownloading}>
+                    {isDownloading ? (
+                      <Spinner as="span" size="sm" className="me-1" />
+                    ) : (
+                      <Download className="me-1" />
+                    )}
+                    Summary
                   </Button>
-                )}
-              </div>
-              <div>
-                <p className='mb-0'><span className='fw-medium'>Name:</span> {rental.customerInfo[0].name}</p>
-                <p className='mb-0'><span className='fw-medium'>Contact:</span> {rental.customerInfo[0].phoneNumber}</p>
-                <p className='mb-0'><span className='fw-medium'>Email:</span> {rental.customerInfo[0].email || 'N/A'}</p>
-                <div className="d-flex">
-                  <div>
-                    <span className='fw-medium'>Address:</span>
-                    <div className="lh-1">
+                </div>
+              </Card.Header>
+              <Card.Body >
+                <div className="d-flex justify-content-between align-items-center mb-1">
+                  <h5 className="mb-0 fw-semibold"><PersonFill className="me-2" />Customer Information</h5>
+                  {canEditDetails && (
+                    <Button
+                      variant="outline-secondary"
+                      size="sm"
+                      onClick={() => setShowEditCustomerModal(true)}
+                    >
+                      <PencilSquare className="me-1" /> Edit
+                    </Button>
+                  )}
+                </div>
+                <div>
+                  <p className='mb-0'><span className='fw-medium'>Name:</span> {rental.customerInfo[0].name}</p>
+                  <p className='mb-0'><span className='fw-medium'>Contact:</span> {rental.customerInfo[0].phoneNumber}</p>
+                  <p className='mb-0'><span className='fw-medium'>Email:</span> {rental.customerInfo[0].email || 'N/A'}</p>
+                  <p className="lh-1">
+                    <span className='fw-medium'>Address: </span>
                       {rental.customerInfo[0].address.street},{" "}
                       {rental.customerInfo[0].address.barangay},{" "}
                       {rental.customerInfo[0].address.city},{" "}
                       {rental.customerInfo[0].address.province}
-                    </div>
-                  </div>
+                  </p>
                 </div>
-              </div>
-              <RentalItemsList
-                singleRents={rental.singleRents}
-                packageRents={rental.packageRents}
-                customTailoring={rental.customTailoring}
-                canEditDetails={canEditDetails}
-                onOpenEditItemModal={handleOpenEditItemModal}
-                onOpenDeleteItemModal={handleOpenDeleteItemModal}
-                onOpenEditPackageModal={handleOpenEditPackageModal}
-                onOpenDeletePackageModal={handleOpenDeletePackageModal}
-                onOpenEditCustomItemModal={handleOpenEditCustomItemModal}
-                onOpenDeleteCustomItemModal={handleOpenDeleteCustomItemModal}
-              />
-            </Card.Body>
-          </Card>
-        </Col>
-
-        <Col md={5}>
-          <OrderActions
+                <RentalItemsList
+                  singleRents={rental.singleRents}
+                  packageRents={rental.packageRents}
+                  customTailoring={rental.customTailoring}
+                  canEditDetails={canEditDetails}
+                  canDeleteItems={canDeleteItems}
+                  onOpenEditItemModal={handleOpenEditItemModal}
+                  onOpenDeleteItemModal={handleOpenDeleteItemModal}
+                  onOpenEditPackageModal={handleOpenEditPackageModal}
+                  onOpenDeletePackageModal={handleOpenDeletePackageModal}
+                  onOpenEditCustomItemModal={handleOpenEditCustomItemModal}
+                  onOpenDeleteCustomItemModal={handleOpenDeleteCustomItemModal}
+                />
+              </Card.Body>
+            </Card>
+          </Col>
+          <Col md={5}>
+            <OrderActions
+              rental={rental}
+              status={rental.status}
+              financials={rental.financials}
+              subtotal={rental.financials.subtotal || 0}
+              editableDiscount={editableDiscount}
+              onDiscountChange={handleDiscountChange}
+              onDiscountBlur={handleDiscountBlur}
+              editableStartDate={rental.rentalStartDate}
+              editableEndDate={editableEndDate}
+              canEditDetails={canEditDetails}
+              paymentUiMode={paymentUiMode}
+              onPaymentUiModeChange={handlePaymentUiModeChange}
+              paymentAmount={paymentAmount}
+              onPaymentAmountChange={setPaymentAmount}
+              onPaymentAmountBlur={handlePaymentAmountBlur}
+              gcashRef={gcashRef}
+              onGcashRefChange={setGcashRef}
+              onReceiptFileChange={setReceiptFile}
+              editableDeposit={editableDeposit}
+              onDepositChange={handleDepositChange}
+              onDepositBlur={handleDepositBlur}
+              onInitiateReturn={handleInitiateReturn}
+              onInitiatePickup={handleInitiatePickup}
+              onInitiateMarkAsPickedUp={handleInitiateMarkAsPickedUp}
+              onInitiateCancel={() => setShowCancelModal(true)}
+            />
+          </Col>
+        </Row>
+        {showReturnModal && (
+          <ProcessReturnModal
+            show={showReturnModal}
+            onHide={() => setShowReturnModal(false)}
             rental={rental}
-            status={rental.status}
-            financials={rental.financials}
-            subtotal={rental.financials.subtotal || 0}
-            editableDiscount={editableDiscount}
-            onDiscountChange={handleDiscountChange}
-            onDiscountBlur={handleDiscountBlur}
-            editableStartDate={editableStartDate}
-            onStartDateChange={setEditableStartDate}
-            editableEndDate={editableEndDate}
-            canEditDetails={canEditDetails}
-            paymentUiMode={paymentUiMode}
-            onPaymentUiModeChange={handlePaymentUiModeChange} 
-            paymentAmount={paymentAmount}
-            onPaymentAmountChange={setPaymentAmount}
-            onPaymentAmountBlur={handlePaymentAmountBlur}
-            gcashRef={gcashRef}
-            onGcashRefChange={setGcashRef}
-            onReceiptFileChange={setReceiptFile}
-            editableDeposit={editableDeposit}
-            onDepositChange={handleDepositChange}
-            onDepositBlur={handleDepositBlur}
-            onReimburseDeposit={handleReimburseDeposit}
-            reimburseAmount={reimburseAmount}
-            onReimburseAmountChange={handleReimburseAmountChange}
-            onInitiateReturn={handleInitiateReturn}
-            onInitiatePickup={handleInitiatePickup}
-            onInitiateMarkAsPickedUp={handleInitiateMarkAsPickedUp} 
+            onSubmit={handleProcessReturn}
           />
-        </Col>
-      </Row>
-
-      <Modal show={showReturnConfirmModal} onHide={() => setShowReturnConfirmModal(false)} centered>
-        <Modal.Header closeButton>
-          <Modal.Title>
-            <ExclamationTriangleFill className="me-2 text-warning" />
-            Confirm Return
-          </Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          You are about to mark this rental as returned.
-          <br/><br/>
-          Paid Deposit: <strong>₱{formatCurrency(rental.financials.depositAmount)}</strong>
-          <br/>
-          Amount to be Reimbursed: <strong>₱{formatCurrency(parseFloat(reimburseAmount) || 0)}</strong>
-          <br/><br/>
-          This action will restore item stock and cannot be undone. Are you sure you want to proceed?
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowReturnConfirmModal(false)}>Cancel</Button>
-          <Button variant="warning" onClick={handleConfirmReturn}>Yes, Mark as Returned</Button>
-        </Modal.Footer>
-      </Modal>
-
-      <Modal show={showDeleteItemModal} onHide={() => setShowDeleteItemModal(false)} centered>
-        <Modal.Header closeButton><Modal.Title>Confirm Deletion</Modal.Title></Modal.Header>
-        <Modal.Body>Are you sure you want to remove <strong>{itemToModify?.name.split(',')[0]}</strong> from this rental? This will return its stock to inventory.</Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowDeleteItemModal(false)}>Cancel</Button>
-          <Button variant="danger" onClick={handleDeleteItem}>Delete Item</Button>
-        </Modal.Footer>
-      </Modal>
-
-      <Modal show={showDeletePackageModal} onHide={() => setShowDeletePackageModal(false)} centered>
-        <Modal.Header closeButton><Modal.Title>Confirm Package Deletion</Modal.Title></Modal.Header>
-        <Modal.Body>
-          {/* --- REPLACE the old Modal.Body content with this block --- */}
-          <p>
-            Are you sure you want to remove the package: <strong>{packageToModify?.name.split(',')[0]}</strong> from this rental?
-          </p>
-          <p className="mb-0">
-            This will return all of its assigned inventory items to stock.
-          </p>
-
-          {/* This is the new conditional warning */}
-          {packageHasCustomItems && (
-            <Alert variant="warning" className="mt-3 mb-0">
-              <ExclamationTriangleFill className="me-2" />
-              <strong>Important:</strong> This package includes custom-made items. Deleting it will also permanently remove their details from this rental.
-            </Alert>
-          )}
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowDeletePackageModal(false)}>Cancel</Button>
-          <Button variant="danger" onClick={handleDeletePackage}>Delete Package</Button>
-        </Modal.Footer>
-      </Modal>
-
-      <Modal show={showDeleteCustomItemModal} onHide={() => setShowDeleteCustomItemModal(false)} centered>
-        <Modal.Header closeButton><Modal.Title>Confirm Deletion</Modal.Title></Modal.Header>
-        <Modal.Body>Are you sure you want to remove the custom item: <strong>{customItemToModify?.name}</strong>?</Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowDeleteCustomItemModal(false)}>Cancel</Button>
-          <Button variant="danger" onClick={handleDeleteCustomItem}>Delete Item</Button>
-        </Modal.Footer>
-      </Modal>
-
-      {/* --- ADD THE NEW VALIDATION MODAL --- */}
-      <Modal show={showValidationModal} onHide={() => setShowValidationModal(false)} centered>
-        <Modal.Header closeButton>
-          <Modal.Title>
-            <ExclamationTriangleFill className="me-2 text-warning" />
-            Review Incomplete Items
-          </Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          {canProceedWithWarnings ? (
+        )}
+        {rental && (
+          <CancellationReasonModal
+            show={showCancelModal}
+            onHide={() => setShowCancelModal(false)}
+            onConfirm={handleConfirmCancellation}
+            title="Confirm Rental Cancellation"
+            itemType="rental"
+            itemId={rental._id}
+          />
+        )}
+        <Modal show={showDeleteItemModal} onHide={() => setShowDeleteItemModal(false)} centered>
+          <Modal.Header closeButton><Modal.Title>Confirm Deletion</Modal.Title></Modal.Header>
+          <Modal.Body>Are you sure you want to remove <strong>{itemToModify?.name.split(',')[0]}</strong> from this rental? This will return its stock to inventory.</Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowDeleteItemModal(false)}>Cancel</Button>
+            <Button variant="danger" onClick={handleDeleteItem}>Delete Item</Button>
+          </Modal.Footer>
+        </Modal>
+        <Modal show={showDeletePackageModal} onHide={() => setShowDeletePackageModal(false)} centered>
+          <Modal.Header closeButton><Modal.Title>Confirm Package Deletion</Modal.Title></Modal.Header>
+          <Modal.Body>
+            {/* --- REPLACE the old Modal.Body content with this block --- */}
             <p>
-              The following items are incomplete. You can still proceed with the pickup, but please review these issues:
+              Are you sure you want to remove the package: <strong>{packageToModify?.name.split(',')[0]}</strong> from this rental?
             </p>
-          ) : (
-            <p>
-              This rental cannot be moved to "To Pickup" until the following issues are resolved:
+            <p className="mb-0">
+              This will return all of its assigned inventory items to stock.
             </p>
-          )}
-          <ListGroup variant="flush">
-            {validationWarnings.map((warning, index) => (
-              <ListGroup.Item key={index} className="text-danger border-0 ps-0">
-                - {warning}
-              </ListGroup.Item>
-            ))}
-          </ListGroup>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowValidationModal(false)}>
-            Close
-          </Button>
-
-          {/* This button ONLY appears if the condition is met */}
-          {canProceedWithWarnings && (
-            <Button variant="primary" onClick={proceedToUpdateStatus}>
-              Proceed Anyway
+            {/* This is the new conditional warning */}
+            {packageHasCustomItems && (
+              <Alert variant="warning" className="mt-3 mb-0">
+                <ExclamationTriangleFill className="me-2" />
+                <strong>Important:</strong> This package includes custom-made items. Deleting it will also permanently remove their details from this rental.
+              </Alert>
+            )}
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowDeletePackageModal(false)}>Cancel</Button>
+            <Button variant="danger" onClick={handleDeletePackage}>Delete Package</Button>
+          </Modal.Footer>
+        </Modal>
+        <Modal show={showDeleteCustomItemModal} onHide={() => setShowDeleteCustomItemModal(false)} centered>
+          <Modal.Header closeButton><Modal.Title>Confirm Deletion</Modal.Title></Modal.Header>
+          <Modal.Body>Are you sure you want to remove the custom item: <strong>{customItemToModify?.name}</strong>?</Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowDeleteCustomItemModal(false)}>Cancel</Button>
+            <Button variant="danger" onClick={handleDeleteCustomItem}>Delete Item</Button>
+          </Modal.Footer>
+        </Modal>
+        {/* --- ADD THE NEW VALIDATION MODAL --- */}
+        <Modal show={showValidationModal} onHide={() => setShowValidationModal(false)} centered>
+          <Modal.Header closeButton>
+            <Modal.Title>
+              <ExclamationTriangleFill className="me-2 text-warning" />
+              Review Incomplete Items
+            </Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            {canProceedWithWarnings ? (
+              <p>
+                The following items are incomplete. You can still proceed with the pickup, but please review these issues:
+              </p>
+            ) : (
+              <p>
+                This rental cannot be moved to "To Pickup" until the following issues are resolved:
+              </p>
+            )}
+            <ListGroup variant="flush">
+              {validationWarnings.map((warning, index) => (
+                <ListGroup.Item key={index} className="text-danger border-0 ps-0">
+                  - {warning}
+                </ListGroup.Item>
+              ))}
+            </ListGroup>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowValidationModal(false)}>
+              Close
             </Button>
-          )}
-        </Modal.Footer>
-      </Modal>
-
-      <Modal show={showPickupConfirmModal} onHide={() => setShowPickupConfirmModal(false)} centered>
-    <Modal.Header closeButton>
-      <Modal.Title>
-        <ExclamationTriangleFill className="me-2 text-info" />
-        Confirm Action
-      </Modal.Title>
-    </Modal.Header>
-    <Modal.Body>
-      Are you sure you want to move this rental to the "To Pickup" stage?
-    </Modal.Body>
-    <Modal.Footer>
-      <Button variant="secondary" onClick={() => setShowPickupConfirmModal(false)}>Cancel</Button>
-      <Button variant="primary" onClick={handleConfirmPickup}>Yes, Move to Pickup</Button>
-    </Modal.Footer>
-  </Modal>
-
-  {/* Confirmation for Mark as Picked Up */}
-  <Modal show={showMarkAsPickedUpConfirmModal} onHide={() => setShowMarkAsPickedUpConfirmModal(false)} centered>
-    <Modal.Header closeButton>
-      <Modal.Title>
-        <ExclamationTriangleFill className="me-2 text-info" />
-        Confirm Pickup
-      </Modal.Title>
-    </Modal.Header>
-    <Modal.Body>
-      Are you sure you want to mark this rental as "Picked Up"? This will finalize the payment and move the rental to the "To Return" stage.
-    </Modal.Body>
-    <Modal.Footer>
-      <Button variant="secondary" onClick={() => setShowMarkAsPickedUpConfirmModal(false)}>Cancel</Button>
-      <Button variant="info" onClick={handleConfirmMarkAsPickedUp}>Yes, Mark as Picked Up</Button>
-    </Modal.Footer>
-  </Modal>
+            {/* This button ONLY appears if the condition is met */}
+            {canProceedWithWarnings && (
+              <Button variant="primary" onClick={proceedToUpdateStatus}>
+                Proceed Anyway
+              </Button>
+            )}
+          </Modal.Footer>
+        </Modal>
+        <Modal show={showPickupConfirmModal} onHide={() => setShowPickupConfirmModal(false)} centered>
+      <Modal.Header closeButton>
+        <Modal.Title>
+          <ExclamationTriangleFill className="me-2 text-info" />
+          Confirm Action
+        </Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        Are you sure you want to move this rental to the "To Pickup" stage?
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="secondary" onClick={() => setShowPickupConfirmModal(false)}>Cancel</Button>
+        <Button variant="primary" onClick={handleConfirmPickup}>Yes, Move to Pickup</Button>
+      </Modal.Footer>
+        </Modal>
       
-      {showEditPackageModal && packageToModify && (
-        <EditPackageModal
-          show={showEditPackageModal}
-          onHide={() => setShowEditPackageModal(false)}
-          pkg={packageToModify}
-          inventory={inventory}
-          onSave={handleSavePackageChanges}
-          allPackages={allPackages}
-          customItems={rental.customTailoring || []} 
-        />
-      )}
-
-      {showEditItemModal && itemToModify && (
-        <SingleItemSelectionModal
-          show={showEditItemModal}
-          onHide={() => {
-            setShowEditItemModal(false);
-            setItemToModify(null);
-          }}
-          // Connect to our new handler function
-          onSelect={handleUpdateItemFromSelection}
-          addAlert={addAlert}
-          mode="rental"
-          // Pre-select the item the user is editing
-          preselectedItemId={itemToModify?.itemId}
-          preselectedVariation={`${itemToModify?.variation.color.name}, ${itemToModify?.variation.size}`}
-        />
-      )}
-
-      {itemToRentBack && (
-          <AddItemFromCustomModal 
-              show={showRentBackModal}
-              onHide={() => { /* This can be left empty or also trigger the next step */ }}
-              onFinished={() => {
-                  setShowRentBackModal(false);
-                  // Remove the item we just processed from the queue.
-                  const newQueue = rentBackQueue.slice(1);
-                  setRentBackQueue(newQueue);
-                  // Process the next item in the updated queue.
-                  processNextInQueue(newQueue);
-              }}
-              itemToProcess={itemToRentBack}
+        {/* Confirmation for     Picked Up */}
+        <Modal show={showMarkAsPickedUpConfirmModal} onHide={() => setShowMarkAsPickedUpConfirmModal(false)} centered>
+      <Modal.Header closeButton>
+        <Modal.Title>
+          <ExclamationTriangleFill className="me-2 text-info" />
+          Confirm Pickup
+        </Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        Are you sure you want to mark this rental as "Picked Up"? This will finalize the payment and move the rental to the "To Return" stage.
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="secondary" onClick={() => setShowMarkAsPickedUpConfirmModal(false)}>Cancel</Button>
+        <Button variant="info" onClick={handleConfirmMarkAsPickedUp}>Yes, Mark as Picked Up</Button>
+      </Modal.Footer>
+        </Modal>
+      
+        {showEditPackageModal && packageToModify && (
+          <EditPackageModal
+            show={showEditPackageModal}
+            onHide={() => setShowEditPackageModal(false)}
+            pkg={packageToModify}
+            onSave={handleSavePackageChanges}
+            customItems={rental.customTailoring || []}
           />
-      )}
-
-      {showEditCustomItemModal && customItemToModify && (
-        <CreateEditCustomItemModal
-          show={showEditCustomItemModal}
-          onHide={() => setShowEditCustomItemModal(false)}
-          item={customItemToModify}
-          itemName={customItemToModify.name}
-          measurementRefs={[]}
-          onSave={handleSaveCustomItemChanges}
-          isForPackage={isEditingItemForPackage}
-          uploadMode="immediate" 
+        )}
+        {showEditItemModal && itemToModify && (
+          <SingleItemSelectionModal
+            show={showEditItemModal}
+            onHide={() => {
+              setShowEditItemModal(false);
+              setItemToModify(null);
+            }}
+            // Connect to our new handler function
+            onSelect={handleUpdateItemFromSelection}
+            addAlert={addAlert}
+            mode="rental"
+            // Pre-select the item the user is editing
+            preselectedItemId={itemToModify?.itemId}
+            preselectedVariation={`${itemToModify?.variation.color.name}, ${itemToModify?.variation.size}`}
+            confirmButtonText={rental.status === 'To Pickup' ? 'Save Changes' : undefined}
+            disableQuantity={rental.status === 'To Pickup'}
+          />
+        )}
+        {showEditCustomItemModal && customItemToModify && (
+          <CreateEditCustomItemModal
+            show={showEditCustomItemModal}
+            onHide={() => setShowEditCustomItemModal(false)}
+            item={customItemToModify}
+            itemName={customItemToModify.name}
+            measurementRefs={measurementRefs}
+            onSave={handleSaveCustomItemChanges}
+            isForPackage={isEditingItemForPackage}
+            uploadMode="immediate"
+          />
+        )}
+        <EditCustomerInfoModal
+          show={showEditCustomerModal}
+          onHide={() => setShowEditCustomerModal(false)}
+          customer={rental.customerInfo[0]}
+          onSave={handleCustomerSave}
         />
-      )}
-
-      <EditCustomerInfoModal
-        show={showEditCustomerModal}
-        onHide={() => setShowEditCustomerModal(false)}
-        customer={rental.customerInfo[0]}
-        onSave={handleCustomerSave}
-      />
-    </Container>
+      </Container>
+    </>
   );
 }
 

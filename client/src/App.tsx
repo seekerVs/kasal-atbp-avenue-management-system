@@ -40,6 +40,7 @@ import SingleRent from "./layouts/singleRent/SingleRent";
 import PackageRent from "./layouts/packageRent/PackageRent";
 import CustomRent from "./layouts/customRent/CustomRent";
 import InventoryItems from "./layouts/inventoryItems/InventoryItems";
+import DamagedItems from "./layouts/damagedItems/DamagedItems";
 import PackageItems from "./layouts/packageItems/PackageItems";
 import ManageRentals from "./layouts/manageRentals/ManageRentals";
 import ContentManagement from "./layouts/contentManagement/ContentManagement";
@@ -48,7 +49,6 @@ import Settings from "./layouts/settings/Settings";
 import ManageReservations from "./layouts/manageReservations/ManageReservations";
 import ReservationViewer from "./layouts/reservationViewer/ReservationViewer";
 import ManageAppointments from "./layouts/manageAppointments/ManageAppointments";
-import AppointmentViewer from "./layouts/appointmentViewer/AppointmentViewer";
 
 // 2. Define the application routes using the new object-based syntax
 // This happens OUTSIDE the App component function.
@@ -81,6 +81,7 @@ const router = createBrowserRouter([
       { path: "/packageRent", element: <ProtectedRoute><PackageRent /></ProtectedRoute> },
       { path: "/customRent", element: <ProtectedRoute><CustomRent /></ProtectedRoute> },
       { path: "/inventoryItems", element: <ProtectedRoute><InventoryItems /></ProtectedRoute> },
+      { path: "/damaged-items", element: <ProtectedRoute><DamagedItems /></ProtectedRoute> },
       { path: "/packageItems", element: <ProtectedRoute><PackageItems /></ProtectedRoute> },
       { path: "/manageRentals", element: <ProtectedRoute><ManageRentals /></ProtectedRoute> },
       { path: "/contentManagement", element: <ProtectedRoute><ContentManagement /></ProtectedRoute> },
@@ -89,7 +90,6 @@ const router = createBrowserRouter([
       { path: "/manage-reservations", element: <ProtectedRoute><ManageReservations /></ProtectedRoute> },
       { path: "/reservations/:id", element: <ProtectedRoute><ReservationViewer /></ProtectedRoute> },
       { path: "/manage-appointments", element: <ProtectedRoute><ManageAppointments /></ProtectedRoute> },
-      { path: "/appointments/:id", element: <ProtectedRoute><AppointmentViewer /></ProtectedRoute> },
     ],
   },
 ]);

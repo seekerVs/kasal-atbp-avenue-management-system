@@ -25,13 +25,16 @@ interface ItemSelectionModalProps {
   preselectedVariation?: string;
   filterByColorHex?: string;
   filterByCategoryType?: 'Wearable' | 'Accessory';
+  initialSelectedItem?: InventoryItem | null;
+  confirmButtonText?: string;
+  disableQuantity?: boolean;
 }
 
 const ACCESSORY_CATEGORIES = ['Veils', 'Cords', 'Arrhae', 'Jewelry', 'Footwear'];
 
 export const SingleItemSelectionModal: React.FC<ItemSelectionModalProps> = ({ 
   show, onHide, onSelect, addAlert, mode, 
-  preselectedItemId, preselectedVariation, filterByColorHex, filterByCategoryType
+  preselectedItemId, preselectedVariation, filterByColorHex, filterByCategoryType, initialSelectedItem = null, confirmButtonText, disableQuantity
 }) => {
   const [assignmentScope, setAssignmentScope] = useState<'matching' | 'all'>('matching');
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
@@ -73,6 +76,13 @@ export const SingleItemSelectionModal: React.FC<ItemSelectionModalProps> = ({
 
   useEffect(() => {
     if (!show) return;
+
+    if (initialSelectedItem) {
+      handleSelectItem(initialSelectedItem);
+      // We don't need to fetch anything, so we can exit the effect early.
+      return; 
+    }
+
     const fetchProducts = async () => {
       setLoadingInventory(true);
       try {
@@ -115,7 +125,7 @@ export const SingleItemSelectionModal: React.FC<ItemSelectionModalProps> = ({
       finally { setLoadingInventory(false); }
     };
     fetchProducts();
-  }, [show, currentPage, searchTerm, selectedSort, attireType, selectedAge, selectedGender, addAlert, preselectedItemId, filterByColorHex, assignmentScope, mode, filterByCategoryType]);
+  }, [show, currentPage, searchTerm, selectedSort, attireType, selectedAge, selectedGender, addAlert, preselectedItemId, filterByColorHex, assignmentScope, mode, filterByCategoryType, initialSelectedItem]);
   
   useEffect(() => { if (currentPage !== 1) setCurrentPage(1); }, [searchTerm, selectedSort, attireType, selectedAge, selectedGender, assignmentScope]);
 
@@ -162,7 +172,6 @@ export const SingleItemSelectionModal: React.FC<ItemSelectionModalProps> = ({
     handleGoBack();
   };
 
-  const isColorSelectionDisabled = (colorHex: string) => mode === 'assignment' && assignmentScope === 'matching' && filterByColorHex !== colorHex;
   const availableSizesForDisplay = useMemo(() => {
     if (!selectedItem) return [];
     return selectedItem.variations.filter(v => {
@@ -179,7 +188,7 @@ export const SingleItemSelectionModal: React.FC<ItemSelectionModalProps> = ({
           <DetailView
             item={selectedItem} mode="full" selectedVariation={selectedVariation} quantity={quantity}
             onVariationChange={setSelectedVariation} onQuantityChange={setQuantity}
-            isColorSelectionDisabled={isColorSelectionDisabled} availableSizesForDisplay={availableSizesForDisplay}
+            availableSizesForDisplay={availableSizesForDisplay} isQuantityDisabled={disableQuantity}
           />
         ) : (
             <GridView
@@ -202,10 +211,15 @@ export const SingleItemSelectionModal: React.FC<ItemSelectionModalProps> = ({
       </Modal.Body>
       <Modal.Footer>
         {selectedItem && (
-          <><Button variant="secondary" onClick={handleGoBack}><ArrowLeft className="me-2"/>Back</Button>
-          <Button variant="primary" onClick={handleConfirmSelection} disabled={!selectedVariation}>
-            {mode === 'rental' ? 'Confirm Selection' : 'Assign Item'}
-          </Button></>
+          <>
+            <Button variant="secondary" onClick={confirmButtonText ? onHide : handleGoBack}>
+              {confirmButtonText ? 'Cancel' : <><ArrowLeft className="me-2"/>Back</>}
+            </Button>
+            
+            <Button variant="primary" onClick={handleConfirmSelection} disabled={!selectedVariation}>
+              {confirmButtonText || (mode === 'rental' ? 'Confirm Selection' : 'Assign Item')}
+            </Button>
+          </>
         )}
       </Modal.Footer>
     </Modal>

@@ -1,7 +1,5 @@
 import {
   HouseDoorFill,
-  CalendarCheck,
-  ClipboardData,
   BoxSeam,
   Images,
   PeopleFill,
@@ -56,6 +54,7 @@ export const sidebarItems: NavItem[] = [
     subItems: [
       { title: "Inventory Items", path: "/inventoryItems" },
       { title: "Packages", path: "/packageItems" },
+      { title: "Damaged Items", path: "/damaged-items" },
     ],
   },
   {

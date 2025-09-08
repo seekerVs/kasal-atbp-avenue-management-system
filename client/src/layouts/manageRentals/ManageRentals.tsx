@@ -2,24 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Container,
-  Row,
-  Col,
   Nav,
-  Image,
   Button,
   Card,
-  Badge,
   Spinner,
   Alert,
   Modal,
-  Collapse,
   InputGroup,
   Form,
 } from 'react-bootstrap';
 import {
-  PersonCircle,
-  EyeFill,
-  BoxSeam,
   CalendarCheck,
   ArrowCounterclockwise,
   CheckCircleFill,
@@ -29,18 +21,15 @@ import {
 
 import { RentalOrder, RentalStatus } from '../../types'; 
 import api from '../../services/api';
-import { formatCurrency } from '../../utils/formatters';
+import { BookingCard } from '../../components/bookingCard/BookingCard';
 
 
 type TabStatus = RentalStatus;
-
-type BadgeVariant = 'primary' | 'secondary' | 'success' | 'danger' | 'warning' | 'info' | 'light' | 'dark';
 
 // ===================================================================================
 // --- MAIN COMPONENT ---
 // ===================================================================================
 function ManageRentals() {
-  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabStatus>('Pending');
   const [allRentals, setAllRentals] = useState<RentalOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,7 +37,7 @@ function ManageRentals() {
   
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [rentalToCancel, setRentalToCancel] = useState<RentalOrder | null>(null);
-  const [expandedRentals, setExpandedRentals] = useState<Map<string, boolean>>(new Map());
+  const [expandedRentals, setExpandedRentals] = useState<Set<string>>(new Set());
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
@@ -69,30 +58,10 @@ function ManageRentals() {
     }
   };
 
-  const getStatusBadgeVariant = (status: RentalStatus): BadgeVariant => {
-    switch (status) {
-      case 'Pending': return 'primary';
-      case 'To Pickup': return 'info';
-      case 'To Return': return 'warning';
-      case 'Returned': return 'success';
-      case 'Completed': return 'success';
-      case 'Cancelled': return 'danger';
-      default: return 'secondary';
-    }
-  };
-
   const filteredRentals = allRentals.filter(rental => {
     if (!rental || !rental._id) return false;
 
-    const lowercasedStatus = rental.status.toLowerCase();
-    const lowercasedActiveTab = activeTab.toLowerCase();
-
-    let tabMatch = false;
-    if (lowercasedActiveTab === 'completed') {
-      tabMatch = lowercasedStatus === 'returned' || lowercasedStatus === 'completed';
-    } else {
-      tabMatch = lowercasedStatus === lowercasedActiveTab;
-    }
+    const tabMatch = rental.status === activeTab;
 
     if (!tabMatch) {
       return false;
@@ -113,11 +82,6 @@ function ManageRentals() {
       customerPhone.includes(lowercasedSearch)
     );
   });
-  
-  const handleShowCancelModal = (rental: RentalOrder) => {
-    setRentalToCancel(rental);
-    setShowCancelModal(true);
-  };
 
   const handleConfirmCancel = async () => {
     if (!rentalToCancel) return;
@@ -138,184 +102,16 @@ function ManageRentals() {
     }
   };
 
-  
-  const renderRentalOrderCard = (rental: RentalOrder) => {
-    if (!rental || !rental._id) return null;
-    
-    // const displayTotal = calculateOrderTotal(rental); // This line was deleted in previous steps.
-    const customer = rental.customerInfo[0] || {};
-    
-    // Combine all items into a single list for rendering
-    const allItems = [
-        ...(rental.singleRents || []),
-        ...(rental.packageRents || []),
-        ...(rental.customTailoring || [])
-    ];
-
-    // --- NEW: Configuration for collapsible items ---
-    const ITEMS_TO_SHOW_INITIALLY = 3;
-    const hasMoreItems = allItems.length > ITEMS_TO_SHOW_INITIALLY;
-    const isExpanded = expandedRentals.get(rental._id) || false; // Check if this rental is expanded
-
-    const displayedItems = allItems.slice(0, ITEMS_TO_SHOW_INITIALLY);
-    const hiddenItems = allItems.slice(ITEMS_TO_SHOW_INITIALLY);
-
-    // Function to toggle expansion for this specific rental
-    const toggleExpansion = () => {
-        setExpandedRentals(prevMap => {
-            const newMap = new Map(prevMap);
-            newMap.set(rental._id, !isExpanded);
-            return newMap;
-        });
-    };
-
-    return (
-      <Card key={rental._id} className="mb-4 shadow-sm">
-        <Card.Header className="d-flex justify-content-between align-items-center bg-light border-bottom">
-          <div>
-            <strong className="me-2">Rental ID: {rental._id}</strong>
-            <small className="text-muted">(Date: {new Date(rental.createdAt).toLocaleDateString()})</small>
-          </div>
-          <Badge bg={getStatusBadgeVariant(rental.status)} pill>{rental.status.toUpperCase()}</Badge>
-        </Card.Header>
-        <Card.Body className="p-4">
-          <Row className="mb-3 align-items-center">
-            <Col>
-              <p className="mb-1"><PersonCircle className="me-2" />Customer: <strong className="text-dark">{customer.name}</strong></p>
-              <p className="mb-0 text-muted small">Contact: {customer.phoneNumber}</p>
-            </Col>
-          </Row>
-          <hr />
-                    {displayedItems.map((item, index) => {
-            // --- NEW: Parsing Logic ---
-            const nameParts = item.name.split(',');
-            const productName = nameParts[0].trim(); // The first part is always the name
-            
-            // Check if there are variation parts (e.g., color, size)
-            const hasVariation = nameParts.length > 1;
-            // Construct the variation string, e.g., "Champagne, M"
-            const variationText = hasVariation ? `${nameParts[1]}, ${nameParts[2]}`.trim() : null;
-
-            return (
-              <Row key={index} className="align-items-center my-3">
-                <Col xs="auto" className="me-3">
-                  <Image src={item.imageUrl || 'https://placehold.co/80x80/e9ecef/adb5bd?text=Item'} fluid rounded style={{ width: "80px", height: "80px", objectFit: "cover" }} />
-                </Col>
-                <Col>
-                  {/* Display the parsed product name */}
-                  <p className="mb-0 fw-bold">{productName}</p>
-                  
-                  {/* Conditionally render the variation text if it exists */}
-                  {variationText && (
-                      <p className="mb-1 text-muted small fst-italic">{variationText}</p>
-                  )}
-                  
-                  {/* Display the quantity */}
-                  <p className="mb-0 text-muted small">Qty: {item.quantity}</p>
-                </Col>
-                <Col xs="auto" className="text-end">
-                  <p className="mb-0 fw-bold text-danger" style={{ fontSize: "1.05em" }}>
-                    ₱{formatCurrency(item.price * item.quantity)}
-                  </p>
-                </Col>
-              </Row>
-            );
-          })}
-
-          {/* ======================================================= */}
-          {/* --- ADD THE COLLAPSIBLE SECTION --- */}
-          {/* ======================================================= */}
-                    {hasMoreItems && (
-              <>
-                  <Collapse in={isExpanded}>
-                      <div id={`rental-items-collapse-${rental._id}`}>
-                          {hiddenItems.map((item, index) => {
-                            // --- NEW: Parsing Logic ---
-                            const nameParts = item.name.split(',');
-                            const productName = nameParts[0].trim();
-                            const hasVariation = nameParts.length > 1;
-                            const variationText = hasVariation ? `${nameParts[1]}, ${nameParts[2]}`.trim() : null;
-
-                            return (
-                              <Row key={`hidden-${index}`} className="align-items-center my-3">
-                                  <Col xs="auto" className="me-3">
-                                      <Image src={item.imageUrl || 'https://placehold.co/80x80/e9ecef/adb5bd?text=Item'} fluid rounded style={{ width: "80px", height: "80px", objectFit: "cover" }} />
-                                  </Col>
-                                  <Col>
-                                      {/* Display the parsed product name */}
-                                      <p className="mb-0 fw-bold">{productName}</p>
-                                      
-                                      {/* Conditionally render the variation text */}
-                                      {variationText && (
-                                          <p className="mb-1 text-muted small fst-italic">{variationText}</p>
-                                      )}
-                                      
-                                      {/* Display the quantity */}
-                                      <p className="mb-0 text-muted small">Qty: {item.quantity}</p>
-                                  </Col>
-                                  <Col xs="auto" className="text-end">
-                                      <p className="mb-0 fw-bold text-danger" style={{ fontSize: "1.05em" }}>
-                                        ₱{formatCurrency(item.price * item.quantity)}
-                                      </p>
-                                  </Col>
-                              </Row>
-                            );
-                          })}
-                      </div>
-                  </Collapse>
-                  <Button 
-                      variant="link" 
-                      onClick={toggleExpansion} 
-                      aria-controls={`rental-items-collapse-${rental._id}`}
-                      aria-expanded={isExpanded}
-                      className="text-decoration-none p-0 mt-2"
-                  >
-                      {isExpanded ? 'Show Less' : `Show ${hiddenItems.length} More Items`}
-                  </Button>
-              </>
-          )}
-          {/* ======================================================= */}
-
-          <hr className="my-3" />
-          <Row className="align-items-center">
-            <Col>
-              <div className="mb-2">
-                <p className="mb-0 text-muted small">Total Amount</p>
-                <p className="fw-bold fs-5 mb-0"><span className="text-danger">₱{formatCurrency(rental.financials.grandTotal || 0)}</span></p>
-                {(rental.financials.depositAmount > 0 || rental.financials.shopDiscount > 0) && (
-                  <p className="text-muted fst-italic mb-0" style={{ fontSize: '0.75rem' }}>
-                    (Includes 
-                    {rental.financials.depositAmount > 0 && ` ₱${formatCurrency(rental.financials.depositAmount)} deposit`}
-                    {rental.financials.depositAmount > 0 && rental.financials.shopDiscount > 0 && ' &'}
-                    {rental.financials.shopDiscount > 0 && ` ₱${formatCurrency(rental.financials.shopDiscount)} discount`}
-                    )
-                  </p>
-                )}
-              </div>
-              <p className="mb-1 text-muted small">
-                Rental Period: {new Date(rental.rentalStartDate).toLocaleDateString()} - {new Date(rental.rentalEndDate).toLocaleDateString()}
-              </p>
-            </Col>
-            <Col className="d-flex justify-content-end align-items-center">
-              <div className="d-flex align-items-center gap-2">
-                {rental.status === 'Pending' && (
-                  <Button variant="outline-secondary" onClick={() => handleShowCancelModal(rental)}>
-                    <XCircleFill className="me-1" /> Cancel
-                  </Button>
-                )}
-                <Button 
-                  variant="outline-danger" 
-                  style={{'--bs-btn-color': '#8B0000', '--bs-btn-border-color': '#8B0000', '--bs-btn-hover-bg': '#8B0000', '--bs-btn-hover-color': 'white'} as React.CSSProperties}
-                  onClick={() => navigate(`/rentals/${rental._id}`)}
-                >
-                  <EyeFill className="me-1" /> View Details
-                </Button>
-              </div>
-            </Col>
-          </Row>
-        </Card.Body>
-      </Card>
-    );
+  const handleToggleExpansion = (rentalId: string) => {
+    setExpandedRentals(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(rentalId)) {
+        newSet.delete(rentalId);
+      } else {
+        newSet.add(rentalId);
+      }
+      return newSet;
+    });
   };
 
   return (
@@ -355,7 +151,15 @@ function ManageRentals() {
                 }
               </Alert>
             ) : (
-              filteredRentals.map(renderRentalOrderCard)
+              filteredRentals.map(rental => (
+                <BookingCard
+                  key={rental._id}
+                  booking={rental}
+                  type="rental"
+                  isExpanded={expandedRentals.has(rental._id)}
+                  onToggleExpansion={handleToggleExpansion}
+                />
+              ))
             )}
           </div>
         </Card>

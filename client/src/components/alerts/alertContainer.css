@@ -1,13 +1,124 @@
+/* frontend/src/components/alerts/alertContainer.css */
+
+/* 1. Main container for positioning */
 .alert-container-wrapper {
   position: fixed;
-  top: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 2050; /* Higher than modal z-index */
+  top: 80px;  /* Position below the navbar */
+  right: 20px;
+  z-index: 2050;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 0.75rem;
-  width: 90%;
-  max-width: 600px;
+  align-items: flex-end; /* Align alerts to the right */
+  gap: 1rem;
+  width: 100%;
+  max-width: 380px;
 }
+
+/* 2. Custom alert styling */
+.custom-alert {
+  display: flex;
+  width: 100%;
+  border-radius: 0.375rem;
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+  background-color: #fff;
+  border-left: 5px solid; /* The colored theme border */
+  padding: 1rem;
+  position: relative;
+  overflow: hidden; /* Important for the progress bar */
+  
+  /* 3. Animation */
+  animation: slideIn 0.5s ease-out forwards;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* 4. Theming for different alert types */
+.custom-alert.alert-success { border-color: var(--bs-success); }
+.custom-alert.alert-danger  { border-color: var(--bs-danger); }
+.custom-alert.alert-warning { border-color: var(--bs-warning); }
+.custom-alert.alert-info    { border-color: var(--bs-info); }
+
+.custom-alert.alert-success .alert-icon { color: var(--bs-success); }
+.custom-alert.alert-danger  .alert-icon { color: var(--bs-danger); }
+.custom-alert.alert-warning .alert-icon { color: var(--bs-warning); }
+.custom-alert.alert-info    .alert-icon { color: var(--bs-info); }
+
+/* 5. Icon styling */
+.alert-icon {
+  font-size: 1.5rem; /* 24px */
+  margin-right: 1rem;
+  flex-shrink: 0;
+}
+
+/* 6. Content styling (title + message) */
+.alert-content {
+  flex-grow: 1;
+}
+
+.alert-title {
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+  color: #212529;
+}
+
+.alert-message {
+  font-size: 0.9rem;
+  color: #495057;
+  margin: 0;
+}
+
+.alert-message ul {
+  margin-bottom: 0;
+  padding-left: 1.25rem;
+}
+
+/* 7. Close button styling */
+.alert-close-btn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  color: #6c757d;
+  cursor: pointer;
+  padding: 0.25rem;
+  line-height: 1;
+}
+.alert-close-btn:hover {
+  color: #212529;
+}
+
+/* 8. Progress bar styling */
+.alert-progress-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 4px;
+  background-color: var(--bs-primary); /* Default color */
+  animation: deplete 5s linear forwards;
+}
+
+.alert-progress-bar.paused {
+  animation-play-state: paused;
+}
+
+@keyframes deplete {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
+/* Progress bar theming */
+.custom-alert.alert-success .alert-progress-bar { background-color: var(--bs-success); }
+.custom-alert.alert-danger  .alert-progress-bar { background-color: var(--bs-danger); }
+.custom-alert.alert-warning .alert-progress-bar { background-color: var(--bs-warning); }
+.custom-alert.alert-info    .alert-progress-bar { background-color: var(--bs-info); }

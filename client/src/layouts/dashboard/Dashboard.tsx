@@ -16,7 +16,6 @@ import {
   CalendarFill,
   HourglassSplit,
   ArrowRepeat,
-  BagCheckFill,
   BoxArrowUpRight,
   CaretDownFill,
   CaretUpFill,
@@ -40,6 +39,8 @@ import "./dashboard.css";
 import { RentalOrder } from "../../types";
 import api from "../../services/api";
 import { AdvancedDateRangePicker } from "../../components/advancedDateRangePicker/AdvancedDateRangePicker";
+import CustomButton1 from "../../components/customButton1/CustomButton1";
+import OutfitRecommendationModal from "../../components/modals/outfitRecommendationModal/OutfitRecommendationModal";
 
 // --- Data Interfaces ---
 interface SalesDataPoint {
@@ -122,6 +123,7 @@ function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [chartLoading, setChartLoading] = useState(false); 
+  const [showRecommendationModal, setShowRecommendationModal] = useState(false);
 
   const [dateRange, setDateRange] = useState({
     startDate: subDays(new Date(), 6),
@@ -192,6 +194,13 @@ function Dashboard() {
     });
   }, [dashboardData, sortColumn, sortDirection]);
 
+   const handleRecommend = (size: string) => {
+    if (!size) return;
+    const path = `/products?size=${encodeURIComponent(size)}`;
+    navigate(path);
+    setShowRecommendationModal(false);
+  };
+
   const handleSort = (column: SortableColumn) => {
     if (sortColumn === column) {
       setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
@@ -246,7 +255,7 @@ function Dashboard() {
         const isOverdue = returnDate < today;
 
         const timeDiff = Math.abs(today.getTime() - returnDate.getTime());
-        const dayDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
+        const dayDiff = Math.round(timeDiff / (1000 * 3600 * 24));
 
         let statusElement;
         if (isOverdue) {
@@ -294,7 +303,13 @@ function Dashboard() {
 
   return (
     <div className="d-flex flex-column justify-content-between gap-3">
-      <p className="m-0 fw-semibold fs-2 text-start">Dashboard</p>
+      <div className="d-flex justify-content-between align-items-center">
+        <p className="m-0 fw-semibold fs-2 text-start">Dashboard</p>
+        
+        <div onClick={() => setShowRecommendationModal(true)}>
+          <CustomButton1 />
+        </div>
+      </div>
 
       <Row xs={1} sm={2} md={3} lg={5} className="g-3">
         {/* Each Col will automatically take up 1/5th of the width on large screens,
@@ -441,6 +456,13 @@ function Dashboard() {
           </Card>
         </Col>
       </Row>
+
+      {/* --- 6. RENDER the modal at the bottom --- */}
+      <OutfitRecommendationModal
+        show={showRecommendationModal}
+        onHide={() => setShowRecommendationModal(false)}
+        onRecommend={handleRecommend}
+      />
     </div>
   );
 }

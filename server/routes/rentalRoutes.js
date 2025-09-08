@@ -8,7 +8,10 @@ const PackageModel = require('../models/Package.js');
 const { calculateFinancials } = require('../utils/financialsCalculator');
 const { del } = require('@vercel/blob');
 const ReservationModel = require('../models/Reservation.js');
+const AppointmentModel = require('../models/Appointment');
 const { protect } = require('../middleware/authMiddleware.js');
+const { sanitizeRequestBody } = require('../middleware/sanitizeMiddleware');
+const DamagedItem = require('../models/DamagedItem');
 const namer = require('color-namer');
 
 const router = express.Router();
@@ -34,8 +37,7 @@ router.get('/:id', asyncHandler(async (req, res) => {
 }));
 
 // POST a new rental (single, package, or custom)
-// POST a new rental (single, package, or custom)
-router.post('/', asyncHandler(async (req, res) => {
+router.post('/', protect, sanitizeRequestBody, asyncHandler(async (req, res) => {
     const { customerInfo, singleRents, packageRents, customTailoring } = req.body;
 
     // --- 1. Validate mandatory information ---
@@ -56,8 +58,8 @@ router.post('/', asyncHandler(async (req, res) => {
         // --- 2. Prepare the base rental data object ---
         const newRentalId = `rent_${nanoid(8)}`;
         const startDate = new Date();
-        const endDate = new Date();
-        endDate.setDate(startDate.getDate() + 4); // Default 4-day rental period
+        const endDate = new Date(startDate);
+        endDate.setDate(startDate.getDate() + 3); // Default 4-day rental period
 
         const rentalData = {
             _id: newRentalId,
@@ -184,7 +186,7 @@ router.post('/', asyncHandler(async (req, res) => {
     }
 }));
 
-router.put('/:id/process', asyncHandler(async (req, res) => {
+router.put('/:id/process', protect, sanitizeRequestBody, asyncHandler(async (req, res) => {
     const { id } = req.params;
     const {
         status,
@@ -207,6 +209,14 @@ router.put('/:id/process', asyncHandler(async (req, res) => {
 
         // (Stock restoration logic remains the same)
         const originalStatus = rental.status;
+        if (status === 'To Return' && originalStatus !== 'To Return') {
+            const newStartDate = new Date();
+            const newEndDate = new Date(newStartDate);
+            newEndDate.setDate(newStartDate.getDate() + 3); // 4-day period
+
+            rental.rentalStartDate = newStartDate.toISOString().split('T')[0];
+            rental.rentalEndDate = newEndDate.toISOString().split('T')[0];
+        }
         if (status === 'Returned' && originalStatus !== 'Returned') {
             const stockUpdateOperations = [];
             if (depositReimbursed !== undefined) {
@@ -248,8 +258,15 @@ router.put('/:id/process', asyncHandler(async (req, res) => {
         
         // (General rental info update remains the same)
         if (status) rental.status = status;
-        if (rentalStartDate) rental.rentalStartDate = rentalStartDate;
-        if (rentalEndDate) rental.rentalEndDate = rentalEndDate;
+        if (status === 'To Return' && originalStatus !== 'To Return') {
+            const pickupDate = new Date();
+            const returnDate = new Date(pickupDate);
+            returnDate.setDate(pickupDate.getDate() + 3); // Standard 4-day rental period
+
+            // Set the authoritative start and end dates, ignoring client input
+            rental.rentalStartDate = pickupDate.toISOString().split('T')[0];
+            rental.rentalEndDate = returnDate.toISOString().split('T')[0];
+        }   
         if (!rental.financials) rental.financials = {};
         if (shopDiscount !== undefined) rental.financials.shopDiscount = parseFloat(shopDiscount) || 0;
         if (depositAmount !== undefined) rental.financials.depositAmount = parseFloat(depositAmount) || 0;
@@ -293,7 +310,7 @@ router.put('/:id/process', asyncHandler(async (req, res) => {
 }));
 
 // PUT to add a new item to an existing rental
-router.put('/:id/addItem', asyncHandler(async (req, res) => {
+router.put('/:id/addItem', protect, sanitizeRequestBody, asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { singleRents, packageRents, customTailoring } = req.body;
 
@@ -420,7 +437,7 @@ router.put('/:id/addItem', asyncHandler(async (req, res) => {
 }));
 
 // PUT to update a single item within a rental
-router.put('/:rentalId/items/:itemId', asyncHandler(async (req, res) => {
+router.put('/:rentalId/items/:itemId', protect, asyncHandler(async (req, res) => {
     const { rentalId, itemId } = req.params;
     const { quantity, newVariation } = req.body;
     if (!quantity || quantity < 1) throw new Error("Invalid quantity.");    
@@ -478,7 +495,7 @@ router.put('/:rentalId/items/:itemId', asyncHandler(async (req, res) => {
 }));
 
 // DELETE a single item from a rental
-router.delete('/:rentalId/items/:itemId', asyncHandler(async (req, res) => {
+router.delete('/:rentalId/items/:itemId', protect, asyncHandler(async (req, res) => {
     const { rentalId, itemId } = req.params;
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -1016,6 +1033,63 @@ router.post('/from-booking', asyncHandler(async (req, res) => {
     }
 }));
 
+// DELETE a custom item that is part of a package from a rental
+// This will also clear its assignment from the package fulfillment.
+router.delete('/:rentalId/packages/:packageId/custom-items/:itemId', asyncHandler(async (req, res) => {
+    const { rentalId, packageId, itemId } = req.params;
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        const rental = await RentalModel.findById(rentalId).session(session);
+        if (!rental) {
+            res.status(404);
+            throw new Error("Rental not found.");
+        }
+
+        const packageToUpdate = rental.packageRents.id(packageId);
+        if (!packageToUpdate) {
+            res.status(404);
+            throw new Error(`Package with ID "${packageId}" not found in this rental.`);
+        }
+
+        const itemToRemove = rental.customTailoring.id(itemId);
+        if (itemToRemove) {
+            // Delete associated images from Vercel Blob if they exist
+            if (itemToRemove.referenceImages && itemToRemove.referenceImages.length > 0) {
+                await del(itemToRemove.referenceImages);
+            }
+            // Remove the item from the top-level customTailoring array
+            rental.customTailoring.pull(itemId);
+        }
+
+        // Find the fulfillment slot and clear its assignment
+        const fulfillmentToClear = packageToUpdate.packageFulfillment.find(
+            (fulfill) => fulfill.isCustom && fulfill.assignedItem?.itemId === itemId
+        );
+
+        if (fulfillmentToClear) {
+            fulfillmentToClear.assignedItem = {}; // Clear the assignment
+        } else {
+            console.warn(`Could not find fulfillment slot for custom item ${itemId} in package ${packageId}`);
+        }
+
+        // Save all changes
+        await rental.save({ session });
+        await session.commitTransaction();
+
+        const finalRental = await RentalModel.findById(rentalId).lean();
+        res.status(200).json({ ...finalRental, financials: calculateFinancials(finalRental) });
+
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
+    }
+}));
+
 router.post('/from-reservation', protect, asyncHandler(async (req, res) => {
   const { reservationId } = req.body;
   if (!reservationId) {
@@ -1152,5 +1226,241 @@ router.post('/from-reservation', protect, asyncHandler(async (req, res) => {
     session.endSession();
   }
 }));
+
+// METHOD: PUT /api/rentals/:id/process-return
+router.put('/:id/process-return', protect, asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { late, damagedItems, depositReimbursed } = req.body;
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        const rental = await RentalModel.findById(id).session(session);
+        if (!rental) {
+            res.status(404);
+            throw new Error('Rental not found.');
+        }
+        if (rental.status !== 'To Return') {
+            res.status(400);
+            throw new Error(`Cannot process return for a rental with status "${rental.status}".`);
+        }
+
+        // --- 1. Process and Log All Damaged Items ---
+        const damagedItemsMap = new Map(); // Key: 'itemId-variation', Value: quantity damaged
+        if (damagedItems && Array.isArray(damagedItems) && damagedItems.length > 0) {
+            const newDamagedRecords = damagedItems.map(item => {
+                // Use a consistent key for both standard and custom items
+                const key = `${item.itemId}-${item.variation}`;
+                damagedItemsMap.set(key, (damagedItemsMap.get(key) || 0) + item.quantity);
+
+                return {
+                    ...item, // Spread all properties from the payload
+                    rentalId: id,
+                    status: 'Awaiting Repair', // Default status for new entries
+                };
+            });
+            // Create all damaged records in the database in a single operation
+            await DamagedItem.insertMany(newDamagedRecords, { session });
+        }
+
+        // --- 2. Calculate Stock to Restore for UNDAMAGED Standard Items ---
+        const stockUpdateOperations = [];
+        const allStandardRentedItems = [
+            ...rental.singleRents.map(item => ({
+                itemId: item.itemId,
+                variation: `${item.variation.color.name}, ${item.variation.size}`,
+                quantity: item.quantity
+            })),
+            ...rental.packageRents.flatMap(pkg =>
+                pkg.packageFulfillment
+                    .filter(f => !f.isCustom && f.assignedItem && f.assignedItem.itemId)
+                    .map(f => ({
+                        itemId: f.assignedItem.itemId,
+                        variation: f.assignedItem.variation,
+                        quantity: 1
+                    }))
+            )
+        ];
+
+        for (const rentedItem of allStandardRentedItems) {
+            const key = `${rentedItem.itemId}-${rentedItem.variation}`;
+            const damagedQty = damagedItemsMap.get(key) || 0;
+            const undamagedQty = rentedItem.quantity - damagedQty;
+
+            if (undamagedQty > 0) {
+                const [color, size] = rentedItem.variation.split(',').map(s => s.trim());
+                stockUpdateOperations.push({
+                    updateOne: {
+                        filter: { 
+                            _id: rentedItem.itemId,
+                            'variations.color.name': color, 
+                            'variations.size': size 
+                        },
+                        update: { $inc: { 'variations.$.quantity': undamagedQty } }
+                    }
+                });
+            }
+        }
+        
+        if (stockUpdateOperations.length > 0) {
+            await ItemModel.bulkWrite(stockUpdateOperations, { session });
+        }
+
+        // --- 3. Process UNDAMAGED "Rent-Back" Items by Adding Them to Inventory ---
+        const rentBackItems = rental.customTailoring.filter(
+            item => item.tailoringType === 'Tailored for Rent-Back'
+        );
+
+        for (const rentBackItem of rentBackItems) {
+            const key = `${rentBackItem._id}-${rentBackItem.outfitType}`; // A unique key for custom items
+            const isDamaged = damagedItemsMap.has(key);
+
+            if (!isDamaged) {
+                // If the item is NOT damaged, create a new entry in the main 'items' inventory.
+                const newItemForInventory = new ItemModel({
+                    name: rentBackItem.name,
+                    price: rentBackItem.price,
+                    category: rentBackItem.outfitCategory,
+                    description: rentBackItem.designSpecifications,
+                    composition: rentBackItem.materials,
+                    variations: [{
+                        // Here you would ideally use a more sophisticated way to get the color name/hex.
+                        // For now, we'll use a placeholder.
+                        color: { name: "As Specified", hex: "#000000" }, 
+                        // You can use your size converter utility here if available
+                        size: convertMeasurementsToSize(rentBackItem.measurements),
+                        quantity: rentBackItem.quantity,
+                        imageUrl: rentBackItem.referenceImages[0] || ''
+                    }],
+                });
+                await newItemForInventory.save({ session });
+            }
+        }
+        
+        // --- 4. Finalize the Rental Document ---
+        rental.status = 'Completed';
+        if (depositReimbursed !== undefined) {
+            if (parseFloat(depositReimbursed) > rental.financials.depositAmount) {
+                throw new Error('Reimbursement cannot exceed the paid deposit.');
+            }
+            rental.financials.depositReimbursed = parseFloat(depositReimbursed);
+        }
+        
+        const updatedRental = await rental.save({ session });
+        await session.commitTransaction();
+
+        // --- 5. Send Final Response ---
+        const calculatedFinancials = calculateFinancials(updatedRental.toObject());
+        const finalResponse = {
+            ...updatedRental.toObject(),
+            financials: calculatedFinancials,
+        };
+        res.status(200).json(finalResponse);
+
+    } catch (error) {
+        await session.abortTransaction();
+        throw error; // Let the global error handler manage the response
+    } finally {
+        session.endSession();
+    }
+}));
+
+// METHOD: PUT /api/rentals/:id/cancel
+router.put('/:id/cancel', protect, asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    if (!reason || typeof reason !== 'string' || reason.trim() === '') {
+        res.status(400);
+        throw new Error('A cancellation reason is required.');
+    }
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        const rental = await RentalModel.findById(id).session(session);
+        if (!rental) {
+            res.status(404);
+            throw new Error('Rental not found.');
+        }
+
+        // Only allow cancellation for specific statuses
+        if (!['Pending', 'To Pickup'].includes(rental.status)) {
+            res.status(400);
+            throw new Error(`Cannot cancel a rental with status "${rental.status}".`);
+        }
+
+        const stockUpdateOperations = [];
+
+        // 1. Restore stock for single rent items
+        if (rental.singleRents?.length > 0) {
+            for (const item of rental.singleRents) {
+                stockUpdateOperations.push({
+                    updateOne: {
+                        filter: { 
+                            _id: item.itemId, 
+                            "variations.color.hex": item.variation.color.hex, 
+                            "variations.size": item.variation.size 
+                        },
+                        update: { $inc: { "variations.$.quantity": item.quantity } }
+                    }
+                });
+            }
+        }
+
+        // 2. Restore stock for assigned package items
+        if (rental.packageRents?.length > 0) {
+            for (const pkg of rental.packageRents) {
+                for (const fulfillment of pkg.packageFulfillment) {
+                    const assigned = fulfillment.assignedItem;
+                    if (!fulfillment.isCustom && assigned && assigned.itemId && assigned.variation) {
+                        const [color, size] = assigned.variation.split(',').map(s => s.trim());
+                        stockUpdateOperations.push({
+                            updateOne: {
+                                filter: { 
+                                    _id: assigned.itemId, 
+                                    "variations.color.name": color, // Match by name here as variation string stores name
+                                    "variations.size": size 
+                                },
+                                update: { $inc: { "variations.$.quantity": 1 } }
+                            }
+                        });
+                    }
+                }
+            }
+        }
+        
+        // 3. Execute stock updates if needed
+        if (stockUpdateOperations.length > 0) {
+            await ItemModel.bulkWrite(stockUpdateOperations, { session });
+        }
+
+        // 4. Update the rental document
+        rental.status = 'Cancelled';
+        rental.cancellationReason = reason.trim();
+        const updatedRental = await rental.save({ session });
+
+        // 5. Commit the transaction
+        await session.commitTransaction();
+
+        // Recalculate and send the final response
+        const calculatedFinancials = calculateFinancials(updatedRental.toObject());
+        const finalResponse = {
+            ...updatedRental.toObject(),
+            financials: calculatedFinancials,
+        };
+        res.status(200).json(finalResponse);
+
+    } catch (error) {
+        await session.abortTransaction();
+        console.error(`Error cancelling rental ${id}:`, error);
+        throw error;
+    } finally {
+        session.endSession();
+    }
+}));
+
 
 module.exports = router;

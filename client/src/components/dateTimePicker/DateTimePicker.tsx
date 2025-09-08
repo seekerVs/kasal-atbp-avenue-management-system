@@ -99,27 +99,22 @@ export const DateTimePicker: React.FC<DateTimePickerProps> = ({
   const disabledTimeSet = getDisabledTimes();
 
   const handleDateChange = (date: Date | null) => {
-    if (!date) {
-      onChange(null);
-      // --- 2. ADD A CHECK before calling onTimeChange ---
-      if (onTimeChange) {
-        onTimeChange('');
-      }
-      return;
+    // If a new date is selected (or the date is cleared)...
+    if (date) {
+        const newDateTime = setHours(setMinutes(date, 0), 9);
+        onChange(newDateTime);
+    } else {
+        onChange(null);
     }
-    
-    // --- 3. ADD A CHECK here as well ---
     if (onTimeChange) {
       onTimeChange('');
     }
-    const newDateTime = setHours(setMinutes(date, 0), 9);
-    onChange(newDateTime);
   };
   
   const handleTimeChange = (timeString: string | null) => {
-    if (timeString && onTimeChange) { // <-- Add a check here too for safety
+    if (onTimeChange && timeString !== null) {
       onTimeChange(timeString);
-      if (selectedDate) {
+      if (selectedDate && timeString) {
         const [hour, minute] = timeString.split(':').map(Number);
         const newDateTime = setHours(setMinutes(selectedDate, minute), hour);
         onChange(newDateTime);

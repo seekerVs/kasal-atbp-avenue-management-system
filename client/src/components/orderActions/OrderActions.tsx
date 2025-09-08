@@ -1,6 +1,6 @@
 // client/src/components/rentalViewer/OrderActions.tsx
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Row, Col, Card, Badge, Button, Form, InputGroup, Alert, Accordion, ListGroup } from 'react-bootstrap';
 import {
   CalendarCheck,
@@ -10,7 +10,8 @@ import {
   HourglassSplit,
   XCircleFill,
   CashCoin,
-  CashStack,
+  Image as ImageIcon,
+  ArrowRightCircleFill
 } from 'react-bootstrap-icons';
 import { RentalStatus, Financials, RentalOrder, CustomTailoringItem, PaymentDetail } from '../../types'; // Import from centralized types
 import { formatCurrency } from '../../utils/formatters';
@@ -25,7 +26,7 @@ const getStatusIcon = (status: RentalStatus) => {
         case 'Pending': return <HourglassSplit size={20} className="me-2" />;
         case 'To Pickup': return <BoxSeam size={20} className="me-2" />;
         case 'To Return': return <ArrowCounterclockwise size={20} className="me-2" />;
-        case 'Returned': case 'Completed': return <CheckCircleFill size={20} className="me-2" />;
+        case 'Completed': return <CheckCircleFill size={20} className="me-2" />;
         case 'Cancelled': return <XCircleFill size={20} className="me-2" />;
         default: return null;
     }
@@ -41,7 +42,6 @@ interface OrderActionsProps {
   onDiscountChange: (value: string) => void;
   onDiscountBlur: () => void; 
   editableStartDate: string;
-  onStartDateChange: (value: string) => void;
   editableEndDate: string;
   canEditDetails: boolean;
   paymentUiMode: 'Cash' | 'Gcash';
@@ -55,12 +55,10 @@ interface OrderActionsProps {
   editableDeposit: string;
   onDepositChange: (value: string) => void;
   onDepositBlur: () => void;
-  onReimburseDeposit: (amount: number) => void;
-  reimburseAmount: string;
-  onReimburseAmountChange: (value: string) => void;
   onInitiateReturn: (rentBackItems: CustomTailoringItem[]) => void;
   onInitiatePickup: () => void;
   onInitiateMarkAsPickedUp: () => void;
+  onInitiateCancel: () => void;
 }
 
 // ===================================================================================
@@ -75,7 +73,6 @@ const OrderActions: React.FC<OrderActionsProps> = ({
   onDiscountChange,
   onDiscountBlur,
   editableStartDate,
-  onStartDateChange,
   editableEndDate,
   canEditDetails,
   paymentUiMode,
@@ -89,11 +86,10 @@ const OrderActions: React.FC<OrderActionsProps> = ({
   editableDeposit,
   onDepositChange,
   onDepositBlur,
-  reimburseAmount, // <-- Destructure
-  onReimburseAmountChange, // <-- Destructure
   onInitiateReturn,
   onInitiateMarkAsPickedUp,
   onInitiatePickup,
+  onInitiateCancel,
 }) => {
   const { addAlert } = useAlert();
   const discountAmount = parseFloat(editableDiscount) || 0;
@@ -109,16 +105,11 @@ const OrderActions: React.FC<OrderActionsProps> = ({
   
   const isPaid = totalPaid > 0;
   const isFullyPaid = isPaid && totalPaid >= grandTotal;
+  const canBeCancelled = status === 'Pending' || status === 'To Pickup';
 
   const handleOcrUpdate = (refNumber: string, file: File | null) => {
     onGcashRefChange(refNumber);
     onReceiptFileChange(file);
-  };
-
-  const handleGcashRefInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawValue = e.target.value.toUpperCase();
-    const alphanumericValue = rawValue.replace(/[^A-Z0-9]/g, '');
-    onGcashRefChange(alphanumericValue);
   };
 
   const handleUseRecommendedDeposit = () => {
@@ -130,17 +121,19 @@ const OrderActions: React.FC<OrderActionsProps> = ({
     (status === 'Pending' && !isPaid) || 
     (status === 'To Pickup' && !isFullyPaid);
 
-  const shouldDisableButton = 
-    // Disable if it's the first payment ('Pending' status) AND payment details are invalid.
-    (status === 'Pending' && (
+  const shouldDisableButton = useMemo(() => {
+    if (isPaid) {
+      return false;
+    }
+
+    const isPaymentInputInvalid = 
       (parseFloat(paymentAmount) <= 0) ||
-      (paymentUiMode === 'Gcash' && gcashRef.trim() === '')
-    )) ||
-    // Disable if it's the final payment ('To Pickup') AND payment details are invalid.
-    (status === 'To Pickup' && !isFullyPaid && (
-      (parseFloat(paymentAmount) <= 0) ||
-      (paymentUiMode === 'Gcash' && gcashRef.trim() === '')
-  ));
+      (paymentUiMode === 'Gcash' && gcashRef.trim() === '');
+      
+    // The button is disabled only if the rental is unpaid AND the new payment input is invalid.
+    return !isPaid && isPaymentInputInvalid;
+    
+  }, [isPaid, paymentAmount, paymentUiMode, gcashRef]);
 
   const handlePaymentAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -197,26 +190,28 @@ const OrderActions: React.FC<OrderActionsProps> = ({
         </div>
         <div className="mb-3">
           <p className="mb-2 fw-medium"><CalendarCheck className="me-2" />Rental Period</p>
-          <Row className="g-2"> {/* g-2 adds a small gap between columns */}
-            <Col md={6}> {/* Takes 50% width on medium screens and up */}
-              <Form.Label className="small text-muted">Start Date</Form.Label>
-              <Form.Control 
-                type="date" 
-                value={editableStartDate} 
-                onChange={e => onStartDateChange(e.target.value)} 
-                disabled={!canEditDetails} 
-              />
-            </Col>
-            <Col md={6}> {/* Takes 50% width on medium screens and up */}
-              <Form.Label className="small text-muted">End Date</Form.Label>
-              <Form.Control 
-                type="date" 
-                value={editableEndDate} 
-                disabled // Always disabled
-                readOnly // Good for accessibility
-              />
-            </Col>
-          </Row>
+          {['Pending', 'To Pickup'].includes(status) ? (
+            // STATE 1: If the rental is not yet picked up, show an info alert.
+            <Alert variant="info" className="small py-2 text-center">
+              The 4-day rental period will be set automatically upon pickup.
+            </Alert>
+          ) : (
+            // STATE 2: If the rental is picked up or finished, display the final dates.
+            <div className="px-1">
+              <div className="d-flex justify-content-between">
+                <span className="text-muted">Start Date:</span>
+                <span >
+                  {editableStartDate ? format(new Date(editableStartDate), 'MMMM dd, yyyy') : 'Not Set'}
+                </span>
+              </div>
+              <div className="d-flex justify-content-between">
+                <span className="text-muted">End Date:</span>
+                <span>
+                  {editableEndDate ? format(new Date(editableEndDate), 'MMMM dd, yyyy') : 'Not Set'}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
         <hr />
         <div className="d-flex justify-content-between align-items-center mb-2">
@@ -331,7 +326,7 @@ const OrderActions: React.FC<OrderActionsProps> = ({
                   <div className="d-flex justify-content-between small">
                     <span className="text-muted">
                       Payment #{index + 1} ({payment.referenceNumber ? 'GCash' : 'Cash'})
-                      {payment.date && ` on ${format(new Date(payment.date), 'MM/dd/yy')}`}
+                      {payment.date && ` on ${format(new Date(payment.date), 'MM/dd/yyyy, h:mm a')}`}
                     </span>
                     <span className="fw-bold">₱{formatCurrency(payment.amount)}</span>
                   </div>
@@ -341,6 +336,16 @@ const OrderActions: React.FC<OrderActionsProps> = ({
                         <span>{payment.referenceNumber}</span>
                     </div>
                   )}
+                  {payment.receiptImageUrl && (
+                    <div className="d-flex justify-content-between small mt-1">
+                      <span className="text-muted">
+                        <ImageIcon className="me-1"/> Proof of Payment:
+                      </span>
+                      <a href={payment.receiptImageUrl} target="_blank" rel="noopener noreferrer">
+                        View Receipt
+                      </a>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -348,7 +353,7 @@ const OrderActions: React.FC<OrderActionsProps> = ({
         )}
 
         {status === 'To Pickup' && !isFullyPaid && (
-          <Alert variant="warning" className="text-center mt-3">
+          <Alert variant="warning" className="text-center mt-3 p-2">
             <div className="fw-bold">Remaining Balance</div>
             <div className="h4 mb-0">₱{formatCurrency(remainingBalance)}</div>
           </Alert>
@@ -390,70 +395,65 @@ const OrderActions: React.FC<OrderActionsProps> = ({
         )}
         
         <div className="d-grid gap-2 mt-4">
-          {status === 'Pending' && (<Button size="lg" onClick={onInitiatePickup} style={{ backgroundColor: '#8B0000', border: 'none', fontWeight: 'bold' }} disabled={shouldDisableButton}>Move to Pickup</Button>)}
+          {status === 'Pending' && (
+            <Button 
+              variant="primary" 
+              onClick={onInitiatePickup} 
+              disabled={shouldDisableButton}
+            >
+              <ArrowRightCircleFill className="me-2"/>
+              Move to Pickup
+            </Button>
+          )}
+
           {status === 'To Pickup' && (
             <Button
-              variant="info"
-              size="lg"
+              variant="primary"
               onClick={() => {
-                // --- THIS IS THE NEW VALIDATION LOGIC ---
                 const finalPaymentInput = parseFloat(paymentAmount) || 0;
-                // Use the server-calculated remaining balance with a fallback to 0.
-                const remainingBalance = financials.remainingBalance ?? 0; // <-- THE FIX
-
+                const remainingBalance = financials.remainingBalance ?? 0;
                 if (remainingBalance > finalPaymentInput) {
                   addAlert(
                     `Payment is insufficient. Remaining balance of ₱${formatCurrency(remainingBalance)} must be paid.`,
                     'danger'
                   );
-                  return; // Stop the process
+                  return;
                 }         
-                // If validation passes, call the original handler from the parent.
                 onInitiateMarkAsPickedUp();
               }}
               disabled={shouldDisableButton}
             >
+              <ArrowRightCircleFill className="me-2"/>
               Mark as Picked Up
             </Button>
           )}
+
           {status === 'To Return' && (
-            <>
-              <Form.Group className="mb-2">
-                  <Form.Label className="small text-muted">Amount to Reimburse</Form.Label>
-                  <InputGroup>
-                      <InputGroup.Text>₱</InputGroup.Text>
-                      <Form.Control
-                          type="number"
-                          value={reimburseAmount}
-                          onChange={(e) => onReimburseAmountChange(e.target.value)}
-                          min="0"
-                          max={financials.depositAmount}
-                          style={{ textAlign: 'right' }}
-                      />
-                  </InputGroup>
-              </Form.Group>
-              <Button variant="warning" size="lg" onClick={() => onInitiateReturn(rental.customTailoring)}>
-                  <ArrowCounterclockwise className="me-2" />
-                  Mark as Returned
-              </Button>
-            </>
+            <Button variant="success" onClick={() => onInitiateReturn(rental.customTailoring)}>
+                <ArrowCounterclockwise className="me-2" />
+                Mark as Returned
+            </Button>
           )}
 
-          {status === 'Returned' && (
-            <Alert variant="success" className="text-center">
-                <p className="fw-bold mb-1">Return Processed</p>
-                <p className="small mb-0">Reimbursed Amount: ₱{formatCurrency(financials.depositReimbursed)}</p>
-            </Alert>
-          )}
-
-          {status === 'Completed' && ( // <-- NEW: Final state display
+          {status === 'Completed' && (
               <Alert variant="success" className="text-center">
                   <CheckCircleFill className="me-2"/>
                   This rental has been completed.
+                  <p className="small mb-0 mt-1">Reimbursed Amount: ₱{formatCurrency(financials.depositReimbursed)}</p>
               </Alert>
           )}
-          {status === 'Returned' && ( <Alert variant="success" className="text-center">This rental has been completed.</Alert> )}
-          {status === 'Cancelled' && ( <Alert variant="danger" className="text-center">This rental was cancelled.</Alert> )}
+
+          {status === 'Cancelled' && ( 
+            <Alert variant="danger" className="text-center">This rental was cancelled.</Alert> 
+          )}
+
+          {/* Secondary Action: Cancel Button */}
+          {canBeCancelled && (
+            <Button variant="outline-danger" onClick={onInitiateCancel}>
+              <XCircleFill className="me-2" />
+              Cancel Rental
+            </Button>
+          )}
         </div>
       </Card.Body>
     </Card>

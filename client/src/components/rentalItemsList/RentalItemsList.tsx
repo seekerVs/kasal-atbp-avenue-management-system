@@ -9,6 +9,7 @@ interface RentalItemsListProps {
   packageRents: RentedPackage[];
   customTailoring: CustomTailoringItem[];
   canEditDetails: boolean;
+  canDeleteItems: boolean;
   onOpenEditItemModal: (item: SingleRentItem) => void;
   onOpenDeleteItemModal: (item: SingleRentItem) => void;
   onOpenEditPackageModal: (pkg: RentedPackage) => void;
@@ -25,6 +26,7 @@ const RentalItemsList: React.FC<RentalItemsListProps> = ({
   packageRents,
   customTailoring,
   canEditDetails,
+  canDeleteItems,
   onOpenEditItemModal,
   onOpenDeleteItemModal,
   onOpenEditPackageModal,
@@ -49,7 +51,9 @@ const RentalItemsList: React.FC<RentalItemsListProps> = ({
           {canEditDetails && (
             <>
               <Button variant="outline-secondary" size="sm" className="me-2" onClick={() => onOpenEditItemModal(item)}><PencilSquare /></Button>
-              <Button variant="outline-danger" size="sm" onClick={() => onOpenDeleteItemModal(item)}><Trash /></Button>
+              {canDeleteItems && (
+                <Button variant="outline-danger" size="sm" onClick={() => onOpenDeleteItemModal(item)}><Trash /></Button>
+              )}
             </>
           )}
         </Col>
@@ -73,9 +77,11 @@ const RentalItemsList: React.FC<RentalItemsListProps> = ({
             <Button variant="outline-secondary" size="sm" className="me-2" onClick={() => onOpenEditPackageModal(pkg)}>
               <PencilSquare />
             </Button>
-            <Button variant="outline-danger" size="sm" onClick={() => onOpenDeletePackageModal(pkg)}>
-              <Trash />
-            </Button>
+            {canDeleteItems && (
+              <Button variant="outline-danger" size="sm" onClick={() => onOpenDeletePackageModal(pkg)}>
+                <Trash />
+              </Button>
+            )}
           </>
         )}
       </Col>
@@ -107,7 +113,9 @@ const RentalItemsList: React.FC<RentalItemsListProps> = ({
                 {canEditDetails && (
                     <>
                       <Button variant="outline-secondary" size="sm" className="me-2" onClick={() => onOpenEditCustomItemModal(item)}><PencilSquare /></Button>
-                      <Button variant="outline-danger" size="sm" onClick={() => onOpenDeleteCustomItemModal(item)}><Trash /></Button>
+                      {canDeleteItems && (
+                        <Button variant="outline-danger" size="sm" onClick={() => onOpenDeleteCustomItemModal(item)}><Trash /></Button>
+                      )}
                     </>
                 )}
             </Col>

@@ -10,7 +10,7 @@
 .dropzone-area.idle {
   border: 2px dashed #adb5bd;
   border-radius: 0.375rem;
-  padding: 2rem;
+  padding: 1rem;
   text-align: center;
   color: #6c757d;
   cursor: pointer;

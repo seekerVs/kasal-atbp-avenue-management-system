@@ -374,8 +374,8 @@ function ItemFormModal({ show, onHide, onSave, item, categories }: ItemFormModal
         const newVariations = [...formData.variations];
         const variation = newVariations[index];
         let numericValue = parseInt(String(variation.quantity), 10);
-        if (isNaN(numericValue) || numericValue < 1) {
-            numericValue = 1;
+        if (isNaN(numericValue) || numericValue < 0) {
+            numericValue = 0;
         }
         newVariations[index] = { ...variation, quantity: numericValue };
         setFormData(prev => ({ ...prev, variations: newVariations }));
@@ -422,11 +422,14 @@ function ItemFormModal({ show, onHide, onSave, item, categories }: ItemFormModal
             const baseItemData = {
                 ...formData,
                 price: parseFloat(priceInput) || 0,
-                variations: finalVariations.map(v => ({
-                    ...v,
-                    quantity: parseInt(String(v.quantity), 10) || 1,
-                    imageUrl: v.imageUrl as string,
-                })),
+                variations: finalVariations.map(v => {
+                    const parsedQuantity = parseInt(String(v.quantity), 10);
+                    return {
+                        ...v,
+                        quantity: !isNaN(parsedQuantity) ? parsedQuantity : 0,
+                        imageUrl: v.imageUrl as string,
+                    };
+                }),
             };
             let itemToSave: InventoryItem;
             if (item) {
@@ -511,7 +514,7 @@ function ItemFormModal({ show, onHide, onSave, item, categories }: ItemFormModal
             variationErrors.color = true;
           }
           if (!variation.size.trim()) variationErrors.size = true;
-          if (parseInt(String(variation.quantity), 10) < 1) variationErrors.quantity = true;
+          if (parseInt(String(variation.quantity), 10) < 0) variationErrors.quantity = true;
           if (!variation.imageUrl) variationErrors.imageUrl = true;
           
           if (Object.keys(variationErrors).length > 0) {
@@ -659,6 +662,7 @@ function ItemFormModal({ show, onHide, onSave, item, categories }: ItemFormModal
                         onChange={e => handleVariationChange(index, 'quantity', e.target.value)}
                         onBlur={() => handleQuantityBlur(index)}
                         isInvalid={!!errors.variations?.[index]?.quantity}
+                        min="0"
                       />
                     </Form.Group>
                   </Col>

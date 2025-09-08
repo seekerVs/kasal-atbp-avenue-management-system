@@ -43,7 +43,15 @@ const PackageSchema = new mongoose.Schema({
     inclusions: [InclusionSchema], // Use the new sub-schema
     price: { type: Number, required: true },
     imageUrls: [String], // Changed from singular 'imageUrl' to plural array
-    colorMotifs: [ColorMotifSchema]
+    colorMotifs: {
+      type: [ColorMotifSchema],
+      validate: {
+        validator: function(v) {
+          return Array.isArray(v) && v.length > 0;
+        },
+        message: 'A package must have at least one color motif defined.'
+      }
+    }
 }, { timestamps: true });
 
 const PackageModel = mongoose.model("packages", PackageSchema);

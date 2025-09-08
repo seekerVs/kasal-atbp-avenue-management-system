@@ -14,7 +14,7 @@ function Settings() {
   const [isSaving, setIsSaving] = useState(false);
   const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
   const [activeTab, setActiveTab] = useState('general');
-  const [slotsInput, setSlotsInput] = useState('0');
+  const [slotsPerDayInput, setSlotsPerDayInput] = useState('0');
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -22,7 +22,7 @@ function Settings() {
       try {
         const response = await api.get('/settings');
         setSettings(response.data);
-        setSlotsInput(String(response.data.appointmentSlotsPerHour || '0'));
+        setSlotsPerDayInput(String(response.data.appointmentSlotsPerDay || '0'));
       } catch (error) {
         addAlert('Could not load shop settings.', 'danger');
       } finally {
@@ -43,20 +43,20 @@ function Settings() {
       });
     }
 
-    if (name === 'appointmentSlotsPerHour') {
+    if (name === 'appointmentSlotsPerDay') {
       if (value === '' || /^\d+$/.test(value)) {
-        setSlotsInput(value);
+        setSlotsPerDayInput(value);
       }
     } else if (settings) {
       setSettings({ ...settings, [name]: value });
     }
   };
 
-  const handleSlotsBlur = () => {
-    const numericValue = parseInt(slotsInput, 10) || 0;
-    setSlotsInput(String(numericValue)); // Ensure the input shows '0' if empty
+  const handleSlotsPerDayBlur = () => {
+    const numericValue = parseInt(slotsPerDayInput, 10) || 0;
+    setSlotsPerDayInput(String(numericValue));
     if (settings) {
-      setSettings({ ...settings, appointmentSlotsPerHour: numericValue });
+      setSettings({ ...settings, appointmentSlotsPerDay: numericValue });
     }
   };
 
@@ -64,8 +64,8 @@ function Settings() {
     if (!settings) return false;
     const errors: { [key: string]: string } = {};
 
-    if (settings.appointmentSlotsPerHour < 0) {
-      errors.appointmentSlotsPerHour = "Slots per hour cannot be a negative number.";
+    if (settings.appointmentSlotsPerDay < 0) {
+      errors.appointmentSlotsPerDay = "Slots per day cannot be a negative number.";
     }
 
     // Only validate the phone number if it's not empty
@@ -87,7 +87,7 @@ function Settings() {
     setIsSaving(true);
     try {
       const response = await api.put('/settings', { 
-        appointmentSlotsPerHour: settings.appointmentSlotsPerHour,
+        appointmentSlotsPerDay: settings.appointmentSlotsPerDay,
         gcashName: settings.gcashName,
         gcashNumber: settings.gcashNumber
       });
@@ -142,20 +142,20 @@ function Settings() {
                         <Row>
                           <Col md={10} lg={8}>
                             <Form.Group className="mb-3">
-                              <Form.Label className="fw-bold">Default Appointment Slots per Hour</Form.Label>
+                              <Form.Label className="fw-bold">Default Appointment Slots per Day</Form.Label>
                               <Form.Control 
                                 type="text"
                                 inputMode="numeric"
-                                name="appointmentSlotsPerHour"
-                                value={slotsInput}
+                                name="appointmentSlotsPerDay"
+                                value={slotsPerDayInput}
                                 onChange={handleSettingsChange}
-                                onBlur={handleSlotsBlur}
-                                isInvalid={!!formErrors.appointmentSlotsPerHour}
+                                onBlur={handleSlotsPerDayBlur}
+                                isInvalid={!!formErrors.appointmentSlotsPerDay}
                               />
                               <Form.Control.Feedback type="invalid">
-                                {formErrors.appointmentSlotsPerHour}
+                                {formErrors.appointmentSlotsPerDay}
                               </Form.Control.Feedback>
-                              <Form.Text>The number of available slots for any open time slot.</Form.Text>
+                              <Form.Text>Total number of appointments available per day. This will be split between Morning and Afternoon.</Form.Text>
                             </Form.Group>
                             <Form.Group className="mb-3">
                               <Form.Label className="fw-bold">GCash Account Name</Form.Label>

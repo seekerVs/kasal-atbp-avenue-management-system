@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Container, Row, Col, Card, Button, Form, Spinner, Alert } from 'react-bootstrap';
-import { useNavigate } from 'react-router-dom';
-import { CalendarEvent, ChatQuote, CheckCircleFill, Download, EnvelopeFill, GeoAltFill, PersonFill, TelephoneFill } from 'react-bootstrap-icons';
-import { setHours, setMinutes, addDays, format } from 'date-fns';
+import { Container, Row, Col, Card, Button, Form, Spinner, Alert, Badge } from 'react-bootstrap';
+import { CalendarEvent, ChatQuote, CheckCircleFill, Download } from 'react-bootstrap-icons';
+import { format } from 'date-fns';
 
 import { Appointment, FormErrors } from '../../types';
 import { ValidatedInput } from '../../components/forms/ValidatedInput';
@@ -10,11 +9,11 @@ import { AddressSelector } from '../../components/addressSelector/AddressSelecto
 import CustomFooter from '../../components/customFooter/CustomFooter';
 import api from '../../services/api';
 import { useAlert } from '../../contexts/AlertContext';
-import { DateTimePicker } from '../../components/dateTimePicker/DateTimePicker';
+import { DayBlockPicker } from '../../components/dayBlockPicker/DayBlockPicker';
 import { DataPrivacyModal } from '../../components/modals/dataPrivacyModal/DataPrivacyModal';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
-import { CustomerInfoDisplay } from '../../components/customerInfoDisplay/CustomerInfoDisplay';
+import { AppointmentSummary } from '../../components/appointmentSummary/AppointmentSummary';
 
 interface UnavailabilityRecord {
   date: string;
@@ -24,14 +23,16 @@ interface UnavailabilityRecord {
 const getInitialAppointmentState = (): Omit<Appointment, '_id' | 'createdAt' | 'updatedAt' | 'status'> => ({
   customerInfo: { name: '', email: '', phoneNumber: '', address: { province: 'Camarines Norte', city: '', barangay: '', street: '' } },
   appointmentDate: null,
-  statusNote: '',
+  notes: '',
+  timeBlock: null,
 });
+
+type BlockType = 'morning' | 'afternoon' | '';
 
 function CreateAppointmentPage() {
   const { addAlert } = useAlert();
 
   const [appointment, setAppointment] = useState(getInitialAppointmentState);
-  const [selectedTime, setSelectedTime] = useState('');
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [unavailableDates, setUnavailableDates] = useState<Date[]>([]); // 2. State for fetched unavailable dates
@@ -57,10 +58,13 @@ function CreateAppointmentPage() {
 
   const handleCustomerChange = (field: string, value: string) => setAppointment(p => ({ ...p, customerInfo: { ...p.customerInfo, [field]: value } }));
   const handleAddressChange = (field: keyof Appointment['customerInfo']['address'], value: string) => setAppointment(p => ({ ...p, customerInfo: { ...p.customerInfo, address: { ...p.customerInfo.address, [field]: value } } }));
-  
-  // This handler now receives a full Date object from the picker
-  const handleDateChange = (date: Date | null) => {
-    setAppointment(p => ({ ...p, appointmentDate: date }));
+
+  const handleDateAndBlockChange = (date: Date | null, block: BlockType) => {
+    setAppointment(p => ({ 
+      ...p, 
+      appointmentDate: date,
+      timeBlock: block === '' ? null : block
+    }));
   };
 
   const validate = (): boolean => {
@@ -72,37 +76,46 @@ function CreateAppointmentPage() {
     if (!appointment.customerInfo.address.street.trim()) newErrors.customerInfo.address.street = 'Street address is required.';
     if (!appointment.appointmentDate) {
         newErrors.appointmentDate = 'An appointment date is required.';
-    } 
-    // ADD THIS CHECK: Ensure a time has been explicitly selected from the dropdown
-    else if (!selectedTime) {
-        newErrors.appointmentDate = 'An appointment time is required.';
+    } else if (!appointment.timeBlock) { // Check for the block on the main state object
+        newErrors.appointmentDate = 'An appointment time block (Morning/Afternoon) is required..';
     }
     setErrors(newErrors);
-    return !(Object.keys(newErrors.customerInfo.address).length || Object.keys(newErrors.customerInfo).length > 1 || newErrors.appointmentDate);
+    const hasAddressErrors = Object.keys(newErrors.customerInfo.address).length > 0;
+    const hasCustomerErrors = Object.keys(newErrors.customerInfo).filter(key => key !== 'address').length > 0;
+    const hasDateError = !!newErrors.appointmentDate;
+
+    return !hasAddressErrors && !hasCustomerErrors && !hasDateError;
   };
 
   const handleSubmit = () => {
-    // This function now only validates and opens the modal.
     if (validate()) {
       setShowPrivacyModal(true);
+    } else {
+        // --- Add a user-friendly alert ---
+        addAlert("Please fill in all required fields marked with an asterisk (*).", "warning");
     }
   };
 
   const handleProceedWithSubmit = async () => {
-    setShowPrivacyModal(false); // Close the modal first
+    setShowPrivacyModal(false);
     setIsSubmitting(true);
     try {
-      const response = await api.post('/appointments', appointment);
-      const savedAppointment: Appointment = response.data;
-      
-      addAlert('Your appointment request has been submitted successfully!', 'success');
-      
-      // Store the response from the server in our new state
-      setSubmittedAppointment(savedAppointment); 
-      
-      // Set the flag to true to switch the view
-      setIsSubmitted(true);
+      if (!appointment.appointmentDate) {
+        throw new Error("Appointment date is missing.");
+      }
 
+      const response = await api.post('/appointments', {
+        customerInfo: appointment.customerInfo,
+        // Format the date to a simple YYYY-MM-DD string
+        appointmentDate: format(appointment.appointmentDate, 'yyyy-MM-dd'),
+        timeBlock: appointment.timeBlock,
+        notes: appointment.notes,
+      });
+
+      const savedAppointment: Appointment = response.data;
+      addAlert('Your appointment request has been submitted successfully!', 'success');
+      setSubmittedAppointment(savedAppointment); 
+      setIsSubmitted(true);
     } catch (err: any) {
       addAlert(err.response?.data?.message || 'Failed to submit appointment request.', 'danger');
     } finally { 
@@ -141,67 +154,39 @@ function CreateAppointmentPage() {
   };
 
   const handleBookAnother = () => {
-    // Reset the main appointment data back to the initial empty state
     setAppointment(getInitialAppointmentState());
-    
-    // Reset the selected time string
-    setSelectedTime('');
-    
-    // Clear any validation errors
     setErrors({});
-    
-    // Clear the stored submitted data
     setSubmittedAppointment(null);
-    
-    // Flip the switch to go back to the form view
     setIsSubmitted(false);
   };
 
   const renderSuccessView = (details: Appointment) => (
     <>
-      <div ref={summaryRef} className="p-3 px-lg-5">
-        <div className="text-center">
-          <CheckCircleFill className="text-success mb-2" size={50} />
-          <h3 className="mb-2">Request Submitted!</h3>
-          <p className="text-muted mb-4 lh-1 fw-light">
-            Thank you, {details.customerInfo.name.split(' ')[0]}. We have received your request. 
-            A staff member will contact you shortly to confirm your schedule. <br />
-            Make sure to take a screenshot or click the "Download as PDF" button for your records.
-          </p>
-          
-          <div className="d-inline-block p-3 rounded mb-2">
-            <p className="text-muted small mb-0" style={{ letterSpacing: '1px' }}>APPOINTMENT ID</p>
-            <p className="h4 fw-bold text-danger mb-0">{details._id}</p>
-          </div>
+      {/* This renders the detailed summary OFF-SCREEN, ready for PDF capture */}
+      <div style={{ position: 'fixed', left: '-2000px', top: 0, zIndex: -1 }}>
+        <AppointmentSummary ref={summaryRef} appointment={details} />
+      </div>
 
-          <div className="summary-container text-start py-2 border-bottom">
-            <Row className="g-4">
-              {/* Left Column: Customer Details */}
-              <Col md={6} className="pe-md-4 border-end-md">
-                <CustomerInfoDisplay customer={details.customerInfo} />
-              </Col>
-              
-              {/* Right Column: Appointment Details */}
-              <Col md={6} className="ps-md-4">
-                <h5 className="mb-2 text-center fw-bold">Appointment Details</h5>
-                <hr className='my-2 mx-3' />
-                
-                {/* Styled Date Block (replaces Alert) */}
-                <div className="rounded mb-3">
-                  <p className="mb-0 fw-medium"><CalendarEvent className="me-2"/>Requested Schedule:</p>
-                  <p className="mb-0">{details.appointmentDate && format(new Date(details.appointmentDate), 'EEEE, MMMM dd, yyyy @ h:mm a')}</p>
-                </div>
-
-                {/* Notes Block */}
-                <div>
-                  <p className="mb-1 fw-medium"><ChatQuote className="me-2"/>Notes:</p>
-                  <p className="text-muted fst-italic ps-4 mb-0">
-                    {details.statusNote?.trim() ? details.statusNote : 'None'}
-                  </p>
-                </div>
-              </Col>
-            </Row>
-          </div>
+      {/* This is the new, clean success message shown to the user */}
+      <div className="text-center p-3">
+        <CheckCircleFill className="text-success mb-3" size={50} />
+        <h3 className="mb-2">Appointment Request Submitted!</h3>
+        <p className="text-muted mb-4">
+            Thank you, {details.customerInfo.name.split(' ')[0]}. Your request has been received. Our staff will contact you shortly to confirm your schedule.
+        </p>
+        <div className="d-inline-block p-3 border rounded mb-4">
+          <p className="text-muted small mb-0" style={{ letterSpacing: '1px' }}>YOUR APPOINTMENT ID</p>
+          <p className="h4 fw-bold text-danger mb-0">{details._id}</p>
+        </div>
+        <div className="text-start bg-light p-3 rounded small">
+            <p className="mb-2">
+                <Badge pill bg="primary" className="me-2">1</Badge> 
+                Please check the status of your request using the <strong>Request Tracker</strong> page.
+            </p>
+            <p className="mb-0">
+                <Badge pill bg="primary" className="me-2">2</Badge> 
+                For any urgent concerns, feel free to <strong>contact us</strong> with your Appointment ID.
+            </p>
         </div>
       </div>
       
@@ -213,10 +198,9 @@ function CreateAppointmentPage() {
           ) : (
               <Download className="me-2"/>
           )}
-          Download as PDF
+          Download Confirmation
         </Button>
       </div>
-      
     </>
   );
 
@@ -255,15 +239,14 @@ function CreateAppointmentPage() {
                     <hr />
                     
                     <Form.Group className="mb-3">
-                      <Form.Label>Preferred Appointment Date & Time<span className="text-danger">*</span></Form.Label>
+                      <Form.Label>Preferred Appointment Schedule<span className="text-danger">*</span></Form.Label>
                       <Alert variant="info" className="small py-2">
-                        <strong>NOTE:</strong> If a specific time is not listed, the allotted slots have already been taken.
+                        <strong>NOTE:</strong> Select a date to see available Morning/Afternoon blocks. Our staff will contact you to finalize a specific time within that block.
                       </Alert>
-                      <DateTimePicker
+                      <DayBlockPicker
                         selectedDate={appointment.appointmentDate}
-                        onChange={handleDateChange}
-                        selectedTime={selectedTime}
-                        onTimeChange={setSelectedTime}
+                        selectedBlock={appointment.timeBlock || ''}
+                        onChange={handleDateAndBlockChange}
                         minDate={new Date()}
                         unavailableDates={unavailableDates}
                       />
@@ -272,7 +255,13 @@ function CreateAppointmentPage() {
                     
                     <Form.Group className="mb-3">
                       <Form.Label><ChatQuote className="me-2"/>Notes or Initial Ideas (Optional)</Form.Label>
-                      <Form.Control as="textarea" rows={3} placeholder="Describe your vision, what the event is for, etc." value={appointment.statusNote || ''} onChange={(e) => setAppointment(p => ({...p, statusNote: e.target.value}))} />
+                      <Form.Control 
+                        as="textarea" 
+                        rows={3} 
+                        placeholder="Describe your vision, what the event is for, etc." 
+                        value={appointment.notes || ''} 
+                        onChange={(e) => setAppointment(p => ({...p, notes: e.target.value}))} 
+                      />
                     </Form.Group>
                     <Alert variant="warning" className="small py-2 mt-4">
                       For official schedule announcements and updates, please follow the Kasal Atbp. Avenue official Facebook Page.

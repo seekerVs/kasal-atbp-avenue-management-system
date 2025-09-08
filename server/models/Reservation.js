@@ -22,10 +22,30 @@ const ReservationSchema = new mongoose.Schema({
   financials: { type: FinancialsSchema, default: {} },
   itemReservations: [ItemReservationSchema],
   packageReservations: [PackageReservationSchema],
-  packageAppointmentDate: { type: Date, required: false },
+  packageAppointmentDate: { 
+    type: Date, 
+    required: false 
+  },
+  // This new field will store the 'morning' or 'afternoon' string.
+  packageAppointmentBlock: {
+    type: String,
+    required: false, // It's only required if there's a custom package item
+    enum: ['morning', 'afternoon', null], // Allow null for reservations without appointments
+  },
 }, {
   timestamps: true,
   _id: false,
+});
+
+ReservationSchema.pre('save', function(next) {
+  if (this.isModified('reserveDate') && this.reserveDate) {
+    this.reserveDate.setUTCHours(0, 0, 0, 0);
+  }
+  // Also normalize the package appointment date
+  if (this.isModified('packageAppointmentDate') && this.packageAppointmentDate) {
+    this.packageAppointmentDate.setUTCHours(0, 0, 0, 0);
+  }
+  next();
 });
 
 // --- FIX: Index the correct 'reserveDate' field ---

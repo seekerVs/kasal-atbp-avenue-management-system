@@ -6,8 +6,6 @@ import { Reservation, Appointment } from '../../types';
 import CustomFooter from '../../components/customFooter/CustomFooter';
 import { format } from 'date-fns';
 import { StatusTimeline } from '../../components/statusTimeline/StatusTimeline';
-// --- 1. REMOVE THE ReservationItemsList IMPORT ---
-// import { ReservationItemsList } from '../../components/reservationItemsList/ReservationItemsList';
 import './requestTracker.css';
 import TrackerBackgroundImage from '../../assets/images/tracker_image.jpg';
 
@@ -100,7 +98,6 @@ function RequestTracker() {
             {appointment.status === 'Confirmed' && "Your appointment is confirmed! Please arrive on time."}
             {appointment.status === 'Completed' && `This appointment has been completed. Rental ID: ${appointment.rentalId || 'N/A'}.`}
             {appointment.status === 'Cancelled' && "This appointment has been cancelled."}
-            {appointment.status === 'No Show' && "This appointment was marked as a no-show."}
           </Alert>
 
           <Card>

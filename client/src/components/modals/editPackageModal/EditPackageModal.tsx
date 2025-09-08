@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Modal, Button } from 'react-bootstrap';
-import { RentedPackage, PackageFulfillment, InventoryItem, CustomTailoringItem, MeasurementRef, Package, NormalizedFulfillmentItem } from '../../../types';
+import { RentedPackage, PackageFulfillment, CustomTailoringItem, MeasurementRef, NormalizedFulfillmentItem } from '../../../types';
 import CreateEditCustomItemModal from '../createEditCustomItemModal/CreateEditCustomItemModal'; 
 import { SingleItemSelectionModal, SelectedItemData } from '../singleItemSelectionModal/SingleItemSelectionModal';
 import api from '../../../services/api';
@@ -15,13 +15,11 @@ interface EditPackageModalProps {
   show: boolean;
   onHide: () => void;
   pkg: RentedPackage;
-  inventory: InventoryItem[];
   onSave: (updatedFulfillment: PackageFulfillment[], updatedCustomItems: CustomTailoringItem[], customItemIdsToDelete: string[], imageUrlsToDelete: string[]) => void;
-  allPackages: Package[];
   customItems: CustomTailoringItem[];
 }
 
-const EditPackageModal: React.FC<EditPackageModalProps> = ({ show, onHide, pkg, inventory, onSave, allPackages, customItems }) => {
+const EditPackageModal: React.FC<EditPackageModalProps> = ({ show, onHide, pkg, onSave, customItems }) => {
   const [fulfillment, setFulfillment] = useState<PackageFulfillment[]>([]);
   // State for the inventory assignment sub-modal
   const [showAssignmentModal, setShowAssignmentModal] = useState(false);
@@ -60,23 +58,39 @@ const EditPackageModal: React.FC<EditPackageModalProps> = ({ show, onHide, pkg, 
   }, [pkg]);
 
   const normalizedDataForForm = useMemo((): NormalizedFulfillmentItem[] => {
+    const customItemsMap = new Map(customItems.map(item => [item._id, item]));
+
     return fulfillment.map(fulfill => {
       const assigned = fulfill.assignedItem || {};
+      let finalAssignedItem: NormalizedFulfillmentItem['assignedItem'] = {};
+
+      if ('outfitCategory' in assigned) {
+        finalAssignedItem = {
+          ...assigned,
+          imageUrl: assigned.referenceImages?.[0],
+        };
+      } 
+      else if (fulfill.isCustom && 'itemId' in assigned && assigned.itemId) {
+        const customItemDetails = customItemsMap.get(assigned.itemId);
+        if (customItemDetails) {
+          finalAssignedItem = {
+            ...customItemDetails,
+            imageUrl: customItemDetails.referenceImages?.[0],
+          };
+        }
+      } 
+      else if ('itemId' in assigned) {
+        finalAssignedItem = assigned;
+      }
+      
       return {
         role: fulfill.role,
         wearerName: fulfill.wearerName,
-        isCustom: fulfill.isCustom ?? false, // Default to false if undefined
-        assignedItem: {
-          itemId: 'itemId' in assigned ? assigned.itemId : undefined,
-          name: 'name' in assigned ? assigned.name : undefined,
-          variation: 'variation' in assigned ? assigned.variation : undefined,
-          imageUrl: 'imageUrl' in assigned ? assigned.imageUrl : undefined,
-          outfitCategory: 'outfitCategory' in assigned ? (assigned as any).outfitCategory : undefined,
-          referenceImages: 'referenceImages' in assigned ? (assigned as any).referenceImages : undefined
-        }
+        isCustom: fulfill.isCustom ?? false,
+        assignedItem: finalAssignedItem,
       };
     });
-  }, [fulfillment]);
+  }, [fulfillment, customItems]);
 
   const handleWearerNameChange = (index: number, name: string) => {
     const updatedFulfillment = [...fulfillment];
@@ -108,13 +122,21 @@ const EditPackageModal: React.FC<EditPackageModalProps> = ({ show, onHide, pkg, 
     setShowAssignmentModal(false);
   };
 
-    // --- NEW HANDLERS for the custom item flow ---
   const handleOpenCustomItemModal = (index: number) => {
     const fulfillItem = fulfillment[index];
+    if (!fulfillItem) return;
+
     const assigned = fulfillItem.assignedItem;
+    let existingData: CustomTailoringItem | null = null;
+
+    if (assigned && 'outfitCategory' in assigned) {
+      existingData = assigned as CustomTailoringItem;
+    } 
+
+    else if (assigned && 'itemId' in assigned && assigned.itemId) {
+      existingData = customItems.find(item => item._id === assigned.itemId) || null;
+    }
     
-    // Check if there's already custom data attached. If so, it's an "edit".
-    const existingData = (assigned && 'outfitCategory' in assigned) ? assigned : null;
     const itemName = `${pkg.name.split(',')[0]}: ${fulfillItem.role}`;
     
     setCustomItemContext({ index, item: existingData, itemName });

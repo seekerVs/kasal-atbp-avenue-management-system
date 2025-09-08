@@ -32,7 +32,9 @@ const EXCLUDED_KEYS = new Set([
   'referenceImages',
   'currentPassword',
   'newPassword',
-  'receiptImageUrl'
+  'receiptImageUrl',
+  'timeBlock',
+  'packageAppointmentBlock'
 ]);
 
 /**

@@ -82,7 +82,8 @@ const CustomTailoringItemSchema = new mongoose.Schema({
 const PaymentDetailSchema = new mongoose.Schema({
     amount: { type: Number, required: true, default: 0 },
     date: { type: Date },
-    referenceNumber: { type: String, default: null }
+    referenceNumber: { type: String, default: null },
+    receiptImageUrl: { type: String, default: null }
 }, { _id: false });
 
 // UPDATED: Financials schema to use the new payment details
@@ -115,7 +116,7 @@ const RentalSchema = new mongoose.Schema({
   status: {
     type: String,
     required: true,
-    enum: ['Pending', 'To Pickup', 'To Return', 'Returned', 'Completed', 'Cancelled'],
+    enum: ['Pending', 'To Pickup', 'To Return', 'Completed', 'Cancelled'],
     default: 'Pending',
   },
 }, {

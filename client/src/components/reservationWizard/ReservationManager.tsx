@@ -15,10 +15,11 @@ type ReservationState = Omit<Reservation, '_id' | 'createdAt' | 'updatedAt' | 's
 interface ReservationManagerProps {
   reservation: ReservationState;
   setReservation: React.Dispatch<React.SetStateAction<ReservationState>>;
-  addAlert: (message: string, type: 'success' | 'danger' | 'warning' | 'info') => void; // Add this line
+  addAlert: (message: string, type: 'success' | 'danger' | 'warning' | 'info') => void;
+  onSavePackageConfig: (config: PackageConfigurationData, pkg: Package, motifId: string, editingId: string | null) => void;
 }
 
-export const ReservationManager: React.FC<ReservationManagerProps> = ({ reservation, setReservation, addAlert }) => {
+export const ReservationManager: React.FC<ReservationManagerProps> = ({ reservation, setReservation, addAlert, onSavePackageConfig }) => {
   const [showPackageModal, setShowPackageModal] = useState(false);
   // We can add a state for the single item modal here as well for consistency
   const [showItemModal, setShowItemModal] = useState(false); 
@@ -126,52 +127,14 @@ export const ReservationManager: React.FC<ReservationManagerProps> = ({ reservat
 
   const handleSaveConfiguration = (config: PackageConfigurationData) => {
     if (!packageToConfigure) return;
-
-    const selectedMotif = packageToConfigure.colorMotifs.find(m => m._id === motifToConfigure);
-
-    setReservation(prev => {
-      const updatedReservations = [...prev.packageReservations];
-
-      if (editingPackageId) {
-        // --- EDIT MODE ---
-        const indexToUpdate = updatedReservations.findIndex(
-          p => p.packageReservationId === editingPackageId
-        );
-
-        if (indexToUpdate > -1) {
-          // Replace the existing package with the updated version
-          updatedReservations[indexToUpdate] = {
-            ...updatedReservations[indexToUpdate], // Keep original IDs
-            fulfillmentPreview: config.packageReservation, // Update with new data
-          };
-        }
-      } else {
-        // --- CREATE MODE ---
-        const newPackageReservation: PackageReservation = {
-          packageReservationId: `pkg_${Date.now()}`,
-          packageId: packageToConfigure._id,
-          packageName: packageToConfigure.name,
-          price: packageToConfigure.price,
-          motifHex: selectedMotif?.motifHex,
-          fulfillmentPreview: config.packageReservation,
-          imageUrl: packageToConfigure.imageUrls?.[0],
-        };
-        updatedReservations.push(newPackageReservation);
-      }
-
-      return {
-        ...prev,
-        packageReservations: updatedReservations,
-        packageAppointmentDate: config.packageAppointmentDate || prev.packageAppointmentDate,
-      };
-    });
-
-    // Clean up and close the modal, resetting edit mode state
+    onSavePackageConfig(config, packageToConfigure, motifToConfigure, editingPackageId);
+    
+    // Clean up local state
     setShowConfigModal(false);
     setPackageToConfigure(null);
     setMotifToConfigure('');
-    setEditingPackageId(null); // <-- Reset edit mode
-    setFulfillmentToEdit(undefined); // <-- Reset initial data
+    setEditingPackageId(null);
+    setFulfillmentToEdit(undefined);
   };
 
   const handleAddItem = (selection: SelectedItemData) => {

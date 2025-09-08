@@ -11,6 +11,7 @@ import {
   Alert,
   Image as BsImage,
   Modal,
+  Form,
 } from 'react-bootstrap';
 import {
   BoxSeam,
@@ -34,7 +35,7 @@ import {
 } from '../../types';
 import { SingleItemSelectionModal, SelectedItemData } from '../../components/modals/singleItemSelectionModal/SingleItemSelectionModal';
 import CreateEditCustomItemModal from '../../components/modals/createEditCustomItemModal/CreateEditCustomItemModal';
-import api from '../../services/api';
+import api, { uploadFile } from '../../services/api';
 import { useAlert } from '../../contexts/AlertContext';
 import namer from 'color-namer';
 import { PackageFulfillmentForm } from '../../components/forms/packageFulfillmentForm/PackageFulfillmentForm';
@@ -62,7 +63,6 @@ function PackageRent() {
   const [showPackageSelectionModal, setShowPackageSelectionModal] = useState(false);
   const [allInventory, setAllInventory] = useState<InventoryItem[]>([]);
   const [allRentals, setAllRentals] = useState<RentalOrder[]>([]);
-  const [selectedPackageId, setSelectedPackageId] = useState<string>('');
   const [measurementRefs, setMeasurementRefs] = useState<MeasurementRef[]>([]);
   const [fulfillmentData, setFulfillmentData] = useState<PackageFulfillment[]>([]);
   const [showCustomItemModal, setShowCustomItemModal] = useState(false);
@@ -82,7 +82,10 @@ function PackageRent() {
   const [showReminderModal, setShowReminderModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false); // <-- RESTORED
   const [modalData, setModalData] = useState({ rentalId: '', itemName: '' }); // <-- RESTORED
-  const [assignmentContext, setAssignmentContext] = useState<{ fulfillmentIndex: number } | null>(null);
+  const [assignmentContext, setAssignmentContext] = useState<{ 
+    fulfillmentIndex: number;
+    itemToEdit?: InventoryItem;
+  } | null>(null);
   const [showAssignmentModal, setShowAssignmentModal] = useState(false);
   const [showIncompleteFulfillmentModal, setShowIncompleteFulfillmentModal] = useState(false);
   const [incompleteAction, setIncompleteAction] = useState<'create' | 'add' | null>(null);
@@ -90,11 +93,16 @@ function PackageRent() {
   
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [stagedFiles, setStagedFiles] = useState<Map<string, File[]>>(new Map());
 
   const selectedMotif = useMemo(() => {
     if (!selectedPackage || !selectedMotifId) return null;
     return selectedPackage.colorMotifs.find(m => m._id === selectedMotifId);
   }, [selectedPackage, selectedMotifId]);
+
+  const isReadyToSubmit = useMemo(() => {
+    return !!selectedPackage;
+  }, [selectedPackage]);
   
   useEffect(() => {
     const pendingItemJSON = sessionStorage.getItem('pendingCustomItem');
@@ -203,26 +211,36 @@ function PackageRent() {
   const normalizedDataForForm = useMemo((): NormalizedFulfillmentItem[] => {
     return fulfillmentData.map(fulfill => {
       const assigned = fulfill.assignedItem || {};
+      
+      // --- THIS IS THE CORRECTED LOGIC ---
+      let finalAssignedItem: NormalizedFulfillmentItem['assignedItem'] = {};
+
+      if ('outfitCategory' in assigned) {
+        // This is a CustomTailoringItem. We know `assigned` has the correct shape.
+        finalAssignedItem = {
+          ...assigned, // Spread all properties from the custom item
+          imageUrl: assigned.referenceImages?.[0], // Directly set the imageUrl for display
+        };
+      } else if ('itemId' in assigned) {
+        // This is a standard inventory item.
+        finalAssignedItem = assigned;
+      }
+      
       return {
         role: fulfill.role,
         wearerName: fulfill.wearerName,
         isCustom: fulfill.isCustom ?? false,
-        assignedItem: {
-          itemId: 'itemId' in assigned ? assigned.itemId : undefined,
-          name: 'name' in assigned ? assigned.name : undefined,
-          variation: 'variation' in assigned ? assigned.variation : undefined,
-          imageUrl: 'imageUrl' in assigned ? assigned.imageUrl : undefined,
-          outfitCategory: 'outfitCategory' in assigned ? (assigned as any).outfitCategory : undefined,
-          referenceImages: 'referenceImages' in assigned ? (assigned as any).referenceImages : undefined
-        }
+        assignedItem: finalAssignedItem,
       };
+      // --- END OF CORRECTED LOGIC ---
     });
   }, [fulfillmentData]);
 
   const handlePackageSelect = (selection: PackageSelectionData) => {
     setSelectedPackage(selection.pkg);
-    setSelectedMotifId(selection.motifId);
-    setShowPackageSelectionModal(false); // Close the modal on selection
+    const firstMotifId = selection.pkg.colorMotifs?.[0]?._id;
+    setSelectedMotifId(selection.motifId || firstMotifId || '');
+    setShowPackageSelectionModal(false);
   };
 
   const getMotifName = (motifHex: string) => {
@@ -271,14 +289,27 @@ function PackageRent() {
     setShowCustomItemModal(true);
   };
 
-  const handleSaveCustomItem = (updatedItem: CustomTailoringItem) => {
+  const handleSaveCustomItem = (updatedItem: CustomTailoringItem, pendingFiles?: File[]) => {
     if (customItemContext === null) return;
     const { index } = customItemContext;
+
+    if (!updatedItem._id) {
+      updatedItem._id = uuidv4();
+    }
+    const customItemId = updatedItem._id;
+
+    if (pendingFiles && pendingFiles.length > 0) {
+      setStagedFiles(prev => {
+        const newMap = new Map(prev);
+        newMap.set(customItemId, pendingFiles);
+        return newMap;
+      });
+    }
 
     const newFulfillmentData = [...fulfillmentData];
     newFulfillmentData[index].assignedItem = updatedItem;
     setFulfillmentData(newFulfillmentData);
-    
+
     setShowCustomItemModal(false);
     setCustomItemContext(null);
   };
@@ -310,7 +341,7 @@ function PackageRent() {
 
   
   const validateAndProceed = (action: 'create' | 'add') => {
-    if (!selectedPackageId) {
+    if (!selectedPackage) {
         addAlert("Please select a package.", 'danger');
         return;
     }
@@ -346,18 +377,19 @@ function PackageRent() {
     }
   };
 
-  const buildRentalPayload = () => {
+  const buildRentalPayload = async () => {
     if (!selectedPackage) return null;
 
-    const { finalPackageFulfillment, customItemsForRental } = buildFinalPayload();
+    // Add 'await' here to resolve the Promise
+    const { finalPackageFulfillment, customItemsForRental } = await buildFinalPayload(); 
     const selectedMotifObject = selectedPackage.colorMotifs.find(m => m._id === selectedMotifId);
 
     return {
       customerInfo: [customerDetails],
       packageRents: [{
-         _id: `pkg_${uuidv4()}`,
-        packageId: selectedPackage._id, // <-- THE CRUCIAL FIX: Send the ID
-        motifHex: selectedMotifObject?.motifHex, // <-- Send the HEX
+          _id: `pkg_${uuidv4()}`,
+        packageId: selectedPackage._id,
+        motifHex: selectedMotifObject?.motifHex,
         price: selectedPackage.price,
         quantity: 1,
         imageUrl: selectedPackage.imageUrls[0] || '',
@@ -373,16 +405,16 @@ function PackageRent() {
     setIsSubmitting(true);
 
     try {
-      // 2. Construct the final API payload
-      const rentalPayload = buildRentalPayload();
-    if (!rentalPayload) {
-        addAlert("No package selected.", "danger");
-        setIsSubmitting(false);
-        return;
-    }
+      // Add 'await' here because buildFinalPayload is now async
+      const rentalPayload = await buildRentalPayload();
+      if (!rentalPayload) {
+          addAlert("No package selected.", "danger");
+          setIsSubmitting(false);
+          return;
+      }
 
       const response = await api.post('/rentals', rentalPayload);
-      addAlert("New rental created successfully! Redirecting...", 'success'); // Using global notification
+      addAlert("New rental created successfully! Redirecting...", 'success');
       setTimeout(() => navigate(`/rentals/${response.data._id}`), 1500);
     } catch (apiError: any) {
       addAlert(apiError.response?.data?.message || "Failed to create package rental.", 'danger');
@@ -392,49 +424,73 @@ function PackageRent() {
     }
   };
 
-  const buildFinalPayload = () => {
-    // This array will hold the full CustomTailoringItem objects for the top-level DB array.
+  const buildFinalPayload = async () => {
+    // --- 1. UPLOAD STAGED FILES AND CREATE A URL MAP ---
+    const uploadedUrlMap = new Map<string, string[]>();
+    
+    if (stagedFiles.size > 0) {
+      addAlert('Uploading reference images...', 'info');
+
+      // Create an array of upload promises
+      const uploadPromises = Array.from(stagedFiles.entries()).map(async ([customItemId, files]) => {
+        const fileUploadPromises = files.map(file => uploadFile(file));
+        const urls = await Promise.all(fileUploadPromises);
+        uploadedUrlMap.set(customItemId, urls);
+      });
+      
+      // Wait for all uploads to complete
+      await Promise.all(uploadPromises);
+    }
+
+    // --- 2. PREPARE THE FINAL PAYLOAD ---
     const customItemsForRental: CustomTailoringItem[] = [];
-
-    // This array will hold the fulfillment data with correct references.
+    
     const finalPackageFulfillment = fulfillmentData.map(fulfill => {
-        // Handle custom items
-        if (fulfill.isCustom) {
-            const assigned = fulfill.assignedItem;
-            // Check if it's a fully-formed custom item from the modal
-            if (assigned && 'outfitCategory' in assigned) {
+      if (fulfill.isCustom) {
+        const assigned = fulfill.assignedItem;
 
-              if (!(assigned as CustomTailoringItem)._id) {
-                (assigned as CustomTailoringItem)._id = uuidv4();
-              }
+        if (assigned && 'outfitCategory' in assigned) {
+          const customItem = assigned as CustomTailoringItem;
+          const customItemId = customItem._id;
+          
+          // Get the newly uploaded URLs for this specific item from our map
+          const newImageUrls = uploadedUrlMap.get(customItemId);
+          
+          // Get existing URLs that were not replaced
+          const existingImageUrls = customItem.referenceImages.filter(img => typeof img === 'string' && !img.startsWith('placeholder_'));
+          
+          // Combine them to create the final list of image URLs
+          const finalImages = newImageUrls ? [...existingImageUrls, ...newImageUrls] : existingImageUrls;
 
-              customItemsForRental.push(assigned as CustomTailoringItem);
+          const finalCustomItem: CustomTailoringItem = {
+            ...customItem,
+            referenceImages: finalImages, // Replace placeholders with real URLs
+          };
+          
+          customItemsForRental.push(finalCustomItem);
 
-              return {
-                  role: fulfill.role,
-                  wearerName: fulfill.wearerName,
-                  assignedItem: {
-                      itemId: (assigned as CustomTailoringItem)._id,
-                  },
-                  isCustom: true
-              };
-            }
-            // If it's a custom slot but no details were added, return a placeholder
-            return {
-                role: fulfill.role,
-                wearerName: fulfill.wearerName,
-                assignedItem: { name: `${selectedPackage?.name.split(',')[0]}: ${fulfill.role}` }, // Placeholder name is fine here as it will be replaced.
-                isCustom: true
-            };
-        } else {
-            // Handle standard inventory items (no changes needed)
-            return fulfill;
+          return {
+            role: fulfill.role,
+            wearerName: fulfill.wearerName,
+            assignedItem: { itemId: customItemId },
+            isCustom: true,
+          };
         }
+        // Handle empty custom slots
+        return {
+          role: fulfill.role,
+          wearerName: fulfill.wearerName,
+          assignedItem: { name: `${selectedPackage?.name.split(',')[0]}: ${fulfill.role}` },
+          isCustom: true,
+        };
+      }
+      // Return standard items as-is
+      return fulfill;
     });
 
     return {
-        finalPackageFulfillment,
-        customItemsForRental
+      finalPackageFulfillment,
+      customItemsForRental,
     };
   };
 
@@ -446,22 +502,22 @@ function PackageRent() {
     setIsSubmitting(true);
 
     try {
-      // 2. Construct the final API payload for adding items
-      const payload = buildRentalPayload();
-    if (!payload) {
-        addAlert("No package selected.", "danger");
-        setIsSubmitting(false);
-        return;
-    }
+      // Add 'await' here
+      const payload = await buildRentalPayload();
+      if (!payload) {
+          addAlert("No package selected.", "danger");
+          setIsSubmitting(false);
+          return;
+      }
 
       await api.put(`/rentals/${existingOpenRental._id}/addItem`, payload);
       
-      // Reset form and show success
-       setModalData({ rentalId: existingOpenRental._id, itemName: selectedPackage!.name });
+      setModalData({ rentalId: existingOpenRental._id, itemName: selectedPackage!.name });
       setShowSuccessModal(true);
-      setSelectedPackageId('');
       setSelectedMotifId('');
       setFulfillmentData([]);
+      // Clear staged files after successful submission
+      setStagedFiles(new Map()); 
     } catch (apiError: any) {
       addAlert(apiError.response?.data?.message || "Failed to add item to rental.", 'danger');
       console.error("API Error:", apiError);
@@ -470,7 +526,23 @@ function PackageRent() {
     }
   };
 
-  const handleOpenAssignmentModal = (fulfillmentIndex: number) => { setAssignmentContext({ fulfillmentIndex }); setShowAssignmentModal(true); };
+  const handleOpenAssignmentModal = (fulfillmentIndex: number) => {
+    const fulfillItem = fulfillmentData[fulfillmentIndex];
+    const assigned = fulfillItem.assignedItem as { itemId?: string };
+
+    if (assigned && assigned.itemId) {
+      const itemToEdit = allInventory.find(item => item._id === assigned.itemId);
+      if (itemToEdit) {
+        setAssignmentContext({ fulfillmentIndex, itemToEdit });
+      } else {
+        setAssignmentContext({ fulfillmentIndex });
+      }
+    } else {
+      setAssignmentContext({ fulfillmentIndex });
+    }
+    
+    setShowAssignmentModal(true);
+  };
   
   const handleSaveAssignment = (selection: SelectedItemData) => {
     if (assignmentContext === null) return;
@@ -537,9 +609,8 @@ function PackageRent() {
             <Card.Header as="h5"><BoxSeam className="me-2" />Select Package</Card.Header>
             <Card.Body>
               {selectedPackage ? (
-                // --- DISPLAY VIEW (when a package is selected) ---
                 <div>
-                  <Row className="g-3">
+                  <Row className="g-3 align-items-center">
                     <Col xs="auto">
                       <BsImage 
                         src={selectedPackage.imageUrls[0] || 'https://placehold.co/120x150'} 
@@ -549,15 +620,28 @@ function PackageRent() {
                     <Col>
                       <h5 className="mb-1">{selectedPackage.name}</h5>
                       <p className="text-danger fw-bold fs-5 mb-2">₱{selectedPackage.price.toLocaleString()}</p>
-                      <div className="d-flex align-items-center">
-                        <Palette className="me-2 text-muted" />
-                        <span>Motif: <strong>{getMotifName(selectedMotif?.motifHex || '')}</strong></span>
-                      </div>
+                      
+                      {/* --- NEW MOTIF SWITCHER DROPDOWN --- */}
+                      <Form.Group>
+                        <Form.Label className="small fw-bold"><Palette className="me-2"/>Motif</Form.Label>
+                        <Form.Select 
+                          size="sm" 
+                          value={selectedMotifId}
+                          onChange={e => setSelectedMotifId(e.target.value)}
+                        >
+                          {selectedPackage.colorMotifs.map(motif => (
+                            <option key={motif._id} value={motif._id}>
+                              {getMotifName(motif.motifHex)}
+                            </option>
+                          ))}
+                        </Form.Select>
+                      </Form.Group>
+                      {/* --- END OF NEW DROPDOWN --- */}
                     </Col>
                   </Row>
                   <div className="d-grid mt-3">
                     <Button variant="outline-secondary" onClick={() => setShowPackageSelectionModal(true)}>
-                      Change Package or Motif...
+                      Change Package...
                     </Button>
                   </div>
                 </div>
@@ -608,7 +692,7 @@ function PackageRent() {
                 onSelectExisting={handleSelectCustomer}
                 onSubmit={validateAndProceed}
                 isSubmitting={isSubmitting}
-                canSubmit={!!selectedPackageId && !!customerDetails.name}
+                canSubmit={isReadyToSubmit}
                 existingOpenRental={existingOpenRental}
                 selectedRentalForDisplay={selectedRentalForDisplay}
                 errors={errors} 
@@ -632,6 +716,7 @@ function PackageRent() {
           measurementRefs={measurementRefs}
           onSave={handleSaveCustomItem}
           isForPackage={true}
+          uploadMode="deferred"
         />
       )}
 
@@ -644,6 +729,7 @@ function PackageRent() {
           addAlert={addAlert}
           preselectedItemId={preselectedAssignment.itemId}
           preselectedVariation={preselectedAssignment.variation}
+          initialSelectedItem={assignmentContext.itemToEdit}
         />
       }
 

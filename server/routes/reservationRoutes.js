@@ -11,7 +11,7 @@ const { protect } = require('../middleware/authMiddleware');
 const { sanitizeRequestBody } = require('../middleware/sanitizeMiddleware');
 const mongoose = require('mongoose'); 
 const { calculateFinancials } = require('../utils/financialsCalculator');
-const namer = require('color-namer');
+const Rental = require('../models/Rental');
 
 const router = express.Router();
 
@@ -19,14 +19,21 @@ const nanoid_reservation = customAlphabet('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 const nanoid_appointment = customAlphabet('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ', 8); 
 const nanoid_subdoc = customAlphabet('0123456789abcdefghijklmnopqrstuvwxyz', 8);
 
-// --- CREATE A NEW RESERVATION ---
 // METHOD: POST /api/reservations
 // Can be accessed by clients or admins.
 router.post(
   '/',
   sanitizeRequestBody,
   asyncHandler(async (req, res) => {
-    const { customerInfo, reserveDate, itemReservations, packageReservations, financials } = req.body;
+    const { 
+      customerInfo, 
+      reserveDate, 
+      itemReservations, 
+      packageReservations, 
+      financials, 
+      packageAppointmentDate,
+      packageAppointmentBlock // New field from request body
+    } = req.body;
 
     // Backend Validation
     if (!customerInfo?.name || !customerInfo?.phoneNumber) {
@@ -84,13 +91,18 @@ router.post(
 
     const newReservation = new Reservation({
         _id: `RES-${nanoid_reservation()}`,
-        ...req.body, // This includes packageAppointmentDate from the client
+        customerInfo,
+        reserveDate,
+        itemReservations,
+        packageReservations,
         financials: {
             requiredDeposit: calculated.requiredDeposit,
             depositAmount: calculated.requiredDeposit, 
             payments: financials.payments || []
         },
         status: 'Pending',
+        packageAppointmentDate,
+        packageAppointmentBlock // Add the new field here
     });
 
     // Save the initial reservation
@@ -102,13 +114,23 @@ router.post(
         await Promise.all(pkg.fulfillmentPreview.map(async (fulfillment) => {
           if (fulfillment.isCustom && !fulfillment.linkedAppointmentId) {
 
+            const fullAppointmentDate = newReservation.packageAppointmentDate;
+            if (!fullAppointmentDate) {
+              console.warn(`Skipping appointment creation for reservation ${newReservation._id} due to missing packageAppointmentDate.`);
+              return;
+            }
+
+            const appointmentHour = new Date(fullAppointmentDate).getHours();
+            const timeBlock = appointmentHour < 12 ? 'morning' : 'afternoon';
+
             const newAppointment = new Appointment({
               _id: `APT-${nanoid_appointment()}`,
               customerInfo: newReservation.customerInfo,
-              appointmentDate: newReservation.packageAppointmentDate, 
-              status: 'Pending',
-              statusNote: `Auto-generated for package '${pkg.packageName}', custom item: '${fulfillment.role}'. Notes: ${fulfillment.notes || 'N/A'}`.trim(),
+              appointmentDate: newReservation.packageAppointmentDate,
+              timeBlock: newReservation.packageAppointmentBlock, // Use the block from the reservation
+              notes: fulfillment.notes || '',
               sourceReservationId: newReservation._id,
+              status: 'Pending',
             });
             const savedAppointment = await newAppointment.save();
             // Link the ID back to the reservation fulfillment
@@ -116,13 +138,8 @@ router.post(
           }
         }));
       }));
-      // Save the reservation AGAIN to persist the linkedAppointmentId changes
       await newReservation.save();
     }
-    
-    // Instead of returning the potentially stale 'savedReservation' variable,
-    // we convert the final, fully-updated Mongoose document to a plain object
-    // to ensure all data (including packageAppointmentDate) is present.
     const finalReservationObject = newReservation.toObject();
     
     res.status(201).json(finalReservationObject);
@@ -149,6 +166,20 @@ router.get(
       Reservation.countDocuments(filter)
     ]);
 
+    const reservationsWithFinancials = reservations.map(res => {
+        // The calculator needs `singleRents` and `packageRents` keys to work,
+        // so we map our reservation data to that structure.
+        const dataForCalc = {
+            singleRents: res.itemReservations || [],
+            packageRents: res.packageReservations || [],
+            financials: res.financials // Pass existing financials like payments
+        };
+        return {
+            ...res,
+            financials: calculateFinancials(dataForCalc)
+        };
+    });
+
     // 3. Gather all unique Item and Package IDs from the CURRENT PAGE of reservations
     const itemIds = new Set();
     const packageIds = new Set();
@@ -167,9 +198,10 @@ router.get(
     const packageMap = new Map(packages.map(pkg => [pkg._id.toString(), pkg]));
 
     // 5. Enrich the reservation data for the current page
-    const enrichedReservations = reservations.map(res => {
+    const enrichedReservations = reservationsWithFinancials.map(res => {
       const enrichedItems = res.itemReservations.map(item => {
         const fullItem = itemMap.get(item.itemId.toString());
+        // Find variation by color HEX, which is more reliable than name
         const variation = fullItem?.variations.find(v => v.color.hex === item.variation.color.hex && v.size === item.variation.size);
         return { ...item, imageUrl: variation?.imageUrl || null };
       });
@@ -188,7 +220,6 @@ router.get(
     });
   })
 );
-
 
 // --- GET A SINGLE RESERVATION (ADMIN ONLY) ---
 // METHOD: GET /api/reservations/:id
@@ -373,6 +404,83 @@ router.put(
   })
 );
 
+router.put(
+  '/:id/cancel',
+  protect, // Admin only
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    // --- (1) GET the reason from the request body ---
+    const { reason } = req.body; 
+
+    // --- (2) ADD validation for the reason ---
+    if (!reason || typeof reason !== 'string' || reason.trim() === '') {
+        res.status(400);
+        throw new Error('A cancellation reason is required.');
+    }
+    
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      const reservation = await Reservation.findById(id).session(session);
+      if (!reservation) {
+        res.status(404);
+        throw new Error('Reservation not found.');
+      }
+      if (reservation.status === 'Completed' || reservation.status === 'Cancelled') {
+        res.status(400);
+        throw new Error(`This reservation cannot be cancelled as it is already ${reservation.status}.`);
+      }
+
+      // ... (The entire stock restoration logic remains exactly the same)
+      const stockUpdateOperations = [];
+      if (reservation.itemReservations && reservation.itemReservations.length > 0) {
+        for (const item of reservation.itemReservations) {
+          stockUpdateOperations.push({
+            updateOne: {
+              filter: { _id: item.itemId, "variations.color.hex": item.variation.color.hex, "variations.size": item.variation.size },
+              update: { $inc: { "variations.$.quantity": item.quantity } }
+            }
+          });
+        }
+      }
+      if (reservation.packageReservations && reservation.packageReservations.length > 0) {
+        for (const pkg of reservation.packageReservations) {
+          for (const fulfillment of pkg.fulfillmentPreview) {
+            if (fulfillment.assignedItemId && fulfillment.variation) {
+              const [colorName, size] = fulfillment.variation.split(',').map(s => s.trim());
+              stockUpdateOperations.push({
+                updateOne: {
+                  filter: { _id: fulfillment.assignedItemId, "variations.color.name": colorName, "variations.size": size },
+                  update: { $inc: { "variations.$.quantity": 1 } }
+                }
+              });
+            }
+          }
+        }
+      }
+      if (stockUpdateOperations.length > 0) {
+        await ItemModel.bulkWrite(stockUpdateOperations, { session });
+      }
+
+      // --- (3) UPDATE the reservation status AND the new reason field ---
+      reservation.status = 'Cancelled';
+      // The old logic for the reason was removed in a previous step, so we add the new one.
+      reservation.cancellationReason = reason;
+      const updatedReservation = await reservation.save({ session });
+
+      await session.commitTransaction();
+      res.status(200).json(updatedReservation);
+
+    } catch (error) {
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      session.endSession();
+    }
+  })
+);
+
 // METHOD: PUT /api/reservations/:id/reschedule
 router.put(
   '/:id/reschedule',
@@ -412,6 +520,105 @@ router.put(
       .lean();
 
     res.status(200).json(populatedReservation);
+  })
+);
+
+
+// METHOD: POST /api/reservations/check-availability
+// Checks if a list of items is available for a given date.
+router.post(
+  '/check-availability',
+  protect,
+  asyncHandler(async (req, res) => {
+    const { newDate, items: requestedItems, reservationIdToExclude } = req.body;
+
+    if (!newDate || !requestedItems || !Array.isArray(requestedItems)) {
+      res.status(400);
+      throw new Error('A new date and a list of items are required.');
+    }
+
+    const targetDate = new Date(newDate);
+    
+    // --- Step 1: Find all conflicting reservations and rentals ---
+    const reservationFilter = {
+      reserveDate: targetDate,
+      status: 'Confirmed', // Only check against other confirmed reservations
+    };
+
+    // If an ID to exclude was provided, add it to the filter.
+    if (reservationIdToExclude) {
+      reservationFilter._id = { $ne: reservationIdToExclude }; // $ne means "not equal"
+    }
+
+    const conflictingBookings = await Reservation.find(reservationFilter).lean();
+
+    const conflictingRentals = await Rental.find({
+        // A rental conflicts if the target date is between its start and end dates
+        rentalStartDate: { $lte: targetDate },
+        rentalEndDate: { $gte: targetDate },
+        status: { $in: ['To Pickup', 'To Return'] } // Active rental statuses
+    }).lean();
+
+    // --- Step 2: Tally all booked items from the conflicting bookings ---
+    const bookedQuantities = new Map();
+
+    const tallyItem = (itemId, variation, quantity) => {
+        const key = `${itemId}-${variation}`;
+        bookedQuantities.set(key, (bookedQuantities.get(key) || 0) + quantity);
+    };
+
+    conflictingBookings.forEach(res => {
+        res.itemReservations.forEach(item => tallyItem(item.itemId, `${item.variation.color.name}, ${item.variation.size}`, item.quantity));
+        res.packageReservations.forEach(pkg => {
+            pkg.fulfillmentPreview.forEach(f => {
+                if (!f.isCustom && f.assignedItemId && f.variation) {
+                    tallyItem(f.assignedItemId, f.variation, 1);
+                }
+            });
+        });
+    });
+
+    conflictingRentals.forEach(rental => {
+        rental.singleRents.forEach(item => tallyItem(item.itemId, `${item.variation.color.name}, ${item.variation.size}`, item.quantity));
+        rental.packageRents.forEach(pkg => {
+            pkg.packageFulfillment.forEach(f => {
+                if (!f.isCustom && f.assignedItem && f.assignedItem.itemId && f.assignedItem.variation) {
+                    tallyItem(f.assignedItem.itemId, f.assignedItem.variation, 1);
+                }
+            });
+        });
+    });
+
+    // --- Step 3: Get the total stock for all requested items ---
+    const allItemIds = requestedItems.map(i => i.itemId);
+    const inventoryItems = await ItemModel.find({ _id: { $in: allItemIds } }).lean();
+    const totalStock = new Map();
+    inventoryItems.forEach(item => {
+        item.variations.forEach(v => {
+            const key = `${item._id}-${v.color.name}, ${v.size}`;
+            totalStock.set(key, v.quantity);
+        });
+    });
+    
+    // --- Step 4: Compare requested items against available stock ---
+    const availabilityResult = [];
+    for (const requested of requestedItems) {
+        const key = `${requested.itemId}-${requested.variation}`;
+        const total = totalStock.get(key) || 0;
+        const booked = bookedQuantities.get(key) || 0;
+        const available = total - booked;
+
+        if (available < requested.quantity) {
+            availabilityResult.push({
+                itemName: requested.name,
+                variation: requested.variation,
+                requested: requested.quantity,
+                available: available,
+            });
+        }
+    }
+
+    res.status(200).json({ unavailableItems: availabilityResult });
   })
 );
 

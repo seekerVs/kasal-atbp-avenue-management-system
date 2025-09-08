@@ -4,6 +4,28 @@ const Settings = require('../models/Settings');
 const asyncHandler = require('../utils/asyncHandler');
 const { protect } = require('../middleware/authMiddleware');
 
+// GET /api/settings/public
+router.get('/public', asyncHandler(async (req, res) => {
+    const settings = await Settings.findById('shopSettings').lean();
+
+    if (!settings) {
+        // It's better to return empty strings than an error,
+        // so the frontend doesn't break if settings aren't configured yet.
+        return res.status(200).json({
+            gcashName: '',
+            gcashNumber: ''
+        });
+    }
+
+    // Only expose the fields that are safe for the public to see.
+    const publicSettings = {
+        gcashName: settings.gcashName || '',
+        gcashNumber: settings.gcashNumber || ''
+    };
+    
+    res.status(200).json(publicSettings);
+}));
+
 // GET /api/settings - Fetches the shop settings document
 router.get('/', protect, asyncHandler(async (req, res) => {
     // Find the single settings document, or create it with defaults if it doesn't exist.

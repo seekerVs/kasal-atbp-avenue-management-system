@@ -32,7 +32,7 @@
     transition: 200ms
   }
 
-  /* .custom-button1-style::after {
+  .custom-button1-style::after {
     content: attr(data);
     font-size: 16px;
     background: linear-gradient(to left, #00FFA3, #DC1FFF);
@@ -40,14 +40,14 @@
     background-clip: text;
     color: transparent;
     transition: 200ms
-  } */
-  /* .custom-button1-style:hover::before {
+  }
+  .custom-button1-style:hover::before {
     opacity: 50%;
     top: 0px;
     right: 0px;
     bottom: 0px;
     left: 0px;
-  } */
+  }
   .custom-button1-style:hover::after{
     color: white;
   }

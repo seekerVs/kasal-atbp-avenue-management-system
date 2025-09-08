@@ -13,10 +13,14 @@ import api from '../../../services/api';
 import { FulfillmentError, PackageFulfillmentForm } from '../../forms/packageFulfillmentForm/PackageFulfillmentForm';
 import { SizeSelectionModal } from '../sizeSelectionModal/SizeSelectionModal';
 import { useAlert } from '../../../contexts/AlertContext';
+import { format } from 'date-fns';
 
 export interface PackageConfigurationData {
   packageReservation: FulfillmentPreview[];
-  packageAppointmentDate?: Date | null;
+  packageAppointment?: {
+    date: Date | null;
+    block: BlockType;
+  };
 }
 
 interface PackageConfigurationModalProps {
@@ -28,9 +32,12 @@ interface PackageConfigurationModalProps {
   initialFulfillmentData?: FulfillmentPreview[];
 }
 
+type BlockType = 'morning' | 'afternoon' | '';
+
 export const PackageConfigurationModal: React.FC<PackageConfigurationModalProps> = ({ show, onHide, onSave, pkg, motifId, initialFulfillmentData  }) => {
   const [fulfillmentData, setFulfillmentData] = useState<FulfillmentPreview[]>([]);
-  const [appointmentDate, setAppointmentDate] = useState<Date | null>(null);
+  const [appointment, setAppointment] = useState<{ date: Date | null; block: BlockType }>({ date: null, block: '' });
+  const [selectedBlock, setSelectedBlock] = useState<BlockType>('');
   const {addAlert} = useAlert()
   const [unavailableDates, setUnavailableDates] = useState<Date[]>([]);
   const [allInventory, setAllInventory] = useState<InventoryItem[]>([]);
@@ -72,6 +79,8 @@ export const PackageConfigurationModal: React.FC<PackageConfigurationModalProps>
     if (show && pkg) {
       setLoading(true);
       setErrors([]);
+      setSelectedBlock('');
+      setAppointment({ date: null, block: '' });
       Promise.all([
         api.get('/unavailability'),
         api.get('/inventory?limit=1000')
@@ -126,8 +135,10 @@ export const PackageConfigurationModal: React.FC<PackageConfigurationModalProps>
         newErrors.push({ index, field: 'wearerName', message: 'Wearer name is required.' });
       }
     });
-    if (hasCustomItems && !appointmentDate) {
+    if (hasCustomItems && !appointment.date) {
       addAlert('An appointment date is required for packages with custom items.', 'danger');
+    } else if (hasCustomItems && !appointment.block) {
+      addAlert('Please select a Morning or Afternoon block for the appointment.', 'danger');
     }
     fulfillmentData.forEach((fulfill, index) => {
       if (fulfill.isCustom && (!fulfill.notes || fulfill.notes.trim() === '')) {
@@ -136,7 +147,7 @@ export const PackageConfigurationModal: React.FC<PackageConfigurationModalProps>
     });
     setErrors(newErrors);
     const hasFieldErrors = newErrors.length > 0;
-    const hasDateError = hasCustomItems && !appointmentDate;
+    const hasDateError = hasCustomItems && (!appointment.date || !appointment.block);
     return !hasFieldErrors && !hasDateError;
   };
   
@@ -176,8 +187,8 @@ export const PackageConfigurationModal: React.FC<PackageConfigurationModalProps>
     setItemForSizeChange(null);
   };
 
-  const handleAppointmentDateChange = (date: Date | null) => {
-    setAppointmentDate(date);
+  const handleAppointmentDateChange = (date: Date | null, block: BlockType) => {
+    setAppointment({ date, block });
   };
   
   const handleCustomItemNoteChange = (index: number, note: string) => {
@@ -190,7 +201,10 @@ export const PackageConfigurationModal: React.FC<PackageConfigurationModalProps>
   const handleFinalSave = () => {
     if (!validate()) { return; }
     if (!pkg) return;
-    onSave({ packageReservation: fulfillmentData, packageAppointmentDate: appointmentDate });
+    onSave({ 
+      packageReservation: fulfillmentData, 
+      packageAppointment: appointment 
+    });
     onHide();
   };
 
@@ -202,15 +216,16 @@ export const PackageConfigurationModal: React.FC<PackageConfigurationModalProps>
         <Modal.Header closeButton>
           <Modal.Title>Configure Package: {pkg.name}</Modal.Title>
         </Modal.Header>
-        <Modal.Body>
+        <Modal.Body style={{maxHeight:'75vh', overflowY:'auto'}}>
           {loading ? (
             <div className="text-center"><Spinner /></div>
           ) : (
             // === MODIFICATION START: Pass the 'mode' prop ===
             <PackageFulfillmentForm
-              mode="reservation" // This tells the form which context to use
+              mode="reservation"
               fulfillmentData={normalizedDataForForm}
-              appointmentDate={appointmentDate}
+              appointmentDate={appointment.date}
+              selectedBlock={appointment.block}
               unavailableDates={unavailableDates}
               onWearerNameChange={handleWearerNameChange}
               onOpenSizeSelectionModal={handleOpenAssignmentModal}

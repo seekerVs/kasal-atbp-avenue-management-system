@@ -2,10 +2,9 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { Container, Card, Row, Col } from 'react-bootstrap';
-import { useNavigate, useLocation } from 'react-router-dom';
 import { format, addDays } from 'date-fns';
 
-import { Reservation, FormErrors, ItemReservation, Package, PackageReservation, UnavailabilityRecord } from '../../types';
+import { Reservation, FormErrors, Package, PackageReservation, UnavailabilityRecord, ShopSettings } from '../../types';
 import CustomFooter from '../../components/customFooter/CustomFooter';
 import api, { uploadFile } from '../../services/api';
 import { useAlert } from '../../contexts/AlertContext';
@@ -21,6 +20,7 @@ import { StepFinish } from '../../components/reservationWizard/steps/StepFinish'
 import { calculateItemDeposit, calculatePackageDeposit } from '../../utils/financials';
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
 import { NavigationBlocker } from '../../components/NavigationBlocker';
+import { PackageConfigurationData } from '../../components/modals/packageConfigurationModal/PackageConfigurationModal';
 
 // The initial state for reserveDate is now a FORMATTED STRING ("YYYY-MM-DD").
 // This is the definitive fix to prevent the RangeError.
@@ -28,22 +28,23 @@ const getInitialReservationState = (): Omit<Reservation, '_id' | 'createdAt' | '
   const today = new Date();
   return {
     customerInfo: { name: '', email: '', phoneNumber: '', address: { province: 'Camarines Norte', city: '', barangay: '', street: '' } },
-    reserveDate: format(addDays(today, 7), 'yyyy-MM-dd'), // Stored as a string
+    reserveDate: format(addDays(today, 7), 'yyyy-MM-dd'),
     financials: {},
     itemReservations: [],
     packageReservations: [],
+    packageAppointmentDate: null,
+    packageAppointmentBlock: null, 
   };
 };
 
 const WIZARD_STEPS = ['Reminders', 'Information', 'Reserve', 'Payment', 'Finish'];
 
 function CreateReservationPage() {
-  const navigate = useNavigate();
-  const location = useLocation();
   const { addAlert } = useAlert();
 
   const [currentStep, setCurrentStep] = useState(1);
   const [reservation, setReservation] = useState(getInitialReservationState);
+  const [shopSettings, setShopSettings] = useState<ShopSettings | null>(null);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -58,19 +59,25 @@ function CreateReservationPage() {
   const initialDataLoaded = useRef(false);
 
   useEffect(() => {
-    const fetchUnavailability = async () => {
+    const fetchInitialData = async () => {
       try {
-        const response = await api.get('/unavailability');
-        // The API returns strings, but the DatePicker needs Date objects.
-        const dates = response.data.map((rec: UnavailabilityRecord) => new Date(rec.date));
+        const [settingsResponse, unavailabilityResponse] = await Promise.all([
+          api.get('/settings/public'),
+          api.get('/unavailability')
+        ]);
+        
+        setShopSettings(settingsResponse.data);
+
+        const dates = unavailabilityResponse.data.map((rec: UnavailabilityRecord) => new Date(rec.date));
         setUnavailableDates(dates);
+
       } catch (err) {
-        console.error("Failed to fetch unavailable dates for the reservation calendar.", err);
-        // Silently fail is okay here, as the primary function can still proceed.
+        console.error("Failed to fetch initial page data.", err);
+        addAlert("Could not load all page data. Some features might be unavailable.", "warning");
       }
     };
-    fetchUnavailability();
-  }, []);
+    fetchInitialData();
+  }, [addAlert]);
 
   useEffect(() => {
     if (initialDataLoaded.current) return;
@@ -243,9 +250,7 @@ function CreateReservationPage() {
     setIsSubmitting(true);
     try {
       let receiptImageUrl = '';
-      // 1. Check if a receipt file has been staged for upload
       if (receiptFile) {
-        // 2. Upload the file first and wait for the URL
         addAlert('Uploading receipt...', 'info');
         receiptImageUrl = await uploadFile(receiptFile);
       }
@@ -274,12 +279,55 @@ function CreateReservationPage() {
     }
   };
 
+  const handleSaveConfiguration = (config: PackageConfigurationData, pkg: Package, motifId: string, editingPackageId: string | null) => {
+    const selectedMotif = pkg.colorMotifs.find(m => m._id === motifId);
+
+    setReservation(prev => {
+      const updatedReservations = [...prev.packageReservations];
+
+      if (editingPackageId) {
+        const indexToUpdate = updatedReservations.findIndex(p => p.packageReservationId === editingPackageId);
+        if (indexToUpdate > -1) {
+          updatedReservations[indexToUpdate] = {
+            ...updatedReservations[indexToUpdate],
+            fulfillmentPreview: config.packageReservation,
+          };
+        }
+      } else {
+        const newPackageReservation: PackageReservation = {
+          packageReservationId: `pkg_${Date.now()}`,
+          packageId: pkg._id,
+          packageName: pkg.name,
+          price: pkg.price,
+          motifHex: selectedMotif?.motifHex,
+          fulfillmentPreview: config.packageReservation,
+          imageUrl: pkg.imageUrls?.[0],
+        };
+        updatedReservations.push(newPackageReservation);
+      }
+      
+      let newAppointmentDate = prev.packageAppointmentDate;
+      let newAppointmentBlock = prev.packageAppointmentBlock;
+      if (config.packageAppointment) {
+        newAppointmentDate = config.packageAppointment.date;
+        newAppointmentBlock = config.packageAppointment.block === '' ? null : config.packageAppointment.block;
+      }
+
+      return {
+        ...prev,
+        packageReservations: updatedReservations,
+        packageAppointmentDate: newAppointmentDate,
+        packageAppointmentBlock: newAppointmentBlock,
+      };
+    });
+  };
+
   const renderStepContent = () => {
     switch (currentStep) {
       case 1: return <StepReminders onNext={() => setCurrentStep(2)} />;
       case 2: return <CustomerAndDateInfo reservation={reservation as any} setReservation={setReservation as any} errors={errors} unavailableDates={unavailableDates} />;
-      case 3: return <ReservationManager reservation={reservation as any} setReservation={setReservation as any} addAlert={addAlert} />;
-      case 4: return <StepPayment reservation={reservation as any} setReservation={setReservation as any} setReceiptFile={setReceiptFile} subtotal={subtotal} requiredDeposit={requiredDeposit} grandTotal={grandTotal} errors={errors}/>;
+      case 3: return <ReservationManager reservation={reservation as any} setReservation={setReservation as any} addAlert={addAlert} onSavePackageConfig={handleSaveConfiguration} />;
+      case 4: return <StepPayment reservation={reservation as any} setReservation={setReservation as any} setReceiptFile={setReceiptFile} subtotal={subtotal} requiredDeposit={requiredDeposit} grandTotal={grandTotal} errors={errors} gcashName={shopSettings?.gcashName} gcashNumber={shopSettings?.gcashNumber}/>;
       case 5: return <StepFinish reservation={submittedReservation} />;
       default: return null;
     }

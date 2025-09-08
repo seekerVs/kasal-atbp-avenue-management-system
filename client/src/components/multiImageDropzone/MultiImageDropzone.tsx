@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { ProgressBar } from 'react-bootstrap';
+import { ProgressBar, Image, Modal } from 'react-bootstrap';
 import { 
   CloudArrowUp, 
-  FileEarmarkImage, 
   X, 
   XCircle, 
   CheckCircleFill, 
@@ -26,7 +25,7 @@ interface UploadFileState {
 
 // Props for the component
 interface MultiImageDropzoneProps {
-  existingImageUrls: string[];
+  existingImageUrls: (string | File)[]; 
   maxFiles?: number;
 }
 
@@ -36,23 +35,126 @@ export interface MultiImageDropzoneRef {
   getFiles: () => (File | string)[];
 }
 
+interface FileItemPreviewProps {
+  fileState: UploadFileState;
+  onRemove: (id: string) => void;
+  onRetry: (file: UploadFileState) => void;
+  onView: (file: File | string) => void;
+}
+
+const FileItemPreview: React.FC<FileItemPreviewProps> = ({ fileState, onRemove, onRetry, onView }) => {
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const imageSource = fileState.file || fileState.url;
+
+  // This effect handles creating and cleaning up temporary blob URLs
+  useEffect(() => {
+    let objectUrl: string | null = null;
+    
+    if (imageSource instanceof File) {
+      // Create a temporary local URL for the staged File object
+      objectUrl = URL.createObjectURL(imageSource);
+      setPreviewUrl(objectUrl);
+    } else if (typeof imageSource === 'string') {
+      // If it's a string, it's an existing URL
+      setPreviewUrl(imageSource);
+    } else {
+      setPreviewUrl(null);
+    }
+
+    // Cleanup function: revoke the object URL to avoid memory leaks
+    return () => {
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [imageSource]); // Re-run when the file source changes
+
+  const handleViewClick = () => {
+    if (imageSource) {
+      onView(imageSource);
+    }
+  };
+
+  return (
+    <div className="file-item">
+      {/* --- THIS IS THE CHANGE: Use Image instead of an icon --- */}
+      <Image src={previewUrl || undefined} className="file-item-preview" onClick={handleViewClick} />
+
+      <div className="file-details">
+        <div className="file-name" title={fileState.file?.name || fileState.url}>
+          {fileState.file?.name || fileState.url?.split('/').pop()}
+        </div>
+        
+        {/* All the status display logic remains the same */}
+        {fileState.status === 'pending' && <div className="file-status text-muted">Pending Upload</div>}
+        {fileState.status === 'uploading' && (
+          <div className="progress-wrapper">
+            <ProgressBar now={fileState.progress} style={{height: '6px'}} animated/>
+            <span className="progress-percentage">{fileState.progress}%</span>
+          </div>
+        )}
+        {fileState.status === 'success' && (
+          <div className="file-status text-success"><CheckCircleFill /><span>Complete</span></div>
+        )}
+        {fileState.status === 'error' && (
+          <div className="file-status text-danger"><XCircle /><span>{fileState.error}</span></div>
+        )}
+      </div>
+
+      <div className="file-actions">
+        {fileState.status === 'error' && (
+            <button type="button" onClick={() => onRetry(fileState)} className="remove-btn me-2" title="Retry upload">
+                <ArrowClockwise size={18}/>
+            </button>
+        )}
+        <button type="button" onClick={() => onRemove(fileState.id)} className="remove-btn" title="Remove file">
+          <X size={22}/>
+        </button>
+      </div>
+    </div>
+  );
+};
+
 // --- MAIN COMPONENT (Wrapped in forwardRef) ---
 export const MultiImageDropzone = forwardRef<MultiImageDropzoneRef, MultiImageDropzoneProps>(
   ({ existingImageUrls, maxFiles = 10 }, ref) => {
     const [files, setFiles] = useState<UploadFileState[]>([]);
+    const [imageInView, setImageInView] = useState<File | string | null>(null);
+    const [imageInViewUrl, setImageInViewUrl] = useState<string | null>(null);
 
-    // Initialize state with existing URLs from the parent form
     useEffect(() => {
-      const initialFiles = existingImageUrls.map((url, index) => ({
-        id: `existing-${index}-${Date.now()}`,
-        status: 'success' as UploadStatus,
-        progress: 100,
-        url: url,
-      }));
+      const initialFiles = (existingImageUrls || []).map((fileOrUrl, index) => {
+        if (typeof fileOrUrl === 'string') {
+          return {
+            id: `existing-${index}-${Date.now()}`,
+            status: 'success' as UploadStatus,
+            progress: 100,
+            url: fileOrUrl,
+          };
+        } else {
+          return {
+            id: `${fileOrUrl.name}-${Date.now()}`,
+            file: fileOrUrl,
+            status: 'pending' as UploadStatus,
+            progress: 0,
+          };
+        }
+      });
       setFiles(initialFiles);
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []); // <-- This effect runs only ONCE on mount.
+    }, [existingImageUrls]);
 
+    useEffect(() => {
+      if (imageInView instanceof File) {
+        const objectUrl = URL.createObjectURL(imageInView);
+        setImageInViewUrl(objectUrl);
+        // Cleanup function for when the modal closes or the image changes
+        return () => URL.revokeObjectURL(objectUrl);
+      } else if (typeof imageInView === 'string') {
+        setImageInViewUrl(imageInView);
+      } else {
+        setImageInViewUrl(null);
+      }
+    }, [imageInView]);
 
     // --- NEW: Expose the uploadAll function to the parent ---
     useImperativeHandle(ref, () => ({
@@ -146,51 +248,20 @@ export const MultiImageDropzone = forwardRef<MultiImageDropzoneRef, MultiImageDr
     
           <div className="file-list">
             {files.map(f => (
-              <div key={f.id} className="file-item">
-                <FileEarmarkImage className="file-icon" />
-                <div className="file-details">
-                  <div className="file-name" title={f.file?.name || f.url}>
-                    {f.file?.name || f.url?.split('/').pop()}
-                  </div>
-    
-                  {/* --- NEW STATUS DISPLAY LOGIC --- */}
-                  {f.status === 'pending' && <div className="file-status text-muted">Pending Upload</div>}
-                  
-                  {f.status === 'uploading' && (
-                    <div className="progress-wrapper">
-                      <ProgressBar now={f.progress} style={{height: '6px'}} animated/>
-                      <span className="progress-percentage">{f.progress}%</span>
-                    </div>
-                  )}
-                  
-                  {f.status === 'success' && (
-                    <div className="file-status text-success">
-                      <CheckCircleFill />
-                      <span>Complete</span>
-                    </div>
-                  )}
-    
-                  {f.status === 'error' && (
-                    <div className="file-status text-danger">
-                      <XCircle />
-                      <span>{f.error}</span>
-                    </div>
-                  )}
-    
-                </div>
-                <div className="file-actions">
-                  {f.status === 'error' && (
-                      <button type="button" onClick={() => handleRetry(f)} className="remove-btn me-2" title="Retry upload">
-                          <ArrowClockwise size={18}/>
-                      </button>
-                  )}
-                  <button type="button" onClick={() => handleRemoveFile(f.id)} className="remove-btn" title="Remove file">
-                    <X size={22}/>
-                  </button>
-                </div>
-              </div>
+              <FileItemPreview
+                key={f.id}
+                fileState={f}
+                onRemove={handleRemoveFile}
+                onRetry={handleRetry}
+                onView={(fileOrUrl) => setImageInView(fileOrUrl)}
+              />
             ))}
           </div>
+          <Modal show={!!imageInView} onHide={() => setImageInView(null)} centered size="lg">
+            <Modal.Body className='p-0 m-auto'>
+              {imageInViewUrl && <Image src={imageInViewUrl} fluid />}
+            </Modal.Body>
+          </Modal>
         </div>
       );
   }

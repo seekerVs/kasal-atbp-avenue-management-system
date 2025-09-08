@@ -1,284 +1,190 @@
-import React, { useState, useEffect, useRef } from "react"; // Import useRef
-import {
-  Modal,
-  Button,
-  Row,
-  Col,
-  Form,
-  Spinner,
-  OverlayTrigger,
-  Tooltip,
-  InputGroup,
-  Alert,
-} from "react-bootstrap";
-import { QuestionCircle, ArrowsCollapse } from "react-bootstrap-icons";
-import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import React, { useState, useEffect, useRef } from "react";
+import { Modal, Button, Row, Col, Form, Spinner, InputGroup, Alert, Card } from "react-bootstrap";
+import { ArrowsCollapse, CheckCircleFill } from "react-bootstrap-icons";
+import axios from "axios"; // Keep axios for direct, un-intercepted polling
+import { useAlert } from "../../../contexts/AlertContext";
+import { convertMeasurementsToSize } from "../../../utils/sizeConverter";
 
-interface CurrentSensorDataItem {
-  _id: string;
-  sensorType: string;
-  position?: number;
-  direction?: number;
-  centimeters?: number;
-  value?: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
+// --- The new props "contract" for this component ---
 interface OutfitRecommendationModalProps {
   show: boolean;
   onHide: () => void;
-  values: Record<string, string>;
-  onChange: (field: string, value: string) => void;
-  onRecommend: () => void;
+  onRecommend: (size: string) => void;
 }
 
-const measurements = [
-  "Full Shoulder",
-  "Waist",
-  "Bicep",
-  "Hip",
-  "Full Chest",
-  "Thigh",
-];
+// --- Define the fixed list of measurements ---
+const CORE_MEASUREMENTS = ["Full Shoulder", "Full Chest", "Waist", "Hip"];
 
-const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({
-  show,
-  onHide,
-  values,
-  onChange,
-}) => {
-  const navigate = useNavigate();
+// --- Type for the sensor data we expect ---
+interface SensorData {
+  sensorType: string;
+  centimeters?: number;
+  updatedAt: string;
+}
 
-  const [currentSensorData, setCurrentSensorData] =
-    useState<CurrentSensorDataItem | null>(null);
+const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({ show, onHide, onRecommend }) => {
+  const { addAlert } = useAlert();
+  // --- Internal State Management ---
+  const [measurementValues, setMeasurementValues] = useState<Record<string, string>>({});
+  const [recommendedSize, setRecommendedSize] = useState<string>('');
+  const [activeField, setActiveField] = useState<string | null>(null);
+
+  // --- State for Device Integration ---
+  const [sensorData, setSensorData] = useState<SensorData | null>(null);
   const [isSensorLoading, setIsSensorLoading] = useState<boolean>(true);
   const [sensorError, setSensorError] = useState<string | null>(null);
-
-  // State to track which input field is currently focused
-  const [focusedField, setFocusedField] = useState<string | null>(null);
-
-  // useRef to store the previous centimeter value for comparison
   const prevCentimetersRef = useRef<number | undefined>(undefined);
-
-  // useRef to store references to each input element
-  // A Map is used to easily store and retrieve refs by their label (string key)
   const inputRefs = useRef<Map<string, HTMLInputElement | null>>(new Map());
 
-  const fetchCurrentSensorData = async () => {
-    try {
-      setIsSensorLoading(true);
-      setSensorError(null);
-      const response = await axios.get<{
-        success: true;
-        data: CurrentSensorDataItem;
-      }>("http://localhost:3001/sensorData");
-      setCurrentSensorData(response.data.data);
-    } catch (err: any) {
-      console.error("Error fetching current sensor data in modal:", err);
-      if (err.response && err.response.status === 404) {
-        setSensorError(
-          "No device data available yet. Please ensure your device is sending data."
-        );
-        setCurrentSensorData(null);
-      } else {
-        setSensorError(
-          err.response?.data?.message || "Failed to fetch device data."
-        );
-      }
-    } finally {
-      setIsSensorLoading(false);
-    }
-  };
-
-  // useEffect to poll for sensor data when the modal is shown
+  // --- Effect 1: Live Size Conversion ---
   useEffect(() => {
-    let intervalId: NodeJS.Timeout | null = null;
-    if (show) {
-      fetchCurrentSensorData(); // Initial fetch
-      intervalId = setInterval(fetchCurrentSensorData, 3000); // Poll every 3 seconds
+    if (measurementValues['Full Chest'] && measurementValues['Waist']) {
+      const size = convertMeasurementsToSize(measurementValues);
+      setRecommendedSize(size);
+    } else {
+      setRecommendedSize(''); // Clear recommendation if core values are missing
     }
+  }, [measurementValues]);
 
-    // Cleanup interval when modal hides or component unmounts
+  // --- Effect 2: Device Data Polling ---
+  useEffect(() => {
+    let intervalId: number | null = null;
+    if (show) {
+      // Reset form when modal opens
+      setMeasurementValues({});
+      setRecommendedSize('');
+      setActiveField(CORE_MEASUREMENTS[0]); // Set focus to the first field on open
+
+      const fetchSensorData = async () => {
+        try {
+          const response = await axios.get("http://localhost:3001/sensorData");
+          setSensorData(response.data.data);
+          if (sensorError) setSensorError(null);
+        } catch (err: any) {
+          setSensorError(err.response?.data?.message || "Device not connected.");
+        } finally {
+          setIsSensorLoading(false);
+        }
+      };
+      
+      fetchSensorData(); // Initial fetch
+      intervalId = setInterval(fetchSensorData, 3000); // Poll every 3 seconds
+    }
     return () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
-      // Optional: Reset the ref when the modal hides to ensure fresh comparison next time it opens
-      prevCentimetersRef.current = undefined;
-      // Clear refs when component unmounts or modal hides
-      inputRefs.current.clear();
+      if (intervalId) clearInterval(intervalId); // Cleanup on close
     };
   }, [show]);
 
-  // useEffect to auto-inject sensor data into the focused field and then move focus
+  // --- Effect 3: Device Data Auto-fill and Focus Shift ---
   useEffect(() => {
-    // Only proceed if an input is focused, we have sensor data, and it's the correct sensor type
-    if (
-      focusedField &&
-      currentSensorData?.centimeters !== undefined &&
-      currentSensorData.sensorType === "LengthMeasurement"
-    ) {
-      const currentCm = currentSensorData.centimeters;
-      const prevCm = prevCentimetersRef.current;
+    if (activeField && sensorData?.centimeters !== undefined && sensorData.centimeters !== prevCentimetersRef.current) {
+      const currentCm = sensorData.centimeters;
+      handleValueChange(activeField, currentCm.toFixed(2));
 
-      // Only update if the current centimeter value has actually changed from the previous one
-      if (currentCm !== prevCm) {
-        onChange(focusedField, currentCm.toFixed(2)); // Insert value into current field
-
-        // --- NEW LOGIC: Move focus to the next input ---
-        const currentIndex = measurements.indexOf(focusedField);
-        const nextIndex = currentIndex + 1;
-
-        if (nextIndex < measurements.length) {
-          const nextFieldLabel = measurements[nextIndex];
-          const nextInputField = inputRefs.current.get(nextFieldLabel);
-
-          if (nextInputField) {
-            nextInputField.focus(); // Programmatically focus the next input
-            setFocusedField(nextFieldLabel); // Update focusedField state to the new field
-          }
-        } else {
-          // If it was the last input, clear focus
-          setFocusedField(null);
-        }
-      }
-    }
-
-    // Always update the ref with the current value for the next comparison
-    prevCentimetersRef.current = currentSensorData?.centimeters;
-  }, [currentSensorData, focusedField, onChange]); // Re-run when sensor data or focused field changes
-
-  // Handle injecting the measurement into the focused field (for the button click)
-  const handleInjectMeasurement = () => {
-    if (
-      focusedField &&
-      currentSensorData?.centimeters !== undefined &&
-      currentSensorData.sensorType === "LengthMeasurement"
-    ) {
-      onChange(focusedField, currentSensorData.centimeters.toFixed(2));
-
-      // --- Duplicate logic for button click: Move focus to the next input ---
-      const currentIndex = measurements.indexOf(focusedField);
+      // Move focus to the next input
+      const currentIndex = CORE_MEASUREMENTS.indexOf(activeField);
       const nextIndex = currentIndex + 1;
-
-      if (nextIndex < measurements.length) {
-        const nextFieldLabel = measurements[nextIndex];
-        const nextInputField = inputRefs.current.get(nextFieldLabel);
-
-        if (nextInputField) {
-          nextInputField.focus();
-          setFocusedField(nextFieldLabel);
-        }
+      if (nextIndex < CORE_MEASUREMENTS.length) {
+        const nextField = CORE_MEASUREMENTS[nextIndex];
+        inputRefs.current.get(nextField)?.focus();
+        setActiveField(nextField);
       } else {
-        setFocusedField(null);
+        inputRefs.current.get(activeField)?.blur(); // Unfocus the last field
+        setActiveField(null);
       }
     }
+    prevCentimetersRef.current = sensorData?.centimeters;
+  }, [sensorData]);
+
+
+  const handleValueChange = (field: string, value: string) => {
+    setMeasurementValues(prev => ({ ...prev, [field]: value }));
   };
 
-  const renderTooltip = (props: any) => (
-    <Tooltip id="help-tooltip" {...props}>
-      These measurements help us recommend your perfect fit.
-    </Tooltip>
-  );
+  const handleRecommendClick = () => {
+    if (!recommendedSize) {
+      addAlert("Please fill in at least Chest and Waist measurements.", 'warning');
+      return;
+    }
+    onRecommend(recommendedSize);
+  };
+
+  const isRecommendDisabled = !measurementValues['Full Chest'] || !measurementValues['Waist'];
 
   return (
-    <Modal
-      show={show}
-      onHide={onHide}
-      centered
-      size="lg"
-      backdrop="static"
-      keyboard={false}
-    >
+    <Modal show={show} onHide={onHide} centered size="lg" backdrop="static">
       <Modal.Header closeButton>
         <Modal.Title className="fw-semibold">Outfit Recommendation</Modal.Title>
       </Modal.Header>
       <Modal.Body>
-        <p className="mb-4">
-          Find the best outfit in an instant
-          <OverlayTrigger placement="top" overlay={renderTooltip}>
-            <QuestionCircle size={16} className="ms-2" />
-          </OverlayTrigger>
-        </p>
+        <p className="mb-4 text-muted">Enter the client's measurements to find their recommended standard size and view available outfits.</p>
 
-        <Form>
-          <Row>
-            {measurements.map((label, idx) => (
-              <Col md={6} className="mb-3" key={label}>
-                <Form.Label>{label}</Form.Label>
-                <InputGroup>
-                  <Form.Control
-                    type="number"
-                    step="0.01"
-                    value={values[label] || ""}
-                    onChange={(e) => onChange(label, e.target.value)}
-                    onFocus={() => setFocusedField(label)}
-                    onBlur={() => setFocusedField(null)}
-                    // --- NEW: Attach ref to the input element ---
-                    ref={(el) => {
-                      // Store the DOM element in the ref Map, using the label as key
-                      if (el) {
-                        // Ensure element exists before setting
-                        inputRefs.current.set(label, el as HTMLInputElement);
-                      } else {
-                        // Element unmounted, remove from map
-                        inputRefs.current.delete(label);
-                      }
-                    }}
-                  />
-                  <Button
-                    variant="outline-secondary"
-                    onClick={handleInjectMeasurement}
-                    // Prevent the input from losing focus when the button is clicked
-                    onMouseDown={(e) => e.preventDefault()}
-                    disabled={
-                      !currentSensorData?.centimeters ||
-                      focusedField !== label ||
-                      isSensorLoading ||
-                      currentSensorData.sensorType !== "LengthMeasurement"
-                    }
-                    title="Get from Device"
-                  >
-                    <ArrowsCollapse size={16} />
-                  </Button>
-                </InputGroup>
-              </Col>
-            ))}
-          </Row>
-        </Form>
+        <Row className="g-4">
+          <Col md={7}>
+            <h6 className="text-uppercase small fw-bold">Measurements (cm)</h6>
+            <Form>
+              {CORE_MEASUREMENTS.map((label) => (
+                <Form.Group className="mb-3" key={label}>
+                  <Form.Label>{label}</Form.Label>
+                  <InputGroup>
+                    <Form.Control
+                      type="number"
+                      step="0.01"
+                      value={measurementValues[label] || ""}
+                      onChange={(e) => handleValueChange(label, e.target.value)}
+                      onFocus={() => setActiveField(label)}
+                      onBlur={() => setActiveField(null)}
+                      ref={el => { inputRefs.current.set(label, el); }}
+                      autoFocus={label === CORE_MEASUREMENTS[0]} // Autofocus the first input
+                    />
+                    <Button
+                      variant="outline-secondary"
+                      disabled={!sensorData?.centimeters || activeField !== label}
+                      title="Get from Device"
+                    >
+                      <ArrowsCollapse />
+                    </Button>
+                  </InputGroup>
+                </Form.Group>
+              ))}
+            </Form>
+          </Col>
+          <Col md={5}>
+            <h6 className="text-uppercase small fw-bold">System Feedback</h6>
+            {recommendedSize ? (
+              <Alert variant="success" className="text-center">
+                <div className="small">Recommended Size:</div>
+                <div className="display-6 fw-bold">{recommendedSize}</div>
+              </Alert>
+            ) : (
+              <Alert variant="secondary">
+                Please provide at least Chest and Waist measurements to see a size recommendation.
+              </Alert>
+            )}
 
-        {/* Display sensor data status */}
-        <div className="mt-3">
-          {isSensorLoading && (
-            <div className="d-flex align-items-center text-muted">
-              <Spinner
-                animation="border"
-                size="sm"
-                className="me-2 text-danger"
-              />
-              Retrieving device measurement...
-            </div>
-          )}
-          {sensorError && (
-            <Alert variant="warning" className="mt-2 py-2">
-              {sensorError}
-            </Alert>
-          )}
-          {!isSensorLoading && !sensorError && currentSensorData && (
-            <Alert variant="success" className="mt-2 py-2">
-              Live Reading: {currentSensorData.centimeters?.toFixed(2) || "N/A"}{" "}
-              cm (Last Updated:{" "}
-              {new Date(currentSensorData.updatedAt).toLocaleTimeString()})
-            </Alert>
-          )}
-        </div>
+            <Card bg="light">
+              <Card.Body>
+                <Card.Title as="h6" className="small">Device Status</Card.Title>
+                {isSensorLoading ? (
+                  <div className="d-flex align-items-center text-muted"><Spinner size="sm" className="me-2"/> Connecting...</div>
+                ) : sensorError ? (
+                  <div className="text-danger small">{sensorError}</div>
+                ) : (
+                  <>
+                    <div className="text-success small mb-2"><CheckCircleFill className="me-1"/> Device Connected</div>
+                    <p className="mb-0"><strong>Live Reading:</strong> {sensorData?.centimeters?.toFixed(2) ?? 'N/A'} cm</p>
+                    <p className="text-muted small mb-0">Last Update: {sensorData ? new Date(sensorData.updatedAt).toLocaleTimeString() : 'N/A'}</p>
+                  </>
+                )}
+              </Card.Body>
+            </Card>
+          </Col>
+        </Row>
       </Modal.Body>
-
       <Modal.Footer>
-        <Button variant="danger" onClick={() => navigate(`/products`)}>
-          Recommend
+        <Button variant="secondary" onClick={onHide}>Close</Button>
+        <Button variant="primary" onClick={handleRecommendClick} disabled={isRecommendDisabled}>
+          Recommend Outfits
         </Button>
       </Modal.Footer>
     </Modal>

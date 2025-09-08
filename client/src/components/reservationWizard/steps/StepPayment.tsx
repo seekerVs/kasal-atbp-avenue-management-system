@@ -17,11 +17,13 @@ interface StepPaymentProps {
   requiredDeposit: number;
   grandTotal: number;
   errors: FormErrors;
+  gcashName?: string;
+  gcashNumber?: string;
 }
 
 export const StepPayment: React.FC<StepPaymentProps> = ({ 
   reservation, setReservation, setReceiptFile, // <-- Destructure new prop
-  subtotal, requiredDeposit, grandTotal, errors 
+  subtotal, requiredDeposit, grandTotal, errors, gcashName, gcashNumber
 }) => {
   const paymentData = reservation.financials.payments?.[0];
 
@@ -89,10 +91,17 @@ export const StepPayment: React.FC<StepPaymentProps> = ({
             <ul className="small ps-3 mb-0">
                 <li>
                     Please send your payment to the following GCash account:
-                    <div className="fw-bold my-1">
-                        Account Name: Juan Dela Cruz<br/>
-                        Account Number: 0917-123-4567
-                    </div>
+                    {/* Use conditional rendering to display the dynamic data or a fallback message */}
+                    {gcashName && gcashNumber ? (
+                      <div className="fw-bold my-1">
+                          Account Name: {gcashName}<br/>
+                          Account Number: {gcashNumber}
+                      </div>
+                    ) : (
+                      <div className="text-danger my-1">
+                        GCash details not available. Please contact the shop.
+                      </div>
+                    )}
                 </li>
                 <li>
                     Ensure the amount sent is the <strong>exact amount</strong> required for your selected payment option.
