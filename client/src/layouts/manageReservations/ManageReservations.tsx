@@ -7,10 +7,12 @@ import { Reservation } from '../../types';
 import api from '../../services/api';
 import CustomPagination from '../../components/customPagination/CustomPagination';
 import { BookingCard } from '../../components/bookingCard/BookingCard';
+import { useLocation } from 'react-router-dom';
 
 type TabStatus = 'Pending' | 'Confirmed' | 'Completed' | 'Cancelled';
 
 function ManageReservations() {
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState<TabStatus>('Pending');
   const [allReservations, setAllReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,6 +46,18 @@ function ManageReservations() {
     };
     fetchReservations();
   }, [currentPage]);
+
+  useEffect(() => {
+    const state = location.state as { activeTab?: TabStatus };
+
+    // If a valid activeTab was passed in the state, update our component's state.
+    if (state?.activeTab) {
+      setActiveTab(state.activeTab);
+
+      // Optional but recommended: Clear the state so this doesn't re-trigger on refresh.
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   useEffect(() => {
     if (currentPage !== 1) {

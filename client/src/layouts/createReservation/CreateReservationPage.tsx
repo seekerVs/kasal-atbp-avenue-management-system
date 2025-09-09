@@ -328,7 +328,7 @@ function CreateReservationPage() {
       case 2: return <CustomerAndDateInfo reservation={reservation as any} setReservation={setReservation as any} errors={errors} unavailableDates={unavailableDates} />;
       case 3: return <ReservationManager reservation={reservation as any} setReservation={setReservation as any} addAlert={addAlert} onSavePackageConfig={handleSaveConfiguration} />;
       case 4: return <StepPayment reservation={reservation as any} setReservation={setReservation as any} setReceiptFile={setReceiptFile} subtotal={subtotal} requiredDeposit={requiredDeposit} grandTotal={grandTotal} errors={errors} gcashName={shopSettings?.gcashName} gcashNumber={shopSettings?.gcashNumber}/>;
-      case 5: return <StepFinish reservation={submittedReservation} />;
+      case 5: return <StepFinish reservation={submittedReservation} shopSettings={shopSettings} />;
       default: return null;
     }
   };

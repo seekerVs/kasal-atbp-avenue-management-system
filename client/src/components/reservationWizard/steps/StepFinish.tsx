@@ -4,16 +4,17 @@ import React, { useRef, useState } from 'react';
 import { Badge, Button, Spinner } from 'react-bootstrap';
 import { CheckCircleFill, Download } from 'react-bootstrap-icons';
 import { useNavigate } from 'react-router-dom';
-import { Reservation } from '../../../types';
+import { Reservation, ShopSettings } from '../../../types';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { ReservationSummary } from '../../reservationSummary/ReservationSummary';
 
 interface StepFinishProps {
   reservation: Reservation | null;
+  shopSettings: ShopSettings | null;
 }
 
-export const StepFinish: React.FC<StepFinishProps> = ({ reservation }) => {
+export const StepFinish: React.FC<StepFinishProps> = ({ reservation, shopSettings }) => {
   const navigate = useNavigate();
   const summaryRef = useRef<HTMLDivElement>(null);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -57,7 +58,7 @@ export const StepFinish: React.FC<StepFinishProps> = ({ reservation }) => {
     <div>
       {/* --- (1) RENDER THE DETAILED SUMMARY OFF-SCREEN FOR PDF CAPTURE --- */}
       <div style={{ position: 'fixed', left: '-2000px', top: 0, zIndex: -1 }}>
-        <ReservationSummary ref={summaryRef} reservation={reservation} />
+        <ReservationSummary ref={summaryRef} reservation={reservation} shopSettings={shopSettings} />
       </div>
       
       <div className="text-center p-3">

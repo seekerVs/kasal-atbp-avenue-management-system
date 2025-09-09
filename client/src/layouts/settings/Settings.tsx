@@ -12,9 +12,8 @@ function Settings() {
   const [settings, setSettings] = useState<ShopSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
+  const [formErrors, setFormErrors] = useState<{ [key: string]: string | undefined }>({});
   const [activeTab, setActiveTab] = useState('general');
-  const [slotsPerDayInput, setSlotsPerDayInput] = useState('0');
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -22,7 +21,6 @@ function Settings() {
       try {
         const response = await api.get('/settings');
         setSettings(response.data);
-        setSlotsPerDayInput(String(response.data.appointmentSlotsPerDay || '0'));
       } catch (error) {
         addAlert('Could not load shop settings.', 'danger');
       } finally {
@@ -32,32 +30,32 @@ function Settings() {
     fetchSettings();
   }, [addAlert]);
 
-  const handleSettingsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSettingsChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
 
+    if (!settings) return;
+
+    // Clear any existing validation error for this field
     if (formErrors[name]) {
-      setFormErrors(prev => {
-        const newErrors = { ...prev };
-        delete newErrors[name];
-        return newErrors;
-      });
+      setFormErrors(prev => ({ ...prev, [name]: undefined }));
     }
 
+    // Create a new state object based on the current one
+    const newSettings = { ...settings };
+
+    // Handle the numeric input for slots per day
     if (name === 'appointmentSlotsPerDay') {
+      // Allow empty string for typing, but parse to number for state
       if (value === '' || /^\d+$/.test(value)) {
-        setSlotsPerDayInput(value);
+        newSettings.appointmentSlotsPerDay = parseInt(value, 10) || 0;
       }
-    } else if (settings) {
-      setSettings({ ...settings, [name]: value });
+    } else {
+      // Handle all other string-based inputs
+      (newSettings as any)[name] = value;
     }
-  };
 
-  const handleSlotsPerDayBlur = () => {
-    const numericValue = parseInt(slotsPerDayInput, 10) || 0;
-    setSlotsPerDayInput(String(numericValue));
-    if (settings) {
-      setSettings({ ...settings, appointmentSlotsPerDay: numericValue });
-    }
+    // Update the single state object
+    setSettings(newSettings);
   };
 
   const validateSettings = (): boolean => {
@@ -89,7 +87,10 @@ function Settings() {
       const response = await api.put('/settings', { 
         appointmentSlotsPerDay: settings.appointmentSlotsPerDay,
         gcashName: settings.gcashName,
-        gcashNumber: settings.gcashNumber
+        gcashNumber: settings.gcashNumber,
+        shopAddress: settings.shopAddress,
+        shopContactNumber: settings.shopContactNumber,
+        shopEmail: settings.shopEmail
       });
       setSettings(response.data);
       addAlert('General settings saved successfully!', 'success');
@@ -147,10 +148,10 @@ function Settings() {
                                 type="text"
                                 inputMode="numeric"
                                 name="appointmentSlotsPerDay"
-                                value={slotsPerDayInput}
+                                value={settings.appointmentSlotsPerDay} 
                                 onChange={handleSettingsChange}
-                                onBlur={handleSlotsPerDayBlur}
                                 isInvalid={!!formErrors.appointmentSlotsPerDay}
+                                min="0"
                               />
                               <Form.Control.Feedback type="invalid">
                                 {formErrors.appointmentSlotsPerDay}
@@ -180,6 +181,40 @@ function Settings() {
                               <Form.Control.Feedback type="invalid">
                                 {formErrors.gcashNumber}
                               </Form.Control.Feedback>
+                            </Form.Group>
+
+                            <hr />
+                            <h6 className="text-muted">Receipt & Invoice Details</h6>
+                            <Form.Group className="mb-3">
+                              <Form.Label className="fw-bold">Shop Address</Form.Label>
+                              <Form.Control 
+                                as="textarea"
+                                rows={2}
+                                name="shopAddress"
+                                placeholder="e.g., 123 Rizal Avenue, Daet, Camarines Norte"
+                                value={settings.shopAddress || ''}
+                                onChange={handleSettingsChange}
+                              />
+                            </Form.Group>
+                            <Form.Group className="mb-3">
+                              <Form.Label className="fw-bold">Shop Contact Number</Form.Label>
+                              <Form.Control 
+                                type="text" 
+                                name="shopContactNumber"
+                                placeholder="e.g., 0917-123-4567"
+                                value={settings.shopContactNumber || ''}
+                                onChange={handleSettingsChange}
+                              />
+                            </Form.Group>
+                            <Form.Group className="mb-3">
+                              <Form.Label className="fw-bold">Shop Email Address</Form.Label>
+                              <Form.Control 
+                                type="email" 
+                                name="shopEmail"
+                                placeholder="e.g., contact@kasalavenue.com"
+                                value={settings.shopEmail || ''}
+                                onChange={handleSettingsChange}
+                              />
                             </Form.Group>
                           </Col>
                         </Row>

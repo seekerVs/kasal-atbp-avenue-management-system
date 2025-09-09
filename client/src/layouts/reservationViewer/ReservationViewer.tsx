@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Container, Row, Col, Spinner, Alert, Breadcrumb, Card, Badge, Button, ListGroup, Modal, Form } from 'react-bootstrap';
+import { Container, Row, Col, Spinner, Alert, Breadcrumb, Card, Badge, Button, ListGroup, Modal } from 'react-bootstrap';
 import { format, isFuture, startOfDay } from 'date-fns'; // <-- Import isFuture and startOfDay
 
 import { Appointment, CustomerInfo, PackageReservation, Reservation } from '../../types';
 import api from '../../services/api';
 import { useAlert } from '../../contexts/AlertContext';
 import { ReservationItemsList } from '../../components/reservationItemsList/ReservationItemsList';
-import { PersonFill, CalendarEvent, GeoAltFill, CheckCircleFill, CashCoin, ExclamationTriangleFill, XCircleFill, Phone, Telephone, TelephoneFill, PencilSquare, Image as ImageIcon, CalendarWeek } from 'react-bootstrap-icons';
+import { PersonFill, CalendarEvent, CheckCircleFill, CashCoin, ExclamationTriangleFill, XCircleFill,PencilSquare, Image as ImageIcon, CalendarWeek } from 'react-bootstrap-icons';
 import { formatCurrency } from '../../utils/formatters';
 import { LinkedAppointmentsList } from '../../components/linkedAppointmentsList/LinkedAppointmentsList';
 import { calculateItemDeposit, calculatePackageDeposit } from '../../utils/financials';
@@ -225,11 +225,11 @@ function ReservationViewer() {
           <Col lg={7} className='lh-sm'>
             <ReservationItemsList items={reservation.itemReservations} packages={reservation.packageReservations} onViewPackage={handleViewPackageDetails}/>
             {linkedAppointments.length > 0 && (
-            <LinkedAppointmentsList 
-              appointments={linkedAppointments}
-              reservation={reservation} // Pass the full reservation object
-            />
-          )}
+              <LinkedAppointmentsList 
+                appointments={linkedAppointments} 
+                reservation={reservation}
+              />
+            )}
           </Col>
 
           <Col lg={5}>

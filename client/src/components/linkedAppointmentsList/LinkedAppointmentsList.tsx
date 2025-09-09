@@ -43,7 +43,7 @@ export const LinkedAppointmentsList: React.FC<LinkedAppointmentsListProps> = ({ 
           
           // --- (3) REFACTORED DISPLAY LOGIC ---
 
-          // Find the corresponding role from the main reservation data
+          // Find the corresponding role from the main reservation data   
           const fulfillment = reservation.packageReservations
             .flatMap(pkg => pkg.fulfillmentPreview)
             .find(f => f.linkedAppointmentId === apt._id);

@@ -3,7 +3,7 @@ import { Container, Row, Col, Card, Button, Form, Spinner, Alert, Badge } from '
 import { CalendarEvent, ChatQuote, CheckCircleFill, Download } from 'react-bootstrap-icons';
 import { format } from 'date-fns';
 
-import { Appointment, FormErrors } from '../../types';
+import { Appointment, FormErrors, ShopSettings } from '../../types';
 import { ValidatedInput } from '../../components/forms/ValidatedInput';
 import { AddressSelector } from '../../components/addressSelector/AddressSelector';
 import CustomFooter from '../../components/customFooter/CustomFooter';
@@ -33,6 +33,7 @@ function CreateAppointmentPage() {
   const { addAlert } = useAlert();
 
   const [appointment, setAppointment] = useState(getInitialAppointmentState);
+  const [shopSettings, setShopSettings] = useState<ShopSettings | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [unavailableDates, setUnavailableDates] = useState<Date[]>([]); // 2. State for fetched unavailable dates
@@ -44,16 +45,22 @@ function CreateAppointmentPage() {
 
   // 3. Fetch unavailable dates when the component mounts
   useEffect(() => {
-    const fetchUnavailability = async () => {
+    const fetchInitialData = async () => {
       try {
-        const response = await api.get('/unavailability');
-        const dates = response.data.map((rec: UnavailabilityRecord) => new Date(rec.date));
+        const [settingsResponse, unavailabilityResponse] = await Promise.all([
+          api.get('/settings/public'),
+          api.get('/unavailability')
+        ]);
+        
+        setShopSettings(settingsResponse.data);
+
+        const dates = unavailabilityResponse.data.map((rec: UnavailabilityRecord) => new Date(rec.date));
         setUnavailableDates(dates);
       } catch (err) {
-        console.error("Failed to fetch unavailable dates", err);
+        console.error("Failed to fetch initial page data", err);
       }
     };
-    fetchUnavailability();
+    fetchInitialData();
   }, []);
 
   const handleCustomerChange = (field: string, value: string) => setAppointment(p => ({ ...p, customerInfo: { ...p.customerInfo, [field]: value } }));
@@ -164,7 +171,7 @@ function CreateAppointmentPage() {
     <>
       {/* This renders the detailed summary OFF-SCREEN, ready for PDF capture */}
       <div style={{ position: 'fixed', left: '-2000px', top: 0, zIndex: -1 }}>
-        <AppointmentSummary ref={summaryRef} appointment={details} />
+        <AppointmentSummary ref={summaryRef} appointment={details} shopSettings={shopSettings} />
       </div>
 
       {/* This is the new, clean success message shown to the user */}

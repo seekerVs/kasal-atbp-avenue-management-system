@@ -17,7 +17,7 @@ interface ReservationItemsListProps {
 export const ReservationItemsList: React.FC<ReservationItemsListProps> = ({ items, packages, onViewPackage }) => {
   const getMotifName = (hex: string) => {
     try {
-      const names = namer(hex);
+      const names = namer(hex); 
       const name = names.ntc[0]?.name || 'Custom Color';
       return name.replace(/\b\w/g, char => char.toUpperCase());
     } catch {

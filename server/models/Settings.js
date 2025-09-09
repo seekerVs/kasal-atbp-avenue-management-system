@@ -23,6 +23,21 @@ const SettingsSchema = new mongoose.Schema({
     trim: true,
     default: ''
   },
+  shopAddress: {
+    type: String,
+    trim: true,
+    default: 'N/A' // Add a sensible default
+  },
+  shopContactNumber: {
+    type: String,
+    trim: true,
+    default: 'N/A'
+  },
+  shopEmail: {
+    type: String,
+    trim: true,
+    default: 'N/A'
+  },
 }, { _id: false }); // Prevent Mongoose from creating its own ObjectId
 
 module.exports = mongoose.model('Settings', SettingsSchema);

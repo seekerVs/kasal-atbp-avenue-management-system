@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Container,
   Nav,
@@ -30,6 +30,7 @@ type TabStatus = RentalStatus;
 // --- MAIN COMPONENT ---
 // ===================================================================================
 function ManageRentals() {
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState<TabStatus>('Pending');
   const [allRentals, setAllRentals] = useState<RentalOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,6 +44,18 @@ function ManageRentals() {
   useEffect(() => {
     fetchRentals();
   }, []);
+
+  useEffect(() => {
+    const state = location.state as { activeTab?: TabStatus };
+
+    // If a valid activeTab was passed in the state, update our component's state.
+    if (state?.activeTab) {
+      setActiveTab(state.activeTab);
+
+      // Optional: Clear the state so this doesn't re-trigger on refresh.
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   const fetchRentals = async () => {
     setLoading(true);
@@ -119,16 +132,19 @@ function ManageRentals() {
       <Container fluid="lg">
         <Card className="shadow-sm overflow-hidden">
           <Card.Header className="bg-white border-bottom-0 pt-3 px-3">
-            <div className="d-flex flex-wrap justify-content-end align-items-center">
-              <InputGroup style={{ maxWidth: '400px' }}>
-                <InputGroup.Text><Search /></InputGroup.Text>
-                <Form.Control
-                  type="search"
-                  placeholder="Search by Customer, Rental ID, or Phone..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </InputGroup>
+            <div className="d-flex flex-wrap justify-content-between align-items-center">
+              <h2 className="mb-0">Rentals Manager</h2>
+              <div className="d-flex align-items-center gap-2">
+                <InputGroup style={{ maxWidth: '400px' }}>
+                  <InputGroup.Text><Search /></InputGroup.Text>
+                  <Form.Control
+                    type="search"
+                    placeholder="Search by Customer, Rental ID, or Phone..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </InputGroup>
+              </div>
             </div>
           </Card.Header>
           <Nav variant="tabs" activeKey={activeTab} onSelect={(k) => setActiveTab(k as TabStatus)} className="px-3 pt-2">

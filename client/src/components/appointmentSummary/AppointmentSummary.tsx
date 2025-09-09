@@ -1,16 +1,17 @@
 import React from 'react';
-import { Row, Col, Image, Table, Card } from 'react-bootstrap';
+import { Row, Col, Image } from 'react-bootstrap';
 import { format } from 'date-fns';
-import { Appointment } from '../../types';
+import { Appointment, ShopSettings } from '../../types';
 import { Logo } from '../../assets/images';
 // We can reuse the same CSS file for a consistent look and feel
 import '../rentalSummary/rentalSummary.css'; 
 
 interface AppointmentSummaryProps {
   appointment: Appointment | null;
+  shopSettings: ShopSettings | null;
 }
 
-export const AppointmentSummary = React.forwardRef<HTMLDivElement, AppointmentSummaryProps>(({ appointment }, ref) => {
+export const AppointmentSummary = React.forwardRef<HTMLDivElement, AppointmentSummaryProps>(({ appointment, shopSettings }, ref) => {
   
   if (!appointment) {
     return null;
@@ -25,8 +26,8 @@ export const AppointmentSummary = React.forwardRef<HTMLDivElement, AppointmentSu
         <Col xs={6}>
           <Image src={Logo} style={{ width: '150px' }} />
           <p className="small text-muted mt-2 mb-0">
-            123 Rizal Avenue, Daet, Camarines Norte<br />
-            contact@kasalavenue.com | 0917-123-4567
+            {shopSettings?.shopAddress || 'Address not available'}<br />
+            {shopSettings?.shopEmail || 'Email not available'} | {shopSettings?.shopContactNumber || 'Contact not available'}
           </p>
         </Col>
         <Col xs={6} className="text-end">

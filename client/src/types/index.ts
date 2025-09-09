@@ -390,6 +390,9 @@ export interface ShopSettings {
   appointmentSlotsPerDay: number;
   gcashName?: string;
   gcashNumber?: string;
+  shopAddress?: string;
+  shopContactNumber?: string;
+  shopEmail?: string;
 }
 
 // And modify the UnavailabilityRecord to remove 'slots'

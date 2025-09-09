@@ -31,6 +31,7 @@ import {
   CustomTailoringItem,
   RentalStatus,
   MeasurementRef,
+  ShopSettings,
 } from '../../types';
 import api, { uploadFile } from '../../services/api';
 import CreateEditCustomItemModal from '../../components/modals/createEditCustomItemModal/CreateEditCustomItemModal';
@@ -54,6 +55,7 @@ function RentalViewer() {
   
   // --- STATE MANAGEMENT ---
   const [rental, setRental] = useState<RentalOrder | null>(null);
+  const [shopSettings, setShopSettings] = useState<ShopSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [measurementRefs, setMeasurementRefs] = useState<MeasurementRef[]>([]);
 
@@ -96,12 +98,14 @@ function RentalViewer() {
     const fetchRentalData = async () => {
       setLoading(true);
       try {
-        const [rentalRes, refsRes] = await Promise.all([
+        const [rentalRes, refsRes, settingsRes] = await Promise.all([
           api.get(`/rentals/${id}`),
-          api.get('/measurementrefs')
+          api.get('/measurementrefs'),
+          api.get('/settings') // Fetch the protected, full settings
         ]);
         setRental(rentalRes.data);
         setMeasurementRefs(refsRes.data);
+        setShopSettings(settingsRes.data);
       } catch (err) { 
         console.error("Error fetching data:", err); 
         addAlert("Failed to load rental details.", 'danger');
@@ -668,7 +672,7 @@ function RentalViewer() {
   return (
     <>
       <div style={{ position: 'fixed', left: '-2000px', top: 0 }}>
-        <RentalSummary ref={summaryRef} rental={rental} />
+        <RentalSummary ref={summaryRef} rental={rental} shopSettings={shopSettings} />
       </div>
 
       <Container fluid>

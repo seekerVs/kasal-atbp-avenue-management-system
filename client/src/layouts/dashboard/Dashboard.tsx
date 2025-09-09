@@ -160,6 +160,22 @@ function Dashboard() {
     fetchDashboardData();
   }, [dateRange]);
 
+  const handleExport = () => {
+    // Get the base URL from the environment variables, just like your api.ts service
+    const API_BASE_URL = import.meta.env.VITE_API_URL;
+
+    // Format the dates into YYYY-MM-DD strings
+    const startDate = formatDate(dateRange.startDate, 'yyyy-MM-dd');
+    const endDate = formatDate(dateRange.endDate, 'yyyy-MM-dd');
+
+    // Construct the full URL for the backend endpoint
+    const exportUrl = `${API_BASE_URL}/dashboard/export-report?startDate=${startDate}&endDate=${endDate}`;
+
+    // Open the URL in a new tab. The browser will handle the PDF download.
+    window.open(exportUrl, '_blank');
+  };
+
+
   const sortedUpcomingAndOverdue = useMemo(() => {
     if (!dashboardData) return [];
     
@@ -326,48 +342,74 @@ function Dashboard() {
           </Card>
         </Col>
         <Col>
-          <Card className="shadow-sm h-100">
-            <Card.Body className="d-flex align-items-center border-start border-primary border-4 rounded bg-white">
-              <div className="text-start pe-3 py-2">
-                <p className="text-secondary mb-1 fw-bold small">PENDING RESERVATIONS</p>
-                <h5 className="fw-bold mb-0">{stats.pendingReservations || 0}</h5>
-              </div>
-              <JournalCheck size={30} className="ms-auto text-light" />
-            </Card.Body>
-          </Card>
+          <div 
+            className="dashboard-stat-card" 
+            onClick={() => navigate('/manage-reservations', { state: { activeTab: 'Pending' } })}
+          >
+            <Card className="shadow-sm h-100">
+              <Card.Body className="d-flex align-items-center border-start border-primary border-4 rounded bg-white">
+                <div className="text-start pe-3 py-2">
+                  <p className="text-secondary mb-1 fw-bold small">PENDING RESERVATIONS</p>
+                  <h5 className="fw-bold mb-0">{stats.pendingReservations || 0}</h5>
+                </div>
+                <JournalCheck size={30} className="ms-auto text-light" />
+              </Card.Body>
+            </Card>
+          </div>
         </Col>
+
+        {/* Pending Appointments Card (Clickable) */}
         <Col>
-          <Card className="shadow-sm h-100">
-            <Card.Body className="d-flex align-items-center border-start border-primary border-4 rounded bg-white">
-              <div className="text-start pe-3 py-2">
-                <p className="text-secondary mb-1 fw-bold small">PENDING APPOINTMENTS</p>
-                <h5 className="fw-bold mb-0">{stats.pendingAppointments || 0}</h5>
-              </div>
-              <CalendarHeart size={30} className="ms-auto text-light" />
-            </Card.Body>
-          </Card>
+          <div 
+            className="dashboard-stat-card" 
+            onClick={() => navigate('/manage-appointments', { state: { activeTab: 'Pending' } })}
+          >
+            <Card className="shadow-sm h-100">
+              <Card.Body className="d-flex align-items-center border-start border-primary border-4 rounded bg-white">
+                <div className="text-start pe-3 py-2">
+                  <p className="text-secondary mb-1 fw-bold small">PENDING APPOINTMENTS</p>
+                  <h5 className="fw-bold mb-0">{stats.pendingAppointments || 0}</h5>
+                </div>
+                <CalendarHeart size={30} className="ms-auto text-light" />
+              </Card.Body>
+            </Card>
+          </div>
         </Col>
+
+        {/* Pending Rentals Card (Clickable) */}
         <Col>
-          <Card className="shadow-sm h-100">
-            <Card.Body className="d-flex align-items-center border-start border-primary border-4 rounded bg-white">
-              <div className="text-start pe-3 py-2">
-                <p className="text-secondary mb-1 fw-bold small">PENDING <br/>RENTALS</p>
-                <h5 className="fw-bold mb-0">{stats.Pending || 0}</h5>
-              </div>
-              <HourglassSplit size={30} className="ms-auto text-light" />
-            </Card.Body>
-          </Card>
+          <div 
+            className="dashboard-stat-card" 
+            onClick={() => navigate('/manageRentals', { state: { activeTab: 'Pending' } })}
+          >
+            <Card className="shadow-sm h-100">
+              <Card.Body className="d-flex align-items-center border-start border-primary border-4 rounded bg-white">
+                <div className="text-start pe-3 py-2">
+                  <p className="text-secondary mb-1 fw-bold small">PENDING <br/>RENTALS</p>
+                  <h5 className="fw-bold mb-0">{stats.Pending || 0}</h5>
+                </div>
+                <HourglassSplit size={30} className="ms-auto text-light" />
+              </Card.Body>
+            </Card>
+          </div>
         </Col>
+
+        {/* To Return Card (Clickable) */}
         <Col>
-          <Card className="shadow-sm h-100">
-            <Card.Body className="d-flex align-items-center border-start border-primary border-4 rounded bg-white">
-              <div className="text-start pe-3 py-2">
-                <p className="text-secondary mb-1 fw-bold small">TO RETURN</p>
-                <h5 className="fw-bold mb-0">{stats.ToReturn || 0}</h5>
-              </div>
-              <ArrowRepeat size={30} className="ms-auto text-light" />
-            </Card.Body>
-          </Card>
+          <div 
+            className="dashboard-stat-card" 
+            onClick={() => navigate('/manageRentals', { state: { activeTab: 'To Return' } })}
+          >
+            <Card className="shadow-sm h-100">
+              <Card.Body className="d-flex align-items-center border-start border-primary border-4 rounded bg-white">
+                <div className="text-start pe-3 py-2">
+                  <p className="text-secondary mb-1 fw-bold small">TO RETURN</p>
+                  <h5 className="fw-bold mb-0">{stats.ToReturn || 0}</h5>
+                </div>
+                <ArrowRepeat size={30} className="ms-auto text-light" />
+              </Card.Body>
+            </Card>
+          </div>
         </Col>
       </Row>
 
@@ -381,7 +423,7 @@ function Dashboard() {
                         <Button 
                           variant="outline-secondary" 
                           size="sm" 
-                          onClick={() => alert("Export functionality to be implemented.")}
+                          onClick={handleExport}
                           className="text-nowrap"
                         >
                             <BoxArrowUpRight className="me-1" /> Export
@@ -428,7 +470,7 @@ function Dashboard() {
             <Card.Header>
                 <h5 className="mb-0 fw-bold">Upcoming & Overdue Returns</h5>
             </Card.Header>
-            <Card.Body className="p-0">
+            <Card.Body className="p-0 small">
               <div className="table-responsive">
                 <Table hover className="mb-0 dashboard-table">
                   <thead>

@@ -1,18 +1,19 @@
 import React from 'react';
 import { Row, Col, Image, Table } from 'react-bootstrap';
 import { format } from 'date-fns';
-import { RentalOrder } from '../../types';
+import { RentalOrder, ShopSettings } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
 import { Logo } from '../../assets/images'; // Assuming your logo is exported from here
 import './rentalSummary.css';
 
 interface RentalSummaryProps {
   rental: RentalOrder | null;
+  shopSettings: ShopSettings | null;
 }
 
 // A ref is passed to this component so we can capture it for the PDF.
 // We use React.forwardRef to allow this.
-export const RentalSummary = React.forwardRef<HTMLDivElement, RentalSummaryProps>(({ rental }, ref) => {
+export const RentalSummary = React.forwardRef<HTMLDivElement, RentalSummaryProps>(({ rental, shopSettings }, ref) => {
   
   if (!rental) {
     return null; // Don't render anything if there's no rental data
@@ -51,8 +52,8 @@ export const RentalSummary = React.forwardRef<HTMLDivElement, RentalSummaryProps
         <Col xs={6}>
           <Image src={Logo} style={{ width: '150px' }} />
           <p className="small text-muted mt-2 mb-0">
-            Gov. Panotes Avenue, Daet, Philippines<br />
-            maandemesa9@gmail.com | 0907 957 9999
+            {shopSettings?.shopAddress || 'Address not available'}<br />
+            {shopSettings?.shopEmail || 'Email not available'} | {shopSettings?.shopContactNumber || 'Contact not available'}
           </p>
         </Col>
         <Col xs={6} className="text-end">

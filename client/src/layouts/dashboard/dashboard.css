@@ -1,13 +1,8 @@
 
-
-
-/* Ensure table headers are not bold for the default Bootstrap `th` */
 .table thead th {
     font-weight: normal; /* Override Bootstrap's default bold */
 }
 
-
-/* Specific styling for the input group icon */
 .input-group-text {
   background-color: #fff;
   border-left: none;
@@ -22,16 +17,42 @@
   background-color: #f8f9fa; /* A subtle hover effect */
 }
 
-/* This container will stack the up/down icons vertically */
 .sort-icon-container {
   display: inline-flex;
   flex-direction: column;
   margin-left: 0.5rem;
-  line-height: 0.7; /* Reduces the space between the two icons */
-  vertical-align: middle; /* Aligns the icon group nicely with the text */
+  line-height: 0.7; 
+  vertical-align: middle;
 }
 
-/* This class makes an icon appear faded/inactive */
 .sort-icon-muted {
   color: #d3d3d3; /* A light grey color */
+}
+
+.dashboard-table {
+    table-layout: fixed;
+    width: 100%;
+}
+
+.dashboard-table thead th:nth-child(1) { width: 30%; } /* Customer */
+.dashboard-table thead th:nth-child(2) { width: 20%; } /* Items */
+.dashboard-table thead th:nth-child(3) { width: 25%; } /* Status */
+.dashboard-table thead th:nth-child(4) { width: 25%; } /* Contact */
+
+.dashboard-table tbody tr td:nth-child(1) {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    /* This is a common trick to make ellipsis work reliably in fixed-layout tables */
+    max-width: 0; 
+}
+
+.dashboard-stat-card {
+    cursor: pointer;
+    transition: transform 0.2s ease-in-out;
+    height: 100%;
+}
+
+.dashboard-stat-card:hover {
+    transform: translateY(-4px);
 }

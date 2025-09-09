@@ -1,7 +1,7 @@
 import React from 'react';
 import { Row, Col, Image, Table, Card } from 'react-bootstrap';
 import { format } from 'date-fns';
-import { Reservation } from '../../types';
+import { Reservation, ShopSettings } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
 import { calculateItemDeposit, calculatePackageDeposit } from '../../utils/financials';
 import { Logo } from '../../assets/images';
@@ -10,9 +10,10 @@ import '../rentalSummary/rentalSummary.css'; // We can reuse the same CSS
 
 interface ReservationSummaryProps {
   reservation: Reservation | null;
+  shopSettings: ShopSettings | null;
 }
 
-export const ReservationSummary = React.forwardRef<HTMLDivElement, ReservationSummaryProps>(({ reservation }, ref) => {
+export const ReservationSummary = React.forwardRef<HTMLDivElement, ReservationSummaryProps>(({ reservation, shopSettings }, ref) => {
   
   if (!reservation) {
     return null;
@@ -76,8 +77,8 @@ export const ReservationSummary = React.forwardRef<HTMLDivElement, ReservationSu
         <Col xs={6}>
           <Image src={Logo} style={{ width: '150px' }} />
           <p className="small text-muted mt-2 mb-0">
-            123 Rizal Avenue, Daet, Camarines Norte<br />
-            contact@kasalavenue.com | 0917-123-4567
+            {shopSettings?.shopAddress || 'Address not available'}<br />
+            {shopSettings?.shopEmail || 'Email not available'} | {shopSettings?.shopContactNumber || 'Contact not available'}
           </p>
         </Col>
         <Col xs={6} className="text-end">
