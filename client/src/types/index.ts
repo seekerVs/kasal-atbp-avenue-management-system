@@ -231,34 +231,24 @@ export interface SensorData {
   direction?: number;
   centimeters?: number;
   value?: number;
+  command?: 'focusNext' | string;
   updatedAt: string;
 }
 
 // ===================================================================
 //
-//               USER & PERMISSION TYPES (NEW & UPDATED)
+//               USER & PERMISSION TYPES
 //
 // ===================================================================
 
-export interface Permission {
-  _id: string;
-  description: string;
-}
-
-export interface Role {
-  _id: string;
-  name: string;
-  permissions: string[];
-  createdAt?: string; // Timestamps are good to have
-  updatedAt?: string;
-}
 
 export interface User {
   _id: string;
   name: string;
   email: string;
-  // UPDATED: 'role' is now a nested object, not a simple string
-  role: Role;
+  role: 'Super Admin' | 'Standard';
+  status: 'active' | 'inactive' | 'suspended';
+  
   createdAt: string;
 }
 

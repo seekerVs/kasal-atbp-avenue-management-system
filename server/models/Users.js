@@ -4,7 +4,6 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 const UserSchema = new mongoose.Schema({
-  // --- MODIFIED: Use a custom string _id ---
   _id: {
     type: String,
     required: true,
@@ -12,12 +11,14 @@ const UserSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   passwordHash: { type: String, required: true },
-  roleId: { 
+  role: { 
     type: String, 
-    ref: 'Role', 
-    required: true 
+    required: true,
+    enum: ['Super Admin', 'Standard'],
+    default: 'Standard'
   },
-  // --- NEW: Add the status field ---
+
+
   status: {
     type: String,
     enum: ['active', 'inactive', 'suspended'],
@@ -25,10 +26,9 @@ const UserSchema = new mongoose.Schema({
   },
 }, { 
   timestamps: true,
-  _id: false // --- Crucial for using our custom string _id ---
+  _id: false 
 });
 
-// Mongoose "pre-save" hook remains the same
 UserSchema.pre('save', async function(next) {
   if (!this.isModified('passwordHash')) {
     return next();
@@ -39,6 +39,7 @@ UserSchema.pre('save', async function(next) {
     next();
   } catch (error) {
     next(error);
+
   }
 });
 

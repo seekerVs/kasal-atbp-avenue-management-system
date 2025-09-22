@@ -3,7 +3,6 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const UserModel = require('../models/Users');
 const asyncHandler = require('../utils/asyncHandler');
-const RoleModel = require('../models/Role');
 const { customAlphabet } = require('nanoid');
 const nanoid_user = customAlphabet('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ', 6);
 
@@ -44,19 +43,13 @@ router.post('/signup', asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: 'Email already exists.' });
   }
 
-  const defaultRole = await RoleModel.findOne({ name: 'Super Admin' }); // Changed to 'User' as it's a more common default
-  if (!defaultRole) {
-    res.status(500);
-    throw new Error('Default user role not found. Please configure roles in the admin panel.');
-  }
-
   // --- FIX #4: Create the user by passing the 'password' to the 'passwordHash' field ---
   const newUser = new UserModel({ 
     _id: `USR-${nanoid_user()}`,
     name, 
     email, 
     passwordHash: password, // The pre-save hook will hash this value
-    roleId: defaultRole._id
+    role: 'Standard' // Assign the default role directly as a string
   });
   await newUser.save();
 

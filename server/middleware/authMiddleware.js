@@ -1,48 +1,66 @@
 const jwt = require('jsonwebtoken');
-const asyncHandler = require('../utils/asyncHandler'); // You are already using this pattern
-const User = require('../models/Users'); // We need the User model to find the user from the token
+const asyncHandler = require('../utils/asyncHandler');
+const User = require('../models/Users');
 
 /**
  * Protects routes by verifying the JWT token from the Authorization header.
+ * Attaches the authenticated user object to the request.
  */
 const protect = asyncHandler(async (req, res, next) => {
   let token;
 
-  // Check if the Authorization header exists and starts with "Bearer"
   if (
     req.headers.authorization &&
     req.headers.authorization.startsWith('Bearer')
   ) {
     try {
-      // 1. Get the token from the header (e.g., "Bearer <token>" -> "<token>")
       token = req.headers.authorization.split(' ')[1];
-
-      // 2. Verify the token using your JWT_SECRET
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-      // 3. Find the user by the ID stored in the token and attach it to the request object.
-      // We exclude the password from the object we attach to the request for security.
-      req.user = await User.findById(decoded.id).select('-password');
+      // We attach the full user object (excluding password) to req.user.
+      // This is crucial for our new isSuperAdmin middleware to work.
+      req.user = await User.findById(decoded.id).select('-passwordHash');
       
       if (!req.user) {
           res.status(401);
           throw new Error('Not authorized, user not found');
       }
 
-      // 4. Proceed to the next middleware or the actual route handler
+      // add a check to ensure the user's account is active.
+      if (req.user.status !== 'active') {
+          res.status(403); // 403 Forbidden
+          throw new Error('Not authorized, account is inactive or suspended.');
+      }
+
       next();
     } catch (error) {
-      console.error('Token verification failed:', error);
-      res.status(401); // 401 Unauthorized
+      console.error('Token verification failed:', error.message);
+      res.status(401);
       throw new Error('Not authorized, token failed');
     }
   }
 
-  // If there's no token at all
   if (!token) {
     res.status(401);
     throw new Error('Not authorized, no token');
   }
 });
 
-module.exports = { protect };
+
+/**
+ * Authorizes routes for Super Admin users only.
+ * This middleware MUST run AFTER the 'protect' middleware.
+ */
+const isSuperAdmin = (req, res, next) => {
+    // We can check req.user because the 'protect' middleware already attached it.
+    if (req.user && req.user.role === 'Super Admin') {
+        // If the user exists and their role is 'Super Admin', proceed.
+        next();
+    } else {
+        // If not, send a '403 Forbidden' error.
+        res.status(403);
+        throw new Error('Not authorized. This action requires Super Admin privileges.');
+    }
+};
+
+module.exports = { protect, isSuperAdmin };

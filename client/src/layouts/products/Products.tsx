@@ -8,12 +8,11 @@ import {
   DropdownButton,
   ButtonGroup,
   Accordion,
-  Spinner,
   Alert,
 } from "react-bootstrap";
 import { Funnel, SortDown } from "react-bootstrap-icons";
 import ProductCard from "../../components/productCard/ProductCard";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import CustomFooter from "../../components/customFooter/CustomFooter";
 
 import api from '../../services/api';
@@ -27,6 +26,7 @@ import { ProductCardSkeleton } from "../../components/productCardSkeleton/Produc
 function Products() {
   const navigate = useNavigate();
   const { isHearted, addHeartedId, removeHeartedId } = useHeartedItems();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [products, setProducts] = useState<InventoryItem[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,11 +36,12 @@ function Products() {
   const [totalPages, setTotalPages] = useState(1);
   const ITEMS_PER_PAGE = 15;
 
+  const [selectedSize, setSelectedSize] = useState(() => searchParams.get('size') || "");
   const [selectedSort, setSelectedSort] = useState("Relevance");
   const [attireType, setAttireType] = useState("");
   const [selectedAge, setSelectedAge] = useState("");
   const [selectedGender, setSelectedGender] = useState("");
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState(() => searchParams.get('search') || "");
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -56,6 +57,7 @@ function Products() {
         if (selectedAge) params.ageGroup = selectedAge;
         if (selectedGender) params.gender = selectedGender;
         if (searchTerm) params.search = searchTerm;
+        if (selectedSize) params.size = selectedSize; 
 
         if (selectedSort === "Price Asc") params.sort = 'price_asc';
         if (selectedSort === "Price Desc") params.sort = 'price_desc';
@@ -71,7 +73,7 @@ function Products() {
       }
     };
     fetchProducts();
-  }, [attireType, selectedAge, selectedGender, searchTerm, currentPage, selectedSort]);
+  }, [attireType, selectedAge, selectedGender, searchTerm, currentPage, selectedSort, selectedSize]);
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -84,6 +86,12 @@ function Products() {
     fetchInitialData();
   }, []);
 
+  useEffect(() => {
+    if (currentPage !== 1) {
+      setCurrentPage(1);
+    }
+  }, [attireType, selectedAge, selectedGender, searchTerm, selectedSort, selectedSize]);
+
   const handleSortSelect = (eventKey: string | null) => {
     if (eventKey) setSelectedSort(eventKey);
   };
@@ -94,7 +102,8 @@ function Products() {
     setSelectedAge("");
     setSelectedGender("");
     setSelectedSort("Relevance");
-    setCurrentPage(1);
+    setSelectedSize("");
+    setSearchParams({});
   };
 
   const handlePageChange = (page: number) => {
@@ -159,6 +168,8 @@ function Products() {
                         mode="rental"
                         assignmentScope="all"
                         onAssignmentScopeChange={() => {}}
+                        selectedSize={selectedSize}
+                        setSelectedSize={setSelectedSize}
                     />
                   </Accordion.Body>
                 </Accordion.Item>
@@ -179,6 +190,8 @@ function Products() {
                   mode="rental"
                   assignmentScope="all"
                   onAssignmentScopeChange={() => {}}
+                  selectedSize={selectedSize}
+                  setSelectedSize={setSelectedSize}
               />
             </div>
           </Col>

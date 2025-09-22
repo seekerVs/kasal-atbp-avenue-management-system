@@ -12,7 +12,7 @@ router.get('/', asyncHandler(async (req, res) => {
   // 1. Get pagination and filter parameters from the query string
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 18;
-  const { category, categories, ageGroup, gender, search, sort, colorHex, excludeCategory } = req.query;
+  const { category, categories, ageGroup, gender, search, sort, colorHex, excludeCategory, size } = req.query;
 
   // 2. Build the filter object dynamically (same as before)
   const filter = {};
@@ -35,6 +35,13 @@ router.get('/', asyncHandler(async (req, res) => {
   } else if (category) {
     // Fallback to the original single category filter if 'categories' is not provided.
     filter.category = category;
+  }
+
+  if (size) {
+    filter['variations'] = { 
+      ...(filter['variations'] || {}), // Preserve existing variation filters (like colorHex)
+      $elemMatch: { size: size } 
+    };
   }
   
   const sortOptions = {};

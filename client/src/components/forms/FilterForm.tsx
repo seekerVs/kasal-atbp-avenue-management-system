@@ -1,8 +1,10 @@
 // client/src/components/forms/FilterForm.tsx
 
 import React from 'react';
-import { Form, InputGroup, Button } from 'react-bootstrap';
+import { Form, InputGroup, Button, Row, Col } from 'react-bootstrap';
 import { Funnel, Search } from 'react-bootstrap-icons';
+
+const STANDARD_SIZES = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL'];
 
 export interface FilterFormProps {
   categories: string[];
@@ -16,17 +18,19 @@ export interface FilterFormProps {
   setSearchTerm: (value: string) => void;
   onReset: () => void;
   isModal?: boolean;
-
   mode: 'rental' | 'assignment';
   filterByColorHex?: string;
   assignmentScope: 'matching' | 'all';
   onAssignmentScopeChange: (scope: 'matching' | 'all') => void;
+  selectedSize: string;
+  setSelectedSize: (value: string) => void;
 }
 
 export const FilterForm: React.FC<FilterFormProps> = ({
   categories, attireType, setAttireType, selectedAge, setSelectedAge,
   selectedGender, setSelectedGender, searchTerm, setSearchTerm, onReset,
-  mode, filterByColorHex, assignmentScope, onAssignmentScopeChange // Destructure new props
+  mode, filterByColorHex, assignmentScope, onAssignmentScopeChange,
+  selectedSize, setSelectedSize
 }) => (
   <>
     <InputGroup className="mb-4">
@@ -75,6 +79,30 @@ export const FilterForm: React.FC<FilterFormProps> = ({
         <hr />
       </>
     )}
+
+    <strong>Size</strong>
+    <Form>
+        <Form.Check type="radio" name="sizeGroup" label="All" id="size-all" checked={!selectedSize} onChange={() => setSelectedSize("")} />
+        
+        {/* --- 2. WRAP the size options in a Row component --- */}
+        <Row>
+            {STANDARD_SIZES.map(size => (
+                // Each size option is now in a Col, taking up half the width
+                <Col xs={6} key={size}>
+                    <Form.Check
+                        type="radio"
+                        name="sizeGroup"
+                        label={size}
+                        id={`size-${size}`}
+                        value={size}
+                        checked={selectedSize === size}
+                        onChange={(e) => setSelectedSize(e.currentTarget.value)}
+                    />
+                </Col>
+            ))}
+        </Row>
+    </Form>
+    <hr />
     
     <strong>Age group</strong>
     <Form>

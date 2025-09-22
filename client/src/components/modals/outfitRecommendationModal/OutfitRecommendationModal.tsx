@@ -1,115 +1,111 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Modal, Button, Row, Col, Form, Spinner, InputGroup, Alert, Card } from "react-bootstrap";
-import { ArrowsCollapse, CheckCircleFill } from "react-bootstrap-icons";
-import axios from "axios"; // Keep axios for direct, un-intercepted polling
+import { ArrowsCollapse, CheckCircleFill, ExclamationTriangleFill, InfoCircleFill } from "react-bootstrap-icons";
 import { useAlert } from "../../../contexts/AlertContext";
 import { convertMeasurementsToSize } from "../../../utils/sizeConverter";
+import { useSensorData } from "../../../hooks/useSensorData";
 
-// --- The new props "contract" for this component ---
 interface OutfitRecommendationModalProps {
   show: boolean;
   onHide: () => void;
   onRecommend: (size: string) => void;
 }
 
-// --- Define the fixed list of measurements ---
-const CORE_MEASUREMENTS = ["Full Shoulder", "Full Chest", "Waist", "Hip"];
-
-// --- Type for the sensor data we expect ---
-interface SensorData {
-  sensorType: string;
-  centimeters?: number;
-  updatedAt: string;
-}
+const CORE_MEASUREMENTS = ["Chest", "Waist",];
 
 const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({ show, onHide, onRecommend }) => {
   const { addAlert } = useAlert();
-  // --- Internal State Management ---
+  
+  // Call the hook to get live sensor data. It will only be active when `show` is true.
+  const { sensorData, isLoading: isSensorLoading, error: sensorError } = useSensorData(show);
+
+  // --- Component-specific state ---
   const [measurementValues, setMeasurementValues] = useState<Record<string, string>>({});
   const [recommendedSize, setRecommendedSize] = useState<string>('');
+  const [isSizeValid, setIsSizeValid] = useState<boolean>(false); 
   const [activeField, setActiveField] = useState<string | null>(null);
-
-  // --- State for Device Integration ---
-  const [sensorData, setSensorData] = useState<SensorData | null>(null);
-  const [isSensorLoading, setIsSensorLoading] = useState<boolean>(true);
-  const [sensorError, setSensorError] = useState<string | null>(null);
-  const prevCentimetersRef = useRef<number | undefined>(undefined);
+  const [lastInsertedTimestamp, setLastInsertedTimestamp] = useState<string | null>(null);
   const inputRefs = useRef<Map<string, HTMLInputElement | null>>(new Map());
 
-  // --- Effect 1: Live Size Conversion ---
+  // Reset form when modal opens
   useEffect(() => {
-    if (measurementValues['Full Chest'] && measurementValues['Waist']) {
+    if (show) {
+      setMeasurementValues({});
+      setRecommendedSize('');
+      setIsSizeValid(false);
+      setActiveField(CORE_MEASUREMENTS[0]);
+    }
+  }, [show]);
+
+  // Effect for live size conversion
+  useEffect(() => {
+    if (measurementValues['Chest'] && measurementValues['Waist']) {
       const size = convertMeasurementsToSize(measurementValues);
       setRecommendedSize(size);
+
+      // If the size is NOT "Custom", it's valid for recommendation.
+      if (size !== 'Custom') {
+        setIsSizeValid(true);
+      } else {
+        setIsSizeValid(false);
+      }
     } else {
-      setRecommendedSize(''); // Clear recommendation if core values are missing
+      // If core measurements are missing, reset the state.
+      setRecommendedSize('');
+      setIsSizeValid(false);
     }
   }, [measurementValues]);
 
-  // --- Effect 2: Device Data Polling ---
+  // --- NEW: Effect to handle commands ("focusNext") from the sensor device ---
   useEffect(() => {
-    let intervalId: number | null = null;
-    if (show) {
-      // Reset form when modal opens
-      setMeasurementValues({});
-      setRecommendedSize('');
-      setActiveField(CORE_MEASUREMENTS[0]); // Set focus to the first field on open
-
-      const fetchSensorData = async () => {
-        try {
-          const response = await axios.get("http://localhost:3001/sensorData");
-          setSensorData(response.data.data);
-          if (sensorError) setSensorError(null);
-        } catch (err: any) {
-          setSensorError(err.response?.data?.message || "Device not connected.");
-        } finally {
-          setIsSensorLoading(false);
-        }
-      };
-      
-      fetchSensorData(); // Initial fetch
-      intervalId = setInterval(fetchSensorData, 3000); // Poll every 3 seconds
-    }
-    return () => {
-      if (intervalId) clearInterval(intervalId); // Cleanup on close
-    };
-  }, [show]);
-
-  // --- Effect 3: Device Data Auto-fill and Focus Shift ---
-  useEffect(() => {
-    if (activeField && sensorData?.centimeters !== undefined && sensorData.centimeters !== prevCentimetersRef.current) {
-      const currentCm = sensorData.centimeters;
-      handleValueChange(activeField, currentCm.toFixed(2));
-
-      // Move focus to the next input
-      const currentIndex = CORE_MEASUREMENTS.indexOf(activeField);
-      const nextIndex = currentIndex + 1;
-      if (nextIndex < CORE_MEASUREMENTS.length) {
+    const handleSensorCommand = (event: CustomEvent) => {
+      if (event.detail.action === 'focusNext') {
+        const currentActiveIndex = activeField ? CORE_MEASUREMENTS.indexOf(activeField) : -1;
+        const nextIndex = (currentActiveIndex + 1) % CORE_MEASUREMENTS.length;
         const nextField = CORE_MEASUREMENTS[nextIndex];
-        inputRefs.current.get(nextField)?.focus();
-        setActiveField(nextField);
-      } else {
-        inputRefs.current.get(activeField)?.blur(); // Unfocus the last field
-        setActiveField(null);
+        
+        // Programmatically find and focus the next input field
+        const nextInput = inputRefs.current.get(nextField);
+        nextInput?.focus();
       }
-    }
-    prevCentimetersRef.current = sensorData?.centimeters;
-  }, [sensorData]);
+    };
+    
+    window.addEventListener('sensorCommand', handleSensorCommand as EventListener);
+    
+    return () => {
+      window.removeEventListener('sensorCommand', handleSensorCommand as EventListener);
+    };
+  }, [activeField]); // Dependency ensures we always know the "current" field.
 
+  useEffect(() => {
+    if (sensorData && 
+        activeField && 
+        sensorData.sensorType === 'LengthMeasurement' && 
+        typeof sensorData.centimeters === 'number' &&
+        sensorData.updatedAt !== lastInsertedTimestamp) {
+      handleValueChange(activeField, sensorData.centimeters.toFixed(2));
+      setLastInsertedTimestamp(sensorData.updatedAt);
+    }
+    
+  // This effect should run whenever the sensor data changes or the user focuses on a new field.
+  }, [sensorData, activeField, lastInsertedTimestamp]);
 
   const handleValueChange = (field: string, value: string) => {
     setMeasurementValues(prev => ({ ...prev, [field]: value }));
   };
-
-  const handleRecommendClick = () => {
-    if (!recommendedSize) {
-      addAlert("Please fill in at least Chest and Waist measurements.", 'warning');
-      return;
+  
+  // --- NEW: Function for the "Get from Device" button ---
+  const handleInsertMeasurement = (field: string) => {
+    if (sensorData && typeof sensorData.centimeters === 'number') {
+      handleValueChange(field, sensorData.centimeters.toFixed(2));
+    } else {
+      addAlert("No new measurement data received from the device.", "warning");
     }
-    onRecommend(recommendedSize);
   };
 
-  const isRecommendDisabled = !measurementValues['Full Chest'] || !measurementValues['Waist'];
+  const handleRecommendClick = () => {
+    onRecommend(recommendedSize);
+  };
 
   return (
     <Modal show={show} onHide={onHide} centered size="lg" backdrop="static">
@@ -118,7 +114,6 @@ const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({ s
       </Modal.Header>
       <Modal.Body>
         <p className="mb-4 text-muted">Enter the client's measurements to find their recommended standard size and view available outfits.</p>
-
         <Row className="g-4">
           <Col md={7}>
             <h6 className="text-uppercase small fw-bold">Measurements (cm)</h6>
@@ -135,12 +130,12 @@ const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({ s
                       onFocus={() => setActiveField(label)}
                       onBlur={() => setActiveField(null)}
                       ref={el => { inputRefs.current.set(label, el); }}
-                      autoFocus={label === CORE_MEASUREMENTS[0]} // Autofocus the first input
+                      autoFocus={label === CORE_MEASUREMENTS[0]}
                     />
                     <Button
                       variant="outline-secondary"
-                      disabled={!sensorData?.centimeters || activeField !== label}
                       title="Get from Device"
+                      onClick={() => handleInsertMeasurement(label)} // <-- WIRED UP
                     >
                       <ArrowsCollapse />
                     </Button>
@@ -151,39 +146,45 @@ const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({ s
           </Col>
           <Col md={5}>
             <h6 className="text-uppercase small fw-bold">System Feedback</h6>
-            {recommendedSize ? (
-              <Alert variant="success" className="text-center">
-                <div className="small">Recommended Size:</div>
-                <div className="display-6 fw-bold">{recommendedSize}</div>
-              </Alert>
-            ) : (
-              <Alert variant="secondary">
-                Please provide at least Chest and Waist measurements to see a size recommendation.
-              </Alert>
-            )}
-
-            <Card bg="light">
-              <Card.Body>
-                <Card.Title as="h6" className="small">Device Status</Card.Title>
-                {isSensorLoading ? (
-                  <div className="d-flex align-items-center text-muted"><Spinner size="sm" className="me-2"/> Connecting...</div>
-                ) : sensorError ? (
-                  <div className="text-danger small">{sensorError}</div>
-                ) : (
-                  <>
-                    <div className="text-success small mb-2"><CheckCircleFill className="me-1"/> Device Connected</div>
-                    <p className="mb-0"><strong>Live Reading:</strong> {sensorData?.centimeters?.toFixed(2) ?? 'N/A'} cm</p>
-                    <p className="text-muted small mb-0">Last Update: {sensorData ? new Date(sensorData.updatedAt).toLocaleTimeString() : 'N/A'}</p>
-                  </>
-                )}
-              </Card.Body>
-            </Card>
+            {(() => {
+              if (!recommendedSize) {
+                return (
+                  <Alert variant="secondary">
+                    Please provide at least Chest and Waist measurements.
+                  </Alert>
+                );
+              }
+              if (isSizeValid) {
+                return (
+                  <Alert variant="success" className="text-center">
+                    <div className="small">Recommended Size:</div>
+                    <div className="display-6 fw-bold">{recommendedSize}</div>
+                  </Alert>
+                );
+              }
+              // This is the new "Invalid" state for "Custom" sizes
+              return (
+                <Alert variant="warning" className="text-center">
+                  <Alert.Heading as="h6" className="d-flex align-items-center justify-content-center">
+                     <ExclamationTriangleFill className="me-2"/> No Standard Size
+                  </Alert.Heading>
+                  <p className="mb-0 small">Measurements do not fit a standard size. Consider a <strong>custom-tailored outfit</strong>.</p>
+                </Alert>
+              );
+            })()}
+            
+            <Alert variant="info" className="d-flex align-items-center small">
+                <InfoCircleFill className="me-2 flex-shrink-0" size={20} />
+                <div>
+                    Please ensure the device is powered on and connected to internet. Measurements will appear automatically in the active field.
+                </div>
+            </Alert>
           </Col>
         </Row>
       </Modal.Body>
       <Modal.Footer>
         <Button variant="secondary" onClick={onHide}>Close</Button>
-        <Button variant="primary" onClick={handleRecommendClick} disabled={isRecommendDisabled}>
+        <Button variant="primary" onClick={handleRecommendClick} disabled={!isSizeValid}>
           Recommend Outfits
         </Button>
       </Modal.Footer>

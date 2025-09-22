@@ -231,6 +231,7 @@ export interface SensorData {
   direction?: number;
   centimeters?: number;
   value?: number;
+  command?: 'focusNext' | string;
   updatedAt: string;
 }
 
@@ -298,8 +299,9 @@ export interface Appointment {
   _id: string;
   customerInfo: CustomerInfo;
   appointmentDate: Date | null;
+  timeBlock: 'morning' | 'afternoon' | null;
   status: 'Pending' | 'Confirmed' | 'Completed' | 'Cancelled' ;
-  statusNote?: string;
+  notes?: string;
   cancellationReason?: string;
   rentalId?: string | null;
   sourceReservationId?: string | null;
@@ -369,6 +371,7 @@ export interface Reservation {
   packageReservations: PackageReservation[];
   appointments?: Appointment[];
   packageAppointmentDate?: Date | null;
+  packageAppointmentBlock?: 'morning' | 'afternoon' | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -385,9 +388,12 @@ export type FormErrors = {
 
 export interface ShopSettings {
   _id: 'shopSettings';
-  appointmentSlotsPerHour: number;
+  appointmentSlotsPerDay: number;
   gcashName?: string;
   gcashNumber?: string;
+  shopAddress?: string;
+  shopContactNumber?: string;
+  shopEmail?: string;
 }
 
 // And modify the UnavailabilityRecord to remove 'slots'

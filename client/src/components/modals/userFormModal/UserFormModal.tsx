@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, Button, Form, Spinner, Alert, Row, Col } from 'react-bootstrap';
-import { User, Role } from '../../../types';
-import { createUser, updateUser, fetchRoles } from '../../../api/apiService';
+import { User } from '../../../types';
+import { createUser, updateUser } from '../../../api/apiService';
 import { useAlert } from '../../../contexts/AlertContext';
 
 interface UserFormModalProps {
@@ -11,94 +11,90 @@ interface UserFormModalProps {
     userToEdit: User | null;
 }
 
+type UserFormData = {
+  name: string;
+  email: string;
+  password: string;
+  role: 'Super Admin' | 'Standard'; 
+  status: 'active' | 'inactive' | 'suspended';
+};
+
 function UserFormModal({ show, onHide, onSave, userToEdit }: UserFormModalProps) {
-    const [formData, setFormData] = useState({
+    const [formData, setFormData] = useState<UserFormData>({
         name: '',
         email: '',
         password: '',
-        roleId: '', // Changed from 'role'
+        role: 'Standard', 
+        status: 'active',
     });
-    const [roles, setRoles] = useState<Role[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [initialLoading, setInitialLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const [isSaving, setIsSaving] = useState(false); // Renamed from 'loading' for clarity
+    const [apiError, setApiError] = useState<string | null>(null);
 
     const { addAlert } = useAlert();
     const isEditMode = !!userToEdit;
 
-        useEffect(() => {
-        const loadRolesAndSetForm = async () => {
-            // --- SET LOADING STATE ---
-            setInitialLoading(true);
-            setError(null); // Clear previous errors
-
-            try {
-                const fetchedRoles = await fetchRoles();
-                setRoles(fetchedRoles);
-                
-                if (isEditMode && userToEdit) {
-                    setFormData({
-                        name: userToEdit.name,
-                        email: userToEdit.email,
-                        password: '',
-                        roleId: userToEdit.role._id,
-                    });
-                } else {
-                    setFormData({
-                        name: '',
-                        email: '',
-                        password: '',
-                        roleId: fetchedRoles.length > 0 ? fetchedRoles[0]._id : '',
-                    });
-                }
-            } catch {
-                setError('Could not load available roles. Please try again.');
-            } finally {
-                // --- UNSET LOADING STATE ---
-                setInitialLoading(false);
-            }
-        };
-
+    useEffect(() => {
         if (show) {
-            loadRolesAndSetForm();
+            if (isEditMode && userToEdit) {
+                // Populate the form with the user's data for editing
+                setFormData({
+                    name: userToEdit.name,
+                    email: userToEdit.email,
+                    password: '',
+                    role: userToEdit.role,
+                    status: userToEdit.status || 'active',
+                });
+            } else {
+                setFormData({
+                    name: '',
+                    email: '',
+                    password: '',
+                    role: 'Standard',
+                    status: 'active',
+                });
+            }
+            setApiError(null);
         }
     }, [userToEdit, show, isEditMode]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
+        const { name, value } = e.target;
+        setFormData(prev => ({
+            ...prev,
+            [name]: (name === 'status' || name === 'role') ? value as any : value,
+        }));
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        setLoading(true);
-        setError(null);
+        setIsSaving(true);
+        setApiError(null);
 
         const userData = {
             name: formData.name,
             email: formData.email,
-            roleId: formData.roleId,
+            role: formData.role,
+            status: formData.status,
         };
 
         try {
             if (isEditMode && userToEdit) {
-                const updateData: any = { ...userData };
+                const updateData: Partial<UserFormData> = { ...userData };
                 if (formData.password) {
                     updateData.password = formData.password;
                 }
                 await updateUser(userToEdit._id, updateData);
-                // --- FIX: Use formData.name ---
                 addAlert(`User '${formData.name}' updated successfully.`, 'success');
             } else {
                 const createData = { ...userData, password: formData.password };
                 await createUser(createData);
-                // --- FIX: Use formData.name ---
                 addAlert(`User '${formData.name}' created successfully.`, 'success');
             }
             onSave();
-        } catch (err) {
-            // ... error handling
+        } catch (err: any) {
+            setApiError(err.response?.data?.message || 'An unexpected error occurred.');
         } finally {
-            setLoading(false);
+            setIsSaving(false);
         }
     };
 
@@ -109,40 +105,34 @@ function UserFormModal({ show, onHide, onSave, userToEdit }: UserFormModalProps)
             </Modal.Header>
             <Form onSubmit={handleSubmit}>
                 <Modal.Body>
-                    {initialLoading ? (
-                        <div className="text-center py-4">
-                            <Spinner animation="border" />
-                            <p className="mt-2">Loading...</p>
-                        </div>
-                    ) : error ? (
-                        <Alert variant="danger">{error}</Alert>
-                    ) : (
-                        <>
-                            <Row>
-                                <Col>
-                                    <Form.Group className="mb-3">
-                                        <Form.Label>Full Name</Form.Label>
-                                        <Form.Control type="text" name="name" value={formData.name} onChange={handleChange} required />
-                                    </Form.Group>
-                                </Col>
-                                <Col>
-                                    <Form.Group className="mb-3">
-                                        <Form.Label>Role</Form.Label>
-                                        <Form.Select name="roleId" value={formData.roleId} onChange={handleChange} required>
-                                            <option value="" disabled>Select a role...</option>
-                                            {roles.map(role => (
-                                                <option key={role._id} value={role._id}>
-                                                    {role.name}
-                                                </option>
-                                            ))}
-                                        </Form.Select>
-                                    </Form.Group>
-                                </Col>
-                            </Row>
+                    {/* The loading spinner is no longer needed here as there's no initial data fetch */}
+                    {apiError && <Alert variant="danger">{apiError}</Alert>}
+                    
+                    <Row>
+                        <Col>
                             <Form.Group className="mb-3">
-                                <Form.Label>Email Address</Form.Label>
-                                <Form.Control type="email" name="email" value={formData.email} onChange={handleChange} required autoComplete="off" />
+                                <Form.Label>Full Name</Form.Label>
+                                <Form.Control type="text" name="name" value={formData.name} onChange={handleChange} required />
                             </Form.Group>
+                        </Col>
+                        {/* --- 7. REPLACE the old Role dropdown with the new one --- */}
+                        <Col>
+                            <Form.Group className="mb-3">
+                                <Form.Label>Role</Form.Label>
+                                <Form.Select name="role" value={formData.role} onChange={handleChange} required>
+                                    <option value="Standard">Standard</option>
+                                    <option value="Super Admin">Super Admin</option>
+                                </Form.Select>
+                            </Form.Group>
+                        </Col>
+                    </Row>
+                    <Form.Group className="mb-3">
+                        <Form.Label>Email Address</Form.Label>
+                        <Form.Control type="email" name="email" value={formData.email} onChange={handleChange} required autoComplete="off" />
+                    </Form.Group>
+                    
+                    <Row>
+                        <Col>
                             <Form.Group className="mb-3">
                                 <Form.Label>Password</Form.Label>
                                 <Form.Control
@@ -150,20 +140,28 @@ function UserFormModal({ show, onHide, onSave, userToEdit }: UserFormModalProps)
                                     name="password"
                                     value={formData.password}
                                     onChange={handleChange}
-                                    placeholder={isEditMode ? 'Leave blank to keep current password' : ''}
+                                    placeholder={isEditMode ? 'Leave blank to keep current' : ''}
                                     required={!isEditMode}
                                     autoComplete={isEditMode ? 'off' : 'new-password'}
                                 />
                             </Form.Group>
-                        </>
-                    )}
+                        </Col>
+                        <Col>
+                            <Form.Group className="mb-3">
+                                <Form.Label>Status</Form.Label>
+                                <Form.Select name="status" value={formData.status} onChange={handleChange} required>
+                                    <option value="active">Active</option>
+                                    <option value="inactive">Inactive</option>
+                                    <option value="suspended">Suspended</option>
+                                </Form.Select>
+                            </Form.Group>
+                        </Col>
+                    </Row>
                 </Modal.Body>
                 <Modal.Footer>
-                    <Button variant="secondary" onClick={onHide} disabled={loading}>
-                        Cancel
-                    </Button>
-                    <Button variant="primary" type="submit" disabled={loading}>
-                        {loading ? <Spinner as="span" animation="border" size="sm" /> : (isEditMode ? 'Save Changes' : 'Create Account')}
+                    <Button variant="secondary" onClick={onHide} disabled={isSaving}>Cancel</Button>
+                    <Button variant="primary" type="submit" disabled={isSaving}>
+                        {isSaving ? <Spinner as="span" animation="border" size="sm" /> : (isEditMode ? 'Save Changes' : 'Create Account')}
                     </Button>
                 </Modal.Footer>
             </Form>

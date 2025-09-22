@@ -12,6 +12,7 @@ import { useAlert } from "../../contexts/AlertContext";
 import { v4 as uuidv4 } from 'uuid';
 import ConfirmationModal from "../../components/modals/confirmationModal/ConfirmationModal";
 import { CustomItemForm } from "../../components/forms/customItemForm/CustomItemForm";
+import { useSensorData } from "../../hooks/useSensorData";
 
 // --- INITIAL STATE & CONSTANTS ---
 const initialCustomerDetails: CustomerInfo = { 
@@ -49,6 +50,7 @@ function CustomRent() {
   const { addAlert } = useAlert();
 
   // --- State Management ---
+  const { sensorData, isLoading, error: sensorError } = useSensorData(true);
   const [measurementRefs, setMeasurementRefs] = useState<MeasurementRef[]>([]);
   const [allRentals, setAllRentals] = useState<RentalOrder[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
@@ -69,6 +71,8 @@ function CustomRent() {
   const dropzoneRef = useRef<MultiImageDropzoneRef>(null);
   const [errors, setErrors] = useState<FormErrors>({});
   const [customerDetails, setCustomerDetails] = useState<CustomerInfo>(initialCustomerDetails);
+  const [activeMeasurementField, setActiveMeasurementField] = useState<string | null>(null);
+  const [lastInsertedTimestamp, setLastInsertedTimestamp] = useState<string | null>(null)
   
   // --- Data Fetching Effect ---
   useEffect(() => {
@@ -90,7 +94,51 @@ function CustomRent() {
 
   const uniqueCategories = useMemo(() => Array.from(new Set(measurementRefs.map(ref => ref.category))), [measurementRefs]);
   const filteredOutfits = useMemo(() => measurementRefs.filter(ref => ref.category === selectedCategory), [selectedCategory, measurementRefs]);
+
+  const handleInsertMeasurement = (field: string) => {
+    if (sensorData && typeof sensorData.centimeters === 'number') {
+      handleMeasurementChange(field, sensorData.centimeters.toFixed(2));
+    } else {
+      addAlert("No measurement data received from the device.", "warning");
+    }
+  };
+
   const selectedRef = measurementRefs.find(ref => ref._id === selectedRefId);
+
+  useEffect(() => {
+    const handleSensorCommand = (event: CustomEvent) => {
+      if (event.detail.action === 'focusNext' && selectedRef) {
+        const measurementFields = selectedRef.measurements;
+        const currentActiveIndex = activeMeasurementField ? measurementFields.indexOf(activeMeasurementField) : -1;
+        const nextIndex = (currentActiveIndex + 1) % measurementFields.length;
+        const nextField = measurementFields[nextIndex];
+        
+        const inputElement = document.getElementById(`measurement-${nextField}`);
+        inputElement?.focus();
+      }
+    };
+    
+    window.addEventListener('sensorCommand', handleSensorCommand as EventListener);
+    return () => {
+      window.removeEventListener('sensorCommand', handleSensorCommand as EventListener);
+    };
+  }, [activeMeasurementField, selectedRef]);
+
+  useEffect(() => {
+    // Check for new, valid, and un-inserted measurement data while a field is active
+    if (sensorData && 
+        activeMeasurementField && 
+        sensorData.sensorType === 'LengthMeasurement' && 
+        typeof sensorData.centimeters === 'number' &&
+        sensorData.updatedAt !== lastInsertedTimestamp) {
+        
+      // Use the existing handler to update the form state
+      handleMeasurementChange(activeMeasurementField, sensorData.centimeters.toFixed(2));
+      
+      // Remember the timestamp to prevent re-insertion
+      setLastInsertedTimestamp(sensorData.updatedAt);
+    }
+  }, [sensorData, activeMeasurementField, lastInsertedTimestamp]);
   
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -293,6 +341,11 @@ function CustomRent() {
                           onAddDynamicListItem={addDynamicListItem}
                           onRemoveDynamicListItem={removeDynamicListItem}
                           dropzoneRef={dropzoneRef}
+                          onInsertMeasurement={handleInsertMeasurement}
+                          onMeasurementFocus={setActiveMeasurementField}
+                          sensorData={sensorData}
+                          isSensorLoading={isLoading}
+                          sensorError={sensorError}
                       />
                   ) : (
                       // This is the initial state before an outfit type is chosen

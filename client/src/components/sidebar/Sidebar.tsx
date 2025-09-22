@@ -1,6 +1,6 @@
 // src/components/sidebar/Sidebar.tsx
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import {
   Navbar,
@@ -10,11 +10,13 @@ import {
   Image,
 } from "react-bootstrap";
 import { BoxArrowRight } from "react-bootstrap-icons";
-import { sidebarItems } from "./sidebarItems";
-import { SidebarNavItem } from "./SidebarNavItem"; // Import the new component
+import { sidebarItems, NavItem } from "./sidebarItems";
+import { SidebarNavItem } from "./SidebarNavItem"; 
 import "./Sidebar.css";
 import { Logo2 } from "../../assets/images";
 import { dispatchAuthChangeEvent } from "../../services/authEvent";
+import api from "../../services/api";
+import { User } from "../../types"; 
 
 function Sidebar() {
   const navigate = useNavigate();
@@ -22,8 +24,22 @@ function Sidebar() {
 
   const [showOffcanvas, setShowOffcanvas] = useState(false);
   const handleCloseOffcanvas = () => setShowOffcanvas(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
-  // --- REVISED: State management for active items ---
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      try {
+        const { data } = await api.get('/users/me');
+        setCurrentUser(data);
+      } catch (error) {
+        console.error("Could not fetch current user in Sidebar:", error);
+        // Handle error, maybe log out user if token is invalid
+      }
+    };
+    fetchCurrentUser();
+  }, []);
+
+
   const findActiveParent = (pathname: string): string | null => {
     for (const item of sidebarItems) {
       if (item.subItems?.some((sub) => sub.path === pathname)) {
@@ -35,13 +51,27 @@ function Sidebar() {
 
   const [openKey, setOpenKey] = useState<string | null>(() => findActiveParent(location.pathname));
   const [activeParent, setActiveParent] = useState<string | null>(() => findActiveParent(location.pathname));
-  
-  // NEW: Effect to keep the correct menu open when navigating
+
   useEffect(() => {
       const parent = findActiveParent(location.pathname);
       setOpenKey(parent);
       setActiveParent(parent);
   }, [location.pathname]);
+
+  const visibleSidebarItems = useMemo((): NavItem[] => {
+    if (!currentUser) {
+      // If user data hasn't loaded yet, show nothing or a loading spinner's worth of items
+      return []; 
+    }
+
+    if (currentUser.role === 'Super Admin') {
+      // Super Admins see all items
+      return sidebarItems;
+    } else {
+      // Standard users see all items EXCEPT 'Accounts'
+      return sidebarItems.filter(item => item.title !== 'Accounts');
+    }
+  }, [currentUser]);
 
   const handleToggle = (key: string) => {
     setOpenKey(openKey === key ? null : key);
@@ -50,10 +80,7 @@ function Sidebar() {
   const handleSignOut = () => {
     handleCloseOffcanvas();
     localStorage.removeItem("authToken");
-    
-    // Dispatch the event to notify the app of the sign-out
     dispatchAuthChangeEvent(); 
-    
     navigate("/signIn");
   };
 
@@ -69,7 +96,7 @@ function Sidebar() {
 
         {/* Scrolling content area is now a direct child */}
         <div className="sidebar-scroll-area" style={{ flexGrow: 1, overflowY: 'auto' }}>
-          {sidebarItems.map((item) => (
+          {visibleSidebarItems.map((item) => (
             <SidebarNavItem
               key={item.title}
               item={item}
@@ -101,11 +128,11 @@ function Sidebar() {
             </Offcanvas.Header>
             <Offcanvas.Body>
               <Nav className="justify-content-end flex-grow-1 pe-3">
-                {sidebarItems.map((item) => (
+                {visibleSidebarItems.map((item) => (
                     <SidebarNavItem
                       key={`mobile-${item.title}`}
                       item={item}
-                      openKey={openKey} // Not used on mobile but required by prop
+                      openKey={openKey}
                       activeParent={activeParent}
                       isMobile={true}
                       onToggle={handleToggle}

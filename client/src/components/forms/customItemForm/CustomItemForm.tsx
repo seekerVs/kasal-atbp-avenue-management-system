@@ -1,7 +1,7 @@
 import React, { Ref, useMemo } from 'react';
-import { Form, Row, Col, InputGroup, Button } from 'react-bootstrap';
-import { PlusCircleFill, Trash, CardText, CashCoin, Hash, PencilSquare, Palette, Image, FileText, Grid3x3GapFill } from 'react-bootstrap-icons';
-import { CustomTailoringItem, MeasurementRef } from '../../../types';
+import { Form, Row, Col, InputGroup, Button, Spinner, OverlayTrigger, Tooltip } from 'react-bootstrap';
+import { PlusCircleFill, Trash, CardText, CashCoin, Hash, PencilSquare, Palette, Image, FileText, Grid3x3GapFill, ArrowsCollapse, XCircleFill, CheckCircleFill } from 'react-bootstrap-icons';
+import { CustomTailoringItem, MeasurementRef, SensorData } from '../../../types';
 import { MultiImageDropzone, MultiImageDropzoneRef } from '../../multiImageDropzone/MultiImageDropzone';
 
 // --- PROPS INTERFACE (from previous step) ---
@@ -21,6 +21,11 @@ export interface CustomItemFormProps {
   onAddDynamicListItem: (listType: 'materials') => void;
   onRemoveDynamicListItem: (listType: 'materials', index: number) => void;
   dropzoneRef: Ref<MultiImageDropzoneRef>; 
+  onInsertMeasurement: (field: string) => void;
+  onMeasurementFocus: (field: string | null) => void;
+  sensorData: SensorData | null;
+  isSensorLoading: boolean;
+  sensorError: string | null;
 }
 
 // --- NEW: THE FULL COMPONENT IMPLEMENTATION ---
@@ -40,12 +45,45 @@ export const CustomItemForm: React.FC<CustomItemFormProps> = ({
   onAddDynamicListItem,
   onRemoveDynamicListItem,
   dropzoneRef,
+  onInsertMeasurement,
+  onMeasurementFocus,
+  sensorData,
+  isSensorLoading,
+  sensorError,
 }) => {
 
   // Memoized calculations are now done inside the reusable component
   const uniqueCategories = useMemo(() => Array.from(new Set((measurementRefs || []).map(ref => ref.category))), [measurementRefs]);
   const filteredOutfits = useMemo(() => (measurementRefs || []).filter(ref => ref.category === selectedCategory), [selectedCategory, measurementRefs]);
   const selectedRef = useMemo(() => (measurementRefs || []).find(ref => ref._id === selectedRefId), [selectedRefId, measurementRefs]);
+
+  const renderTooltipContent = () => {
+    if (isSensorLoading) {
+      return "Connecting to device...";
+    }
+    if (sensorError) {
+      return sensorError;
+    }
+    if (sensorData) {
+      return (
+        <>
+          <div><strong>Live Reading:</strong> {sensorData.centimeters?.toFixed(2) ?? 'N/A'} cm</div>
+          <div className="small text-muted">Last Update: {new Date(sensorData.updatedAt).toLocaleTimeString()}</div>
+        </>
+      );
+    }
+    return "Device status unknown.";
+  };
+
+  const renderStatusIcon = () => {
+    if (isSensorLoading) {
+      return <Spinner animation="border" size="sm" variant="secondary" />;
+    }
+    if (sensorError) {
+      return <XCircleFill size={18} className="text-danger" />;
+    }
+    return <CheckCircleFill size={18} className="text-success" />;
+  };
 
   return (
     // This is the JSX moved from CreateEditCustomItemModal
@@ -110,20 +148,57 @@ export const CustomItemForm: React.FC<CustomItemFormProps> = ({
       </Form.Group>
 
       {(selectedRef || (!isCreateMode && Object.keys(formData.measurements).length > 0)) && (
-            <>
-            <hr /><h6>Measurements (cm)</h6><Row>
+        <>
+          <hr />
+          <div className="d-flex align-items-center mb-2">
+            <h6 className="mb-0 me-2">Measurements (cm)</h6>
+            <OverlayTrigger
+              placement="top"
+              overlay={
+                <Tooltip id="device-status-tooltip">
+                  {renderTooltipContent()}
+                </Tooltip>
+              }
+            >
+              <span style={{ cursor: 'pointer' }}>
+                {renderStatusIcon()}
+              </span>
+            </OverlayTrigger>
+          </div>
+          <Row>
             {(isCreateMode && selectedRef ? selectedRef.measurements : Object.keys(formData.measurements)).map(m => (
-                <Col md={4} lg={3} key={m} className="mb-2">
+              <Col md={4} lg={3} key={m} className="mb-2">
                 <Form.Group>
-                    <Form.Label className="small text-capitalize">{m.replace(/([A-Z])/g, ' $1').trim()}<span className="text-danger">*</span></Form.Label>
-                    <Form.Control type="number" value={formData.measurements[m] || ''} onChange={(e) => onMeasurementChange(m, e.target.value)} isInvalid={!!errors.measurements?.[m]} />
+                  <Form.Label className="small text-capitalize">{m.replace(/([A-Z])/g, ' $1').trim()}<span className="text-danger">*</span></Form.Label>
+                  
+                  {/* The input is now wrapped in an InputGroup */}
+                  <InputGroup>
+                    <Form.Control 
+                      id={`measurement-${m}`} // Unique ID for focus targeting
+                      type="number" 
+                      value={formData.measurements[m] || ''} 
+                      onChange={(e) => onMeasurementChange(m, e.target.value)} 
+                      onFocus={() => onMeasurementFocus(m)} // Tell parent which field is active
+                      onBlur={() => onMeasurementFocus(null)} // Tell parent no field is active
+                      isInvalid={!!errors.measurements?.[m]}
+                    />
+                    {/* The new "Get from Device" button */}
+                    <Button 
+                      variant="outline-secondary" 
+                      title="Get from Device" 
+                      onClick={() => onInsertMeasurement(m)}
+                    >
+                      <ArrowsCollapse /> 
+                    </Button>
                     <Form.Control.Feedback type="invalid" tooltip>{errors.measurements?.[m]}</Form.Control.Feedback>
+                  </InputGroup>
+
                 </Form.Group>
-                </Col>
+              </Col>
             ))}
-            </Row>
-            </>
-        )}
+          </Row>
+        </>
+      )}
 
       <hr />
       <Row>
