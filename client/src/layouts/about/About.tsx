@@ -11,8 +11,6 @@ import { WelcomeSection } from './WelcomeSection';
 import { HistorySection } from './HistorySection';
 import { FeaturesSection } from './FeaturesSection';
 import { NewsletterSection } from './NewsletterSection';
-
-import CustomFooter from "../../components/customFooter/CustomFooter";
 import { Coat_display, Dress_display } from "../../assets/images";
 import "./About.css";
 import { FaqSection } from "./FaqSection";
@@ -69,10 +67,6 @@ function About() {
         <FaqSection data={pageContent.faq} />
       )}
       <NewsletterSection data={pageContent.newsletter} />
-
-      <footer className="bg-white text-dark pb-3">
-        <CustomFooter />
-      </footer>
     </Container>
   );
 }

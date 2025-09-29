@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Row, Col, Image, Table } from 'react-bootstrap';
 import { format } from 'date-fns';
 import { RentalOrder, ShopSettings } from '../../types';
@@ -19,20 +19,36 @@ export const RentalSummary = React.forwardRef<HTMLDivElement, RentalSummaryProps
     return null; // Don't render anything if there's no rental data
   }
 
+  const isPurchaseOnly = useMemo(() => {
+    if (!rental) return false;
+
+    // Check for any rental-type items
+    const hasRentalItems = 
+      (rental.singleRents?.length ?? 0) > 0 || 
+      (rental.packageRents?.length ?? 0) > 0 || 
+      rental.customTailoring?.some(item => item.tailoringType === 'Tailored for Rent-Back');
+
+    // Check for any purchase-type items
+    const hasPurchaseItems = rental.customTailoring?.some(item => item.tailoringType === 'Tailored for Purchase');
+
+    // The condition is met if there are purchase items AND no rental items
+    return hasPurchaseItems && !hasRentalItems;
+  }, [rental]);
+
   // --- Helper function to determine the document title ---
   const getDocumentTitle = (status: RentalOrder['status']): string => {
     switch (status) {
       case 'Pending':
       case 'To Pickup':
-        return 'Rental Agreement & Invoice';
+        return 'Order Summary';
       case 'To Return':
-        return 'Pickup Receipt & Return Slip';
+        return 'Order Receipt';
       case 'Completed':
-        return 'Final Rental Receipt';
+        return 'Order Receipt';
       case 'Cancelled':
-        return 'Cancelled Rental Record';
+        return 'Cancelled Order Record';
       default:
-        return 'Rental Summary';
+        return 'Order Summary';
     }
   };
 
@@ -58,7 +74,7 @@ export const RentalSummary = React.forwardRef<HTMLDivElement, RentalSummaryProps
         </Col>
         <Col xs={6} className="text-end">
           <h2 className="mb-1">{getDocumentTitle(rental.status)}</h2>
-          <p className="mb-0"><strong>Rental ID:</strong> {rental._id}</p>
+          <p className="mb-0"><strong>ID:</strong> {rental._id}</p>
           <p className="mb-0"><strong>Date Issued:</strong> {format(new Date(), 'MMM dd, yyyy')}</p>
         </Col>
       </Row>
@@ -72,15 +88,19 @@ export const RentalSummary = React.forwardRef<HTMLDivElement, RentalSummaryProps
           <p className="mb-0"><strong>Address:</strong> {`${customerInfo[0].address.street}, ${customerInfo[0].address.barangay}, ${customerInfo[0].address.city}`}</p>
         </Col>
         <Col xs={6}>
-          <h6 className="summary-section-title">RENTAL DETAILS</h6>
+          <h6 className="summary-section-title">ORDER DETAILS</h6>
           <p className="mb-0"><strong>Status:</strong> {rental.status}</p>
-          {['To Return', 'Completed'].includes(rental.status) ? (
+          {!isPurchaseOnly && (
             <>
-              <p className="mb-0"><strong>Pickup Date:</strong> {format(new Date(rental.rentalStartDate), 'MMM dd, yyyy')}</p>
-              <p className="mb-0"><strong>Return Due Date:</strong> {format(new Date(rental.rentalEndDate), 'MMM dd, yyyy')}</p>
+              {['To Return', 'Completed'].includes(rental.status) ? (
+                <>
+                  <p className="mb-0"><strong>Pickup Date:</strong> {format(new Date(rental.rentalStartDate), 'MMM dd, yyyy')}</p>
+                  <p className="mb-0"><strong>Return Due Date:</strong> {format(new Date(rental.rentalEndDate), 'MMM dd, yyyy')}</p>
+                </>
+              ) : (
+                <p className="mb-0"><strong>Rental Period:</strong> 4 Days (Starts upon pickup)</p>
+              )}
             </>
-          ) : (
-            <p className="mb-0"><strong>Rental Period:</strong> 4 Days (Starts upon pickup)</p>
           )}
         </Col>
       </Row>
@@ -91,7 +111,7 @@ export const RentalSummary = React.forwardRef<HTMLDivElement, RentalSummaryProps
         <thead>
           <tr>
             <th>#</th>
-            <th>Item / Package</th>
+            <th>Item</th>
             <th>Details</th>
             <th className="text-center">Qty</th>
             <th className="text-end">Price</th>
@@ -99,21 +119,36 @@ export const RentalSummary = React.forwardRef<HTMLDivElement, RentalSummaryProps
           </tr>
         </thead>
         <tbody>
-          {allItems.map((item, index) => (
-            <tr key={item._id || index}>
-              <td>{index + 1}</td>
-              <td>{item.name.split(',')[0]}</td>
-              <td>
-                {'variation' in item 
-                  ? `${item.variation.color.name}, ${item.variation.size}`
-                  : item.name.split(',')[1] || 'Package'
+          {allItems.map((item, index) => {
+            let details = '';
+            // Check for the most unique property first to identify CustomTailoringItem
+            if ('outfitType' in item) {
+                details = `Custom (${item.outfitType})`;
+                if (item.fittingDate) {
+                    details += ` | Fitting: ${format(new Date(item.fittingDate), 'MMM dd')}`;
                 }
-              </td>
-              <td className="text-center">{item.quantity}</td>
-              <td className="text-end">{formatCurrency(item.price)}</td>
-              <td className="text-end">{formatCurrency(item.price * item.quantity)}</td>
-            </tr>
-          ))}
+                if (item.completionDate) {
+                    details += ` | Completion: ${format(new Date(item.completionDate), 'MMM dd')}`;
+                }
+            // Then check for the next most unique property to identify RentedPackage
+            } else if ('packageFulfillment' in item) {
+                details = item.name.split(',')[1] || 'Package';
+            // If it's neither of the above, it must be a SingleRentItem
+            } else if ('variation' in item) {
+                details = `${item.variation.color.name}, ${item.variation.size}`;
+            }
+            
+            return (
+              <tr key={item._id || index}>
+                <td>{index + 1}</td>
+                <td>{item.name.split(',')[0]}</td>
+                <td>{details}</td>
+                <td className="text-center">{item.quantity}</td>
+                <td className="text-end">{formatCurrency(item.price)}</td>
+                <td className="text-end">{formatCurrency(item.price * item.quantity)}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </Table>
 
@@ -169,7 +204,11 @@ export const RentalSummary = React.forwardRef<HTMLDivElement, RentalSummaryProps
       {/* --- 5. FOOTER --- */}
       <div className="summary-footer mt-5 text-center">
         <p className="fw-bold">Thank you for choosing Kasal atbp. Avenue!</p>
-        <p className="small text-muted">Please present this document upon pickup and return of items. Terms and conditions apply.</p>
+        {['To Pickup', 'To Return'].includes(rental.status) && (
+          <p className="small text-muted">
+            Please present this document upon pickup and return of items. Terms and conditions apply.
+          </p>
+        )}
       </div>
     </div>
   );

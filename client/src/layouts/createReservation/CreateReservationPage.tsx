@@ -5,7 +5,6 @@ import { Container, Card, Row, Col } from 'react-bootstrap';
 import { format, addDays } from 'date-fns';
 
 import { Reservation, FormErrors, Package, PackageReservation, UnavailabilityRecord, ShopSettings } from '../../types';
-import CustomFooter from '../../components/customFooter/CustomFooter';
 import api, { uploadFile } from '../../services/api';
 import { useAlert } from '../../contexts/AlertContext';
 
@@ -370,8 +369,6 @@ function CreateReservationPage() {
         onHide={() => setShowSuccessModal(false)}
         reservation={submittedReservation}
       />
-
-      <footer className="bg-white text-dark py-3 border-top"><CustomFooter /></footer>
     </>
   );
 }

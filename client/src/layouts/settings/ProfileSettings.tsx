@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Form, Row, Col, Button, Spinner, Card, ListGroup } from 'react-bootstrap';
+import { Row, Col, Button, Spinner, Card } from 'react-bootstrap';
 import { User } from '../../types';
 import api from '../../services/api';
 import { useAlert } from '../../contexts/AlertContext';
@@ -21,7 +21,7 @@ function ProfileSettings() {
       try {
         const response = await api.get('/users/me');
         setUser(response.data);
-        setDraftUser(response.data); // Initialize draft for editing
+        setDraftUser(response.data);
       } catch (error) {
         addAlert('Could not fetch your profile data.', 'danger');
       } finally {
@@ -44,9 +44,9 @@ function ProfileSettings() {
         name: draftUser.name,
         email: draftUser.email,
       });
-      setUser(response.data); // Update main state with saved data
-      setDraftUser(response.data); // Sync draft state
-      setIsEditMode(false); // Exit edit mode
+      setUser(response.data);
+      setDraftUser(response.data);
+      setIsEditMode(false);
       addAlert('Profile details updated!', 'success');
     } catch (err: any) {
       addAlert(err.response?.data?.message || 'Failed to save details.', 'danger');
@@ -56,21 +56,19 @@ function ProfileSettings() {
   };
 
   const handleCancelEdit = () => {
-    setDraftUser(user); // Revert changes by resetting draft to main state
+    setDraftUser(user);
     setIsEditMode(false);
   };
 
   if (isLoading) return <Spinner animation="border" />;
   if (!user || !draftUser) return <p>Could not load user profile.</p>;
 
-  // Safely access permissions, providing an empty array as a fallback
-  const permissions = user.role?.permissions || [];
-
   return (
     <>
-      <Row className="g-2">
-        {/* --- DETAILS & EDIT FORM COLUMN --- */}
-        <Col md={6}>
+      {/* --- MODIFICATION START: The Row now centers a single column --- */}
+      <Row >
+        <Col md={10} lg={8}>
+        {/* --- MODIFICATION END --- */}
           <Card>
             <Card.Header className="d-flex justify-content-between align-items-center">
               <h5 className="mb-0">Your Details</h5>
@@ -82,7 +80,6 @@ function ProfileSettings() {
             </Card.Header>
             <Card.Body>
               {isEditMode ? (
-                // --- EDIT MODE ---
                 <>
                   <ValidatedInput label="Name" name="name" value={draftUser.name} onChange={handleDraftChange} />
                   <ValidatedInput label="Email" name="email" type="email" value={draftUser.email} onChange={handleDraftChange} />
@@ -94,11 +91,10 @@ function ProfileSettings() {
                   </div>
                 </>
               ) : (
-                // --- VIEW MODE ---
                 <>
                   <p><strong>Name:</strong> {user.name}</p>
                   <p><strong>Email:</strong> {user.email}</p>
-                  <p className="mb-0"><strong>Role:</strong> {user.role.name}</p>
+                  <p className="mb-0"><strong>Role:</strong> {user.role}</p>
                 </>
               )}
             </Card.Body>
@@ -110,29 +106,8 @@ function ProfileSettings() {
           </Card>
         </Col>
 
-        {/* --- PERMISSIONS COLUMN --- */}
-        <Col md={6}>
-          <Card>
-            <Card.Header as="h5">Your Role Permissions</Card.Header>
-            <ListGroup variant="flush" style={{ maxHeight: '75vh', overflowY: 'auto' }}>
-              {permissions.length > 0 ? (
-                permissions.map((perm: any) => (
-                  <ListGroup.Item key={perm._id}>
-                    <p className="fw-bold mb-0 text-capitalize">{perm._id.replace(/_/g, ' ')}</p>
-                    <p className="text-muted small mb-0">{perm.description}</p>
-                  </ListGroup.Item>
-                ))
-              ) : (
-                <ListGroup.Item className="text-muted">
-                  Your role currently has no specific permissions assigned.
-                </ListGroup.Item>
-              )}
-            </ListGroup>
-          </Card>
-        </Col>
       </Row>
 
-      {/* --- RENDER THE MODAL --- */}
       <ChangePasswordModal
         show={showPasswordModal}
         onHide={() => setShowPasswordModal(false)}

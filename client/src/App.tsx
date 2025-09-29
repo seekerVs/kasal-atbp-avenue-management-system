@@ -8,7 +8,6 @@ import "react-bootstrap-icons";
 import { ErrorBoundary } from "react-error-boundary";
 
 // Context Providers
-import { NotificationProvider } from "./contexts/NotificationContext";
 import { AlertProvider } from "./contexts/AlertContext";
 
 // Layout and Helper Components
@@ -99,13 +98,10 @@ function App() {
   return (
     // The ErrorBoundary and Providers now wrap the RouterProvider
     <ErrorBoundary FallbackComponent={ErrorFallback}>
-      <NotificationProvider>
-        <AlertProvider>
-          <InactivityManager />
-          {/* 3. The App component now provides the configured router to the application */}
-          <RouterProvider router={router} />
-        </AlertProvider>
-      </NotificationProvider>
+      <AlertProvider>
+        <InactivityManager />
+        <RouterProvider router={router} />
+      </AlertProvider>
     </ErrorBoundary>
   );
 }

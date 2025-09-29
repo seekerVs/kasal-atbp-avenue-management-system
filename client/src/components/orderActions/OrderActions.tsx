@@ -92,8 +92,27 @@ const OrderActions: React.FC<OrderActionsProps> = ({
   onInitiateCancel,
 }) => {
   const { addAlert } = useAlert();
+  const { hasRentalItems, hasPurchaseItems, isPurchaseOnly } = useMemo(() => {
+    if (!rental) {
+      return { hasRentalItems: false, hasPurchaseItems: false, isPurchaseOnly: false };
+    }
+    
+    // Check if there are any items that are for rent
+    const hasStandardRentals = (rental.singleRents?.length ?? 0) > 0 || (rental.packageRents?.length ?? 0) > 0;
+    const hasCustomRentBacks = rental.customTailoring?.some(item => item.tailoringType === 'Tailored for Rent-Back');
+    const hasRentalItems = hasStandardRentals || hasCustomRentBacks;
+
+    // Check if there are any items that are for purchase
+    const hasPurchaseItems = rental.customTailoring?.some(item => item.tailoringType === 'Tailored for Purchase');
+
+    // Determine if the order is exclusively for purchase
+    const isPurchaseOnly = hasPurchaseItems && !hasRentalItems;
+
+    return { hasRentalItems, hasPurchaseItems, isPurchaseOnly };
+  }, [rental]);
+  
   const discountAmount = parseFloat(editableDiscount) || 0;
-  const depositAmount = parseFloat(editableDeposit) || 0;
+  const depositAmount = isPurchaseOnly ? 0 : parseFloat(editableDeposit) || 0;
   const isStandardDeposit = parseFloat(editableDeposit) === (financials.requiredDeposit || 0);
   
   const itemsTotal = subtotal - discountAmount;
@@ -188,31 +207,38 @@ const OrderActions: React.FC<OrderActionsProps> = ({
             {status.toUpperCase()}
           </Button>
         </div>
-        <div className="mb-3">
-          <p className="mb-2 fw-medium"><CalendarCheck className="me-2" />Rental Period</p>
-          {['Pending', 'To Pickup'].includes(status) ? (
-            // STATE 1: If the rental is not yet picked up, show an info alert.
-            <Alert variant="info" className="small py-2 text-center">
-              The 4-day rental period will be set automatically upon pickup.
-            </Alert>
-          ) : (
-            // STATE 2: If the rental is picked up or finished, display the final dates.
-            <div className="px-1">
-              <div className="d-flex justify-content-between">
-                <span className="text-muted">Start Date:</span>
-                <span >
-                  {editableStartDate ? format(new Date(editableStartDate), 'MMMM dd, yyyy') : 'Not Set'}
-                </span>
+        {!isPurchaseOnly && (
+          <div className="mb-3">
+            <p className="mb-2 fw-medium"><CalendarCheck className="me-2" />Rental Period</p>
+            
+            {hasRentalItems && hasPurchaseItems && (
+              <Alert variant="light" className="small py-2 text-center border">
+                Note: The rental period only applies to rent-back and standard rental items.
+              </Alert>
+            )}
+
+            {['Pending', 'To Pickup'].includes(status) ? (
+              <Alert variant="info" className="small py-2 text-center">
+                The 4-day rental period will be set automatically upon pickup.
+              </Alert>
+            ) : (
+              <div className="px-1">
+                <div className="d-flex justify-content-between">
+                  <span className="text-muted">Start Date:</span>
+                  <span >
+                    {editableStartDate ? format(new Date(editableStartDate), 'MMMM dd, yyyy') : 'Not Set'}
+                  </span>
+                </div>
+                <div className="d-flex justify-content-between">
+                  <span className="text-muted">End Date:</span>
+                  <span>
+                    {editableEndDate ? format(new Date(editableEndDate), 'MMMM dd, yyyy') : 'Not Set'}
+                  </span>
+                </div>
               </div>
-              <div className="d-flex justify-content-between">
-                <span className="text-muted">End Date:</span>
-                <span>
-                  {editableEndDate ? format(new Date(editableEndDate), 'MMMM dd, yyyy') : 'Not Set'}
-                </span>
-              </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
         <hr />
         <div className="d-flex justify-content-between align-items-center mb-2">
           <span className="text-muted">Subtotal</span>
@@ -228,85 +254,75 @@ const OrderActions: React.FC<OrderActionsProps> = ({
           </Col>
         </Form.Group>
 
-        {/* --- NEW: DEPOSIT INPUT SECTION --- */}
-        <div className="mb-2"> {/* Use a simple div as the main wrapper */}
-          <Form.Group as={Row} className="align-items-center ">
-          <Form.Label column sm={6} className="text-muted mb-0 pb-0">Security Deposit</Form.Label>
-          <Col sm={6}>
-            <InputGroup>
-              <InputGroup.Text>₱</InputGroup.Text>
-              <Form.Control 
-                type="number" 
-                value={editableDeposit} 
-                onBlur={onDepositBlur}
-                onChange={(e) => onDepositChange(e.target.value)} 
-                disabled={!canEditDetails}
-                min="0"
-                style={{ textAlign: 'right' }} 
-              />
-            </InputGroup>
-          </Col>
-        </Form.Group>
-
-        {/* Conditionally Rendered Deposit Breakdown */}
-        {isStandardDeposit && canEditDetails && hasDepositBreakdown && (
-          <Row >
-            <Col > {/* Indent the accordion */}
-              <Accordion flush className="m-2 p-0 w-100 ">
-                <Accordion.Item eventKey="0">
-                  <Accordion.Header as="div">
-                    <span className="small text-primary fst-italic text-end" style={{cursor: 'pointer'}}>
-                      View deposit breakdown
-                    </span>
-                  </Accordion.Header>
-                  <Accordion.Body className="p-2 border-top">
-                    <ListGroup variant="flush">
-                      {rental.singleRents?.map((item, index) => (
-                        <ListGroup.Item key={`single-dep-${index}`} className="d-flex justify-content-between small text-muted p-1 border-0">
-                          <span>{item.name.split(',')[0]} (x{item.quantity})</span>
-                          <span className="fw-normal">{formatCurrency((item.price < 500 ? item.price : 500) * item.quantity)}</span>
-                        </ListGroup.Item>
-                      ))}
-
-                      {/* Breakdown for Package Rent Items */}
-                      {rental.packageRents?.map((pkg, index) => (
-                        <ListGroup.Item key={`pkg-dep-${index}`} className="d-flex justify-content-between small text-muted p-1 border-0">
-                          <span>{pkg.name.split(',')[0]} (x{pkg.quantity})</span>
-                          <span className="fw-normal">{formatCurrency(2000 * pkg.quantity)}</span>
-                        </ListGroup.Item>
-                      ))}
-
-                      {/* Breakdown for Custom Tailoring Items (Rent-Back only) */}
-                      {rental.customTailoring?.filter(item => item.tailoringType === 'Tailored for Rent-Back').map((item, index) => (
-                        <ListGroup.Item key={`custom-dep-${index}`} className="d-flex justify-content-between small text-muted p-1 border-0">
-                          <span>{item.name} (x{item.quantity})</span>
-                          <span className="fw-normal">{formatCurrency(item.price * item.quantity)}</span>
-                        </ListGroup.Item>
-                      ))}
-
-                    </ListGroup>
-                  </Accordion.Body>
-                </Accordion.Item>
-              </Accordion>
+        {!isPurchaseOnly && (
+          <div className="mb-2">
+            <Form.Group as={Row} className="align-items-center ">
+            <Form.Label column sm={6} className="text-muted mb-0 pb-0">Security Deposit</Form.Label>
+            <Col sm={6}>
+              <InputGroup>
+                <InputGroup.Text>₱</InputGroup.Text>
+                <Form.Control 
+                  type="number" 
+                  value={editableDeposit} 
+                  onBlur={onDepositBlur}
+                  onChange={(e) => onDepositChange(e.target.value)} 
+                  disabled={!canEditDetails}
+                  min="0"
+                  style={{ textAlign: 'right' }} 
+                />
+              </InputGroup>
             </Col>
-          </Row>
-        )}
+          </Form.Group>
 
-        {!isStandardDeposit && canEditDetails && (
-          <Row>
-            <Col className="mt-0 mb-2 w-100 text-end">
-              <Button
-                variant="link"
-                size="sm"
-                className="p-0 text-decoration-underline"
-                onClick={handleUseRecommendedDeposit}
-              >
-                Use recommended deposit
-              </Button>
-            </Col>
-          </Row>
+          {isStandardDeposit && canEditDetails && hasDepositBreakdown && (
+            <Row >
+              <Col >
+                <Accordion flush className="m-2 p-0 w-100 ">
+                  <Accordion.Item eventKey="0">
+                    <Accordion.Header as="div">
+                      <span className="small text-primary fst-italic text-end" style={{cursor: 'pointer'}}>
+                        View deposit breakdown
+                      </span>
+                    </Accordion.Header>
+                    <Accordion.Body className="p-2 border-top">
+                      <ListGroup variant="flush">
+                        {rental.singleRents?.map((item, index) => (
+                          <ListGroup.Item key={`single-dep-${index}`} className="d-flex justify-content-between small text-muted p-1 border-0">
+                            <span>{item.name.split(',')[0]} (x{item.quantity})</span>
+                            <span className="fw-normal">{formatCurrency((item.price < 500 ? item.price : 500) * item.quantity)}</span>
+                          </ListGroup.Item>
+                        ))}
+                        {rental.packageRents?.map((pkg, index) => (
+                          <ListGroup.Item key={`pkg-dep-${index}`} className="d-flex justify-content-between small text-muted p-1 border-0">
+                            <span>{pkg.name.split(',')[0]} (x{pkg.quantity})</span>
+                            <span className="fw-normal">{formatCurrency(2000 * pkg.quantity)}</span>
+                          </ListGroup.Item>
+                        ))}
+                        {rental.customTailoring?.filter(item => item.tailoringType === 'Tailored for Rent-Back').map((item, index) => (
+                          <ListGroup.Item key={`custom-dep-${index}`} className="d-flex justify-content-between small text-muted p-1 border-0">
+                            <span>{item.name} (x{item.quantity})</span>
+                            <span className="fw-normal">{formatCurrency(item.price * item.quantity)}</span>
+                          </ListGroup.Item>
+                        ))}
+                      </ListGroup>
+                    </Accordion.Body>
+                  </Accordion.Item>
+                </Accordion>
+              </Col>
+            </Row>
+          )}
+
+          {!isStandardDeposit && canEditDetails && (
+            <Row>
+              <Col className="mt-0 mb-2 w-100 text-end">
+                <Button variant="link" size="sm" className="p-0 text-decoration-underline" onClick={handleUseRecommendedDeposit}>
+                  Use recommended deposit
+                </Button>
+              </Col>
+            </Row>
+          )}
+          </div>
         )}
-        </div>
         
         <div className="d-flex justify-content-between align-items-baseline mb-3">
           <p className="mb-0 fw-medium">Total Amount:</p>

@@ -94,12 +94,21 @@ router.get('/stats', asyncHandler(async (req, res) => {
         }
 
         if (rental.status === 'To Return') {
-            const itemCount =
-                (rental.singleRents?.reduce((sum, item) => sum + item.quantity, 0) || 0) +
-                (rental.packageRents?.length || 0) +
-                (rental.customTailoring?.length || 0);
-            
-            toReturnAndOverdue.push({ ...rental, itemCount });
+            // Check if there are any actual rental items
+            const hasRentalItems = 
+                (rental.singleRents?.length ?? 0) > 0 || 
+                (rental.packageRents?.length ?? 0) > 0 || 
+                rental.customTailoring?.some(item => item.tailoringType === 'Tailored for Rent-Back');
+
+            // Only add the rental to the "To Return" list if it actually contains items to be returned.
+            if (hasRentalItems) {
+                const itemCount =
+                    (rental.singleRents?.reduce((sum, item) => sum + item.quantity, 0) || 0) +
+                    (rental.packageRents?.length || 0) +
+                    (rental.customTailoring?.length || 0);
+                
+                toReturnAndOverdue.push({ ...rental, itemCount });
+            }
         }
     });
 

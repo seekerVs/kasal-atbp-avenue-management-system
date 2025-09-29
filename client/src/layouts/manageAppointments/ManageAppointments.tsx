@@ -230,7 +230,7 @@ function ManageAppointments() {
 
   const renderAppointmentCard = (appointment: Appointment) => {
     return (
-      <Card key={appointment._id} className="mb-4 shadow-sm">
+      <Card key={appointment._id} className="mb-2 shadow-sm">
         <Card.Header className="d-flex justify-content-between align-items-center bg-light">
           <div>
             <strong>ID: {appointment._id}</strong>
@@ -426,6 +426,7 @@ function ManageAppointments() {
             onSave={handleSaveCustomItemAndCreateRental}
             isForPackage={false}
             uploadMode="immediate"
+            initialFittingDate={currentAppointment.appointmentDate}
           />
         </>
       )}

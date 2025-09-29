@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Container, Row, Col, Form, Button, Card, Spinner, Modal, Alert } from 'react-bootstrap';
 import { ClipboardCheck, ExclamationTriangleFill } from 'react-bootstrap-icons';
 import { useNavigate } from "react-router-dom";
+import { format } from "date-fns";
 
 import CustomerDetailsCard from "../../components/CustomerDetailsCard";
 import { MeasurementRef, CustomerInfo, RentalOrder, CustomTailoringItem, FormErrors } from '../../types';
@@ -40,6 +41,8 @@ const initialTailoringData: CustomTailoringItem = {
   outfitCategory: '',
   outfitType: '',
   measurements: {},
+  fittingDate: '',
+  completionDate: '',
 };
 
 // ===================================================================================
@@ -57,6 +60,7 @@ function CustomRent() {
   const [selectedRefId, setSelectedRefId] = useState<string>('');
   
   const [tailoringData, setTailoringData] = useState(initialTailoringData);
+  const [priceInput, setPriceInput] = useState('0');
 
   const [isNewCustomerMode, setIsNewCustomerMode] = useState(true);
   const [existingOpenRental, setExistingOpenRental] = useState<RentalOrder | null>(null);
@@ -90,10 +94,7 @@ function CustomRent() {
         } finally { setLoading(false); }
     };
     fetchData();
-  }, []);
-
-  const uniqueCategories = useMemo(() => Array.from(new Set(measurementRefs.map(ref => ref.category))), [measurementRefs]);
-  const filteredOutfits = useMemo(() => measurementRefs.filter(ref => ref.category === selectedCategory), [selectedCategory, measurementRefs]);
+  }, [addAlert]);
 
   const handleInsertMeasurement = (field: string) => {
     if (sensorData && typeof sensorData.centimeters === 'number') {
@@ -142,7 +143,30 @@ function CustomRent() {
   
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setTailoringData(prev => ({ ...prev, [name]: (name === 'price' || name === 'quantity') ? parseFloat(value) || 0 : value }));
+    
+    if (name === 'price') {
+      if (value === '' || /^\d*\.?\d*$/.test(value)) {
+        setPriceInput(value);
+      }
+    } else {
+      setTailoringData(prev => ({
+        ...prev,
+        [name]: name === 'quantity' ? parseInt(value, 10) || 1 : value
+      }));
+    }
+  };
+
+  const handlePriceBlur = () => {
+    const numericValue = parseFloat(priceInput) || 0;
+    setTailoringData(prev => ({ ...prev, price: numericValue }));
+    setPriceInput(String(numericValue));
+  };
+
+  const handleDateChange = (field: 'fittingDate' | 'completionDate', date: Date | null) => {
+    setTailoringData(prev => ({
+      ...prev,
+      [field]: date ? format(date, 'yyyy-MM-dd') : '' // Store as string
+    }));
   };
   
   const handleMeasurementChange = (field: string, value: string) => {
@@ -259,6 +283,13 @@ function CustomRent() {
     }
     if (!selectedRefId || !selectedRef) { errors.push("Please select an Outfit Category and Type."); }
 
+    if (!tailoringData.fittingDate) {
+      errors.push("A Fitting Date is required.");
+    }
+    if (!tailoringData.completionDate) {
+      errors.push("A Target Completion Date is required.");
+    }
+
     // --- Soft Validations (Warnings) ---
     if (tailoringData.materials.every(m => m.trim() === '')) { 
         warnings.push("Materials"); 
@@ -325,59 +356,31 @@ function CustomRent() {
             <Card>
                 <Card.Header as="h5" className="d-flex align-items-center"><ClipboardCheck className="me-2"/>Outfit Details</Card.Header>
                 <Card.Body>
-                    {selectedRef ? (
-                      <CustomItemForm
-                          formData={tailoringData}
-                          measurementRefs={measurementRefs}
-                          selectedCategory={selectedCategory}
-                          selectedRefId={selectedRefId}
-                          errors={{}} // We will wire up a proper error state later if needed
-                          isCreateMode={true}
-                          onInputChange={handleInputChange}
-                          onCategoryChange={handleCategoryChange}
-                          onRefChange={handleRefChange}
-                          onMeasurementChange={handleMeasurementChange}
-                          onDynamicListChange={handleDynamicListChange}
-                          onAddDynamicListItem={addDynamicListItem}
-                          onRemoveDynamicListItem={removeDynamicListItem}
-                          dropzoneRef={dropzoneRef}
-                          onInsertMeasurement={handleInsertMeasurement}
-                          onMeasurementFocus={setActiveMeasurementField}
-                          sensorData={sensorData}
-                          isSensorLoading={isLoading}
-                          sensorError={sensorError}
-                      />
-                  ) : (
-                      // This is the initial state before an outfit type is chosen
-                      <Row>
-                          <Col md={6}>
-                              <Form.Group className="mb-3">
-                                  <Form.Label>Outfit Category <span className="text-danger">*</span></Form.Label>
-                                  <Form.Select value={selectedCategory} onChange={handleCategoryChange} required>
-                                      <option value="">-- Select a Category --</option>
-                                      {uniqueCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                                  </Form.Select>
-                              </Form.Group>
-                          </Col>
-                          <Col md={6}>
-                              <Form.Group className="mb-3">
-                                  <Form.Label>Outfit Type <span className="text-danger">*</span></Form.Label>
-                                  <Form.Select value={selectedRefId} onChange={handleRefChange} disabled={!selectedCategory} required>
-                                      <option value="">-- Select an Outfit Type --</option>
-                                      {filteredOutfits.map(ref => <option key={ref._id} value={ref._id}>{ref.outfitName}</option>)}
-                                  </Form.Select>
-                              </Form.Group>
-                          </Col>
-                          {/* Optional: Add a placeholder message */}
-                          {!selectedCategory && (
-                              <Col xs={12}>
-                                  <Alert variant="info" className="text-center">
-                                      Please select an Outfit Category and Type to begin entering details.
-                                  </Alert>
-                              </Col>
-                          )}
-                      </Row>
-                  )}
+                    <CustomItemForm
+                        formData={tailoringData}
+                        measurementRefs={measurementRefs}
+                        selectedCategory={selectedCategory}
+                        priceInput={priceInput}
+                        onPriceBlur={handlePriceBlur} 
+                        selectedRefId={selectedRefId}
+                        errors={{errors}} // We will wire up a proper error state later if needed
+                        isCreateMode={true}
+                        onInputChange={handleInputChange}
+                        onDateChange={handleDateChange}
+                        isFittingDateDisabled={false}
+                        onCategoryChange={handleCategoryChange}
+                        onRefChange={handleRefChange}
+                        onMeasurementChange={handleMeasurementChange}
+                        onDynamicListChange={handleDynamicListChange}
+                        onAddDynamicListItem={addDynamicListItem}
+                        onRemoveDynamicListItem={removeDynamicListItem}
+                        dropzoneRef={dropzoneRef}
+                        onInsertMeasurement={handleInsertMeasurement}
+                        onMeasurementFocus={setActiveMeasurementField}
+                        sensorData={sensorData}
+                        isSensorLoading={isLoading}
+                        sensorError={sensorError}
+                    />
                 </Card.Body>
             </Card>
         </Col>

@@ -12,8 +12,7 @@ import {
   Modal,
   ListGroup,
 } from 'react-bootstrap';
-
-import { Download, ExclamationTriangleFill, PencilSquare, PersonFill } from 'react-bootstrap-icons';
+import { Download, ExclamationTriangleFill, PencilSquare, PersonFill, BoxArrowInRight } from 'react-bootstrap-icons';
 
 // Import Child Components
 import RentalItemsList from '../../components/rentalItemsList/RentalItemsList';
@@ -42,6 +41,7 @@ import { CancellationReasonModal } from '../../components/modals/cancellationRea
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { RentalSummary } from '../../components/rentalSummary/RentalSummary';
+import AddItemFromCustomModal from '../../components/modals/addItemFromCustomModal/AddItemFromCustomModal';
 
 // ===================================================================================
 // --- MAIN COMPONENT ---
@@ -91,6 +91,8 @@ function RentalViewer() {
   const [isEditingItemForPackage, setIsEditingItemForPackage] = useState(false);
   const [showReturnModal, setShowReturnModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [itemsToConvertToInventory, setItemsToConvertToInventory] = useState<CustomTailoringItem[]>([]);
+  const [showAddItemModal, setShowAddItemModal] = useState(false);
 
   // --- DATA FETCHING & SYNCING ---
   useEffect(() => {
@@ -129,7 +131,57 @@ function RentalViewer() {
     }
   }, [rental]);
 
+  useEffect(() => {
+    // This effect acts as the controller for the conversion modal flow.
+    if (itemsToConvertToInventory.length > 0) {
+      // If there are items in our "To-Do" list, show the modal.
+      setShowAddItemModal(true);
+    } else {
+      // If the list is empty, ensure the modal is hidden.
+      setShowAddItemModal(false);
+    }
+  }, [itemsToConvertToInventory]);
+
   // --- EVENT HANDLERS ---
+  const handleInitiateConversion = () => {
+    if (rental && rental.pendingInventoryConversion && rental.pendingInventoryConversion.length > 0) {
+      setItemsToConvertToInventory(rental.pendingInventoryConversion);
+    } else {
+      addAlert("No items are currently pending conversion for this rental.", "info");
+    }
+  };
+
+  const handleConversionFinished = async (wasSuccessful: boolean) => {
+    // This function is called when the AddItemFromCustomModal is closed or saved.
+    if (!rental || itemsToConvertToInventory.length === 0) {
+      setItemsToConvertToInventory([]); // Safety clear
+      return;
+    }
+
+    const processedItemId = itemsToConvertToInventory[0]._id;
+
+    if (wasSuccessful) {
+      // If the admin saved the item, we need to call the cleanup route
+      try {
+        const response = await api.delete(`/rentals/${rental._id}/pending-conversion/${processedItemId}`);
+        // Update the main rental state to reflect the item's removal from the pending list
+        setRental(response.data); 
+        // Remove the processed item from our local "To-Do" list
+        setItemsToConvertToInventory(prev => prev.slice(1));
+        // The useEffect will then either show the next item or close the modal
+      } catch (err: any) {
+        addAlert(err.response?.data?.message || 'Failed to update rental after conversion.', 'danger');
+        // On error, we stop the process to prevent data inconsistency
+        setItemsToConvertToInventory([]);
+      }
+    } else {
+      // If the admin clicked "Cancel" or closed the modal, we clear the list to stop the flow.
+      // The items remain in the `pendingInventoryConversion` array on the backend to be processed later.
+      addAlert('Inventory conversion cancelled. You can resume this process later.', 'info');
+      setItemsToConvertToInventory([]);
+    }
+  };
+
   const handleDownloadPdf = () => {
     const input = summaryRef.current;
     if (!input || !rental) {
@@ -184,8 +236,14 @@ function RentalViewer() {
 
     try {
       const response = await api.put(`/rentals/${rental._id}/process-return`, payload);
-      setRental(response.data);
+      const updatedRental = response.data;
+      setRental(updatedRental); // Update the main rental state first
       addAlert('Rental return processed successfully!', 'success');
+      
+      // Check if the backend returned any items that need to be converted
+      if (updatedRental.pendingInventoryConversion && updatedRental.pendingInventoryConversion.length > 0) {
+        setItemsToConvertToInventory(updatedRental.pendingInventoryConversion);
+      }
     } catch (err: any) {
       addAlert(err.response?.data?.message || "Failed to process the return.", 'danger');
     } finally {
@@ -432,30 +490,21 @@ function RentalViewer() {
 
   const handleOpenEditCustomItemModal = (itemToEdit: CustomTailoringItem) => {
     if (!rental) return;
-
-    // --- NEW LOGIC: Check if this item is part of any package ---
     const isFromPackage = rental.packageRents.some(pkg => 
         pkg.packageFulfillment.some(fulfill => {
-            // If it's not a custom slot, it can't match.
             if (!fulfill.isCustom) return false;
-
             const assigned = fulfill.assignedItem;
-
-            // --- THIS IS THE TYPE GUARD ---
-            // Check that 'assigned' exists and has the 'itemId' property before using it.
             if (assigned && 'itemId' in assigned) {
                 return assigned.itemId === itemToEdit._id;
             }
-
             return false;
         })
     );
-
-    // Set both state variables needed for the modal
     setCustomItemToModify(itemToEdit);
-    setIsEditingItemForPackage(isFromPackage); // Set our new context flag
+    setIsEditingItemForPackage(isFromPackage);
     setShowEditCustomItemModal(true);
   };
+
   const handleOpenDeleteCustomItemModal = (item: CustomTailoringItem) => { 
     setCustomItemToModify(item); 
     setShowDeleteCustomItemModal(true); 
@@ -677,14 +726,14 @@ function RentalViewer() {
 
       <Container fluid>
         <Breadcrumb>
-          <Breadcrumb.Item onClick={() => navigate('/manageRentals')}>Manage Rentals</Breadcrumb.Item>
-          <Breadcrumb.Item active>View Rental</Breadcrumb.Item>
+          <Breadcrumb.Item onClick={() => navigate('/manageRentals')}>Manage Orders</Breadcrumb.Item>
+          <Breadcrumb.Item active>View Order</Breadcrumb.Item>
         </Breadcrumb>
         <Row>
           <Col md={7}>
             <Card className="mb-4">
               <Card.Header as="h5" className="d-flex justify-content-between align-items-center">
-                <span>Rental ID: {rental._id}</span>
+                <span>ID: {rental._id}</span>
                 <div className="d-flex align-items-center gap-2">
                   <small className="text-muted">Created: {new Date(rental.createdAt).toLocaleDateString()}</small>
                   {/* --- (6) ADD THE DOWNLOAD BUTTON --- */}
@@ -698,7 +747,18 @@ function RentalViewer() {
                   </Button>
                 </div>
               </Card.Header>
-              <Card.Body >
+              <Card.Body>
+                {rental.status === 'Completed' && rental.pendingInventoryConversion && rental.pendingInventoryConversion.length > 0 && (
+                  <Alert variant="info" className="d-flex justify-content-between align-items-center">
+                    <div>
+                      <strong>Action Required:</strong> This rental has items that need to be added to the main inventory.
+                    </div>
+                    <Button variant="primary" size="sm" onClick={handleInitiateConversion}>
+                      <BoxArrowInRight className="me-2"/>
+                      Process Items
+                    </Button>
+                  </Alert>
+                )}
                 <div className="d-flex justify-content-between align-items-center mb-1">
                   <h5 className="mb-0 fw-semibold"><PersonFill className="me-2" />Customer Information</h5>
                   {canEditDetails && (
@@ -711,15 +771,15 @@ function RentalViewer() {
                     </Button>
                   )}
                 </div>
-                <div>
+                <div className='lh-sm'>
                   <p className='mb-0'><span className='fw-medium'>Name:</span> {rental.customerInfo[0].name}</p>
                   <p className='mb-0'><span className='fw-medium'>Contact:</span> {rental.customerInfo[0].phoneNumber}</p>
                   <p className='mb-0'><span className='fw-medium'>Email:</span> {rental.customerInfo[0].email || 'N/A'}</p>
-                  <p className="lh-1">
+                  <p>
                     <span className='fw-medium'>Address: </span>
-                      {rental.customerInfo[0].address.street},{" "}
-                      {rental.customerInfo[0].address.barangay},{" "}
-                      {rental.customerInfo[0].address.city},{" "}
+                      {rental.customerInfo[0].address.street},
+                      {rental.customerInfo[0].address.barangay},
+                      {rental.customerInfo[0].address.city},
                       {rental.customerInfo[0].address.province}
                   </p>
                 </div>
@@ -934,6 +994,8 @@ function RentalViewer() {
             onSave={handleSaveCustomItemChanges}
             isForPackage={isEditingItemForPackage}
             uploadMode="immediate"
+            initialFittingDate={customItemToModify.fittingDate}
+            isFittingDateDisabled={isEditingItemForPackage || rental.status === 'To Pickup'}
           />
         )}
         <EditCustomerInfoModal
@@ -943,6 +1005,13 @@ function RentalViewer() {
           onSave={handleCustomerSave}
         />
       </Container>
+      {showAddItemModal && itemsToConvertToInventory.length > 0 && (
+        <AddItemFromCustomModal
+          show={showAddItemModal}
+          onFinished={handleConversionFinished}
+          itemToProcess={itemsToConvertToInventory[0]}
+        />
+      )}
     </>
   );
 }

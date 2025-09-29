@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Modal, Button, Form, Row, Col, Card, InputGroup, Alert, ListGroup, Spinner, CardText } from 'react-bootstrap';
-import { CustomTailoringItem, InventoryItem, ItemVariation } from '../../../types';
+import { CustomTailoringItem, InventoryItem, ItemVariation, MeasurementRef } from '../../../types';
 import { useAlert } from '../../../contexts/AlertContext';
 import { Gem, InfoCircleFill, Palette, PlusCircleFill, TagFill, Trash } from 'react-bootstrap-icons';
 import { ImageDropzone } from '../../imageDropzone/ImageDropzone';
@@ -11,8 +11,7 @@ import api, { uploadFile } from '../../../services/api';
 
 interface AddItemFromCustomModalProps {
   show: boolean;
-  onHide: () => void;
-  onFinished: () => void;
+  onFinished: (wasSuccessful: boolean) => void; // Changed to accept a boolean
   itemToProcess: CustomTailoringItem;
 }
 
@@ -28,7 +27,7 @@ type VariationInForm = Omit<ItemVariation, 'imageUrl'> & {
   imageUrl: string | File | null;
 };
 
-const AddItemFromCustomModal: React.FC<AddItemFromCustomModalProps> = ({ show, onHide, onFinished, itemToProcess }) => {
+const AddItemFromCustomModal: React.FC<AddItemFromCustomModalProps> = ({ show, onFinished, itemToProcess }) => {
   const { addAlert } = useAlert();
   const [addMode, setAddMode] = useState<AddMode>('new');
   const [formData, setFormData] = useState<Omit<InventoryItem, '_id' | 'variations'> & { variations: VariationInForm[] }>({} as any);
@@ -43,11 +42,28 @@ const AddItemFromCustomModal: React.FC<AddItemFromCustomModalProps> = ({ show, o
   const [loadingInventory, setLoadingInventory] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedInventoryItem, setSelectedInventoryItem] = useState<InventoryItem | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [measurementRefs, setMeasurementRefs] = useState<MeasurementRef[]>([]);
+
+  const uniqueCategories = useMemo(() => 
+    Array.from(new Set(measurementRefs.map(ref => ref.category)))
+         .filter(cat => cat !== 'Accessory'), 
+    [measurementRefs]
+  );
 
   useEffect(() => {
     if (show) {
+        const fetchMeasurementRefs = async () => {
+          try {
+            const res = await api.get('/measurementrefs');
+            setMeasurementRefs(res.data || []);
+          } catch (err) {
+            addAlert('Could not load category list.', 'warning');
+          }
+        };
+        fetchMeasurementRefs();
+
         const calculatedSize = convertMeasurementsToSize(itemToProcess.measurements);
-        
         // Ensure this object perfectly matches the VariationInForm type.
         const initialVariation: VariationInForm = {
           color: { name: 'Black', hex: '#000000' },
@@ -84,7 +100,7 @@ const AddItemFromCustomModal: React.FC<AddItemFromCustomModalProps> = ({ show, o
       setLoadingInventory(true);
       try {
         const res = await api.get('/inventory');
-        setInventory(res.data || []);
+        setInventory(res.data.items || []);
       } catch (error) {
         addAlert('Failed to load inventory.', 'danger');
       } finally {
@@ -116,13 +132,15 @@ const AddItemFromCustomModal: React.FC<AddItemFromCustomModalProps> = ({ show, o
     };
 
     const handleSave = async () => {
-    try {
+        setIsSaving(true);
+        try {
         if (addMode === 'new') {
             const newVariationForm = formData.variations[0];
-            if (!formData.name.trim() || !newVariationForm.color.name.trim() || !newVariationForm.imageUrl) {
-                addAlert('Product Name, Color, and Image are required.', 'warning');
-                return;
-            }
+            if (!formData.name.trim() || !newVariationForm.color.name.trim()) {
+                  addAlert('Product Name and Color are required.', 'warning');
+                  setIsSaving(false);
+                  return;
+              }
 
             let finalImageUrl = '';
             if (newVariationForm.imageUrl instanceof File) {
@@ -136,13 +154,14 @@ const AddItemFromCustomModal: React.FC<AddItemFromCustomModalProps> = ({ show, o
 
             await api.post('/inventory', finalPayload);
             addAlert(`Successfully created new product: ${formData.name}`, 'success');
-            onFinished();
+            onFinished(true);
 
-        } else { // 'variation' mode
-            if (!selectedInventoryItem || !variationData.color.name.trim() || !variationData.imageUrl) {
-                addAlert('Please select a product, and provide a color and image.', 'warning');
-                return;
-            }
+        } else {
+            if (!selectedInventoryItem || !variationData.color.name.trim()) {
+                  addAlert('Please select a product and provide a color.', 'warning');
+                  setIsSaving(false);
+                  return;
+              }
 
             let finalImageUrl = '';
             if (variationData.imageUrl instanceof File) {
@@ -162,32 +181,28 @@ const AddItemFromCustomModal: React.FC<AddItemFromCustomModalProps> = ({ show, o
                 variations: updatedVariations,
             });
             addAlert(`Successfully added new variation to ${selectedInventoryItem.name}`, 'success');
-            onFinished();
+            onFinished(true);
         }
     } catch (error) {
         addAlert('An error occurred while saving to inventory.', 'danger');
+        onFinished(false);
+    } finally {
+        setIsSaving(false); 
     }
   };
 
-    const handleMainFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    if (name === 'price') {
-        setFormData(prev => ({ ...prev, price: parseFloat(value) || 0 }));
-    } else {
-        setFormData(prev => ({ ...prev, [name]: value }));
-    }
+    const handleMainFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+        const { name, value } = e.target;
+        if (name === 'price') {
+            setFormData(prev => ({ ...prev, price: parseFloat(value) || 0 }));
+        } else {
+            setFormData(prev => ({ ...prev, [name]: value }));
+        }
     };
 
     const handleVariationFormChange = (field: keyof Omit<ItemVariation, 'color' | 'imageUrl'>, value: string) => {
         const newVariations = [...formData.variations];
         (newVariations[0] as any)[field] = value;
-        setFormData({ ...formData, variations: newVariations });
-    };
-  
-
-    const handleImageFileSelect = (file: File | null) => {
-        const newVariations = [...formData.variations];
-        newVariations[0].imageUrl = file;
         setFormData({ ...formData, variations: newVariations });
     };
 
@@ -206,7 +221,7 @@ const AddItemFromCustomModal: React.FC<AddItemFromCustomModalProps> = ({ show, o
     );
 
   return (
-    <Modal show={show} onHide={onFinished} size="xl" backdrop="static">
+    <Modal show={show} onHide={() => onFinished(false)} size="xl" backdrop="static">
       <Modal.Header closeButton>
         <Modal.Title>Add Returned Custom Item to Inventory</Modal.Title>
       </Modal.Header>
@@ -257,10 +272,14 @@ const AddItemFromCustomModal: React.FC<AddItemFromCustomModalProps> = ({ show, o
                 <Row className="mt-3">
                     <Col>
                         <ImageDropzone
-                        label="Variation Image"
-                        currentImage={variationData.imageUrl}
-                        onFileSelect={handleVariationImageFileSelect} // Correct prop name and handler
-                      />
+                            label="Variation Image"
+                            currentImage={formData.variations[0].imageUrl}
+                            onFileSelect={(file) => {
+                                const newVariations = [...formData.variations];
+                                newVariations[0].imageUrl = file;
+                                setFormData({ ...formData, variations: newVariations });
+                            }}
+                        />
                     </Col>
                 </Row>
                 </Card.Body>
@@ -282,7 +301,16 @@ const AddItemFromCustomModal: React.FC<AddItemFromCustomModalProps> = ({ show, o
             <Col md={3}>
                 <Form.Group className="mb-3">
                 <Form.Label><TagFill className="me-1" /> Category</Form.Label>
-                <Form.Control name="category" value={formData.category} onChange={handleMainFormChange} />
+                <Form.Select 
+                  name="category" 
+                  value={formData.category} 
+                  onChange={handleMainFormChange}
+                >
+                  <option value="">-- Select a Category --</option>
+                  {uniqueCategories.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </Form.Select>
                 </Form.Group>
             </Col>
             <Col md={3}>
@@ -387,8 +415,11 @@ const AddItemFromCustomModal: React.FC<AddItemFromCustomModalProps> = ({ show, o
         )}
         </Modal.Body>
       <Modal.Footer>
-        <Button variant="secondary" onClick={onFinished}>Cancel</Button>
-        <Button variant="primary" onClick={handleSave}>Save to Inventory</Button>
+        <Button variant="secondary" onClick={() => onFinished(false)} disabled={isSaving}>Cancel</Button>
+        <Button variant="primary" onClick={handleSave} disabled={isSaving}>
+          {isSaving ? <Spinner as="span" size="sm" className="me-2" /> : null}
+          Save to Inventory
+        </Button>
       </Modal.Footer>
     </Modal>
   );

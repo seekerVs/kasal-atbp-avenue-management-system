@@ -133,7 +133,7 @@ function ManageRentals() {
         <Card className="shadow-sm overflow-hidden">
           <Card.Header className="bg-white border-bottom-0 pt-3 px-3">
             <div className="d-flex flex-wrap justify-content-between align-items-center">
-              <h2 className="mb-0">Rentals Manager</h2>
+              <h2 className="mb-0">Orders Manager</h2>
               <div className="d-flex align-items-center gap-2">
                 <InputGroup style={{ maxWidth: '400px' }}>
                   <InputGroup.Text><Search /></InputGroup.Text>

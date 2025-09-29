@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Button, Image, Spinner, Alert, Card } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
-import CustomFooter from '../../components/customFooter/CustomFooter';
 import { CustomTailoringPageContent } from '../../types';
 import './customTailoring.css';
 
@@ -86,10 +85,6 @@ function CustomTailoring() {
           </Col>
         </Row>
       </Container>
-      
-      <footer className="text-dark py-3 border-top">
-        <CustomFooter />
-      </footer>
     </>
   );
 }

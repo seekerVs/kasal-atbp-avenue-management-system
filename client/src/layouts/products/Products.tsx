@@ -13,8 +13,6 @@ import {
 import { Funnel, SortDown } from "react-bootstrap-icons";
 import ProductCard from "../../components/productCard/ProductCard";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import CustomFooter from "../../components/customFooter/CustomFooter";
-
 import api from '../../services/api';
 import { InventoryItem } from '../../types';
 import './products.css';
@@ -262,9 +260,6 @@ function Products() {
           </Col>
         </Row>
       </div>
-      <footer className="px-0 py-3 mt-4 border-top">
-        <CustomFooter />
-      </footer>
     </>
   );
 }

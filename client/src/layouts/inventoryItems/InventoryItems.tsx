@@ -214,27 +214,30 @@ function InventoryItems() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredInventory.map(item => (
-                      <tr key={item._id}>
-                        <td style={{ width: '80px', textAlign: 'center' }}>
-                          <img
-                            src={item.variations && item.variations.length > 0 ? item.variations[0].imageUrl : 'https://placehold.co/60x60/e9ecef/adb5bd?text=N/A'}
-                            alt={item.name}
-                            style={{ width: '60px', height: '60px', borderRadius: '0.25rem', objectFit: 'cover' }}
-                          />
-                        </td>
-                        <td>{item.name}</td>
-                        <td>{item.category}</td>
-                        <td>₱{item.price ? item.price.toFixed(2) : '0.00'}</td>
-                        <td>{item.variations ? item.variations.length : 0}</td>
-                        <td>{getTotalStock(item)}</td>
-                        <td>{getTotalStock(item) > 0 ? <Badge bg="success">In Stock</Badge> : <Badge bg="danger">Out of Stock</Badge>}</td>
-                        <td>
-                          <Button variant="outline-secondary" size="sm" className="me-2" onClick={() => handleOpenItemModal(item)}><PencilSquare /></Button>
-                          <Button variant="outline-danger" size="sm" onClick={() => handleOpenDeleteModal(item)}><Trash /></Button>
-                        </td>
-                      </tr>
-                    ))}
+                    {filteredInventory.map(item => {
+                      const displayImage = item.variations?.[0]?.imageUrl || 'https://placehold.co/60x60/e9ecef/adb5bd?text=N/A';
+                      return (
+                        <tr key={item._id}>
+                          <td style={{ width: '80px', textAlign: 'center' }}>
+                            <img
+                              src={displayImage}
+                              alt={item.name}
+                              style={{ width: '60px', height: '60px', borderRadius: '0.25rem', objectFit: 'cover' }}
+                            />
+                          </td>
+                          <td>{item.name}</td>
+                          <td>{item.category}</td>
+                          <td>₱{item.price ? item.price.toFixed(2) : '0.00'}</td>
+                          <td>{item.variations ? item.variations.length : 0}</td>
+                          <td>{getTotalStock(item)}</td>
+                          <td>{getTotalStock(item) > 0 ? <Badge bg="success">In Stock</Badge> : <Badge bg="danger">Out of Stock</Badge>}</td>
+                          <td>
+                            <Button variant="outline-secondary" size="sm" className="me-2" onClick={() => handleOpenItemModal(item)}><PencilSquare /></Button>
+                            <Button variant="outline-danger" size="sm" onClick={() => handleOpenDeleteModal(item)}><Trash /></Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </Table>
               ) : (

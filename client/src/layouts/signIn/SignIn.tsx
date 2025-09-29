@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { Form, Button, Card, InputGroup, Alert } from "react-bootstrap"; // Import Alert for error messages
 import { Eye, EyeSlash } from "react-bootstrap-icons";
-import CustomFooter from "../../components/customFooter/CustomFooter"; // Assuming this path is correct
 import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "../../services/api";
 import { dispatchAuthChangeEvent } from "../../services/authEvent";
@@ -133,11 +132,6 @@ function SignIn() {
           </Form>
         </Card>
       </div>
-
-      {/* Footer stays at the bottom */}
-      <footer className="text-dark mt-auto py-3">
-        <CustomFooter />
-      </footer>
     </div>
   );
 }

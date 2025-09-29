@@ -117,6 +117,8 @@ export interface CustomTailoringItem extends BaseRentItem {
   materials: string[];
   designSpecifications: string;
   referenceImages: string[];
+  fittingDate: string;
+  completionDate: string;
 }
 
 // --- Defines an item assigned to a role within a rented package ---
@@ -188,6 +190,7 @@ export interface RentalOrder {
   status: RentalStatus;
   createdAt: string;
   updatedAt: string;
+  pendingInventoryConversion?: CustomTailoringItem[];
 }
 
 export interface NormalizedFulfillmentItem {

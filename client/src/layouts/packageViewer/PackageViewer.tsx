@@ -5,7 +5,6 @@ import { Col, Row, Image, Stack, Form, Button, Alert, Carousel, ListGroup, Accor
 import { X, Check2 } from "react-bootstrap-icons";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Package as PackageType, InventoryItem, AssignedItem } from "../../types";
-import CustomFooter from "../../components/customFooter/CustomFooter";
 import api from "../../services/api";
 import './packageViewer.css';
 import namer from 'color-namer';
@@ -279,9 +278,6 @@ function PackageViewer() {
             </Col>
           </Row>
         </div>
-      <footer className="text-dark py-3 mt-5">
-        <CustomFooter />
-      </footer>
 
       <DataPrivacyModal
         show={showPrivacyModal}

@@ -4,15 +4,15 @@ import React from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import CustomNavbar1 from './customNavbar/CustomNavbar1';
 import Sidebar from './sidebar/Sidebar';
-import { AdminBar } from './adminBar/AdminBar.tsx'; // We will create this next
-import { useAuth } from '../hooks/useAuth'; // We will create this next
+import { AdminBar } from './adminBar/AdminBar.tsx';
+import { useAuth } from '../hooks/useAuth';
 import AlertContainer from './alerts/AlertContainer.tsx';
+import CustomFooter from './customFooter/CustomFooter';
 
-// These are the routes that are part of the admin dashboard's core UI
 const ADMIN_CORE_ROUTES = [
   '/dashboard',
   '/new-rental',
-  '/rentals', // Base for /rentals/:id
+  '/rentals',
   '/singleRent',
   '/packageRent',
   '/customRent',
@@ -23,9 +23,9 @@ const ADMIN_CORE_ROUTES = [
   '/accounts',
   '/settings',
   '/manage-reservations',
-  '/reservations', // Base for /reservations/:id
+  '/reservations',
   '/manage-appointments',
-  '/appointments', // Base for /appointments/:id
+  '/appointments',
   "/damaged-items",
 ];
 
@@ -33,10 +33,14 @@ export const Layout = () => {
   const { isAuthenticated } = useAuth();
   const location = useLocation();
 
-  // Determine if the current path is a core admin-only page
   const isCoreAdminPage = ADMIN_CORE_ROUTES.some(route => location.pathname.startsWith(route));
 
-  // We place it at the top level so its `position: fixed` style works correctly over all content.
+  const renderFooter = !isCoreAdminPage && (
+    <footer className="bg-white text-dark py-3 border-top mt-3">
+      <CustomFooter />
+    </footer>
+  );
+  
   return (
     <>
       <AlertContainer />
@@ -44,20 +48,20 @@ export const Layout = () => {
         if (!isAuthenticated) {
           // --- 1. USER IS LOGGED OUT ---
           return (
-            <>
+            <div className="d-flex flex-column" style={{ minHeight: '100vh' }}>
               <div className="custom-navbar-wrapper">
                 <CustomNavbar1 />
               </div>
               <div className="unprotected-container">
                 <Outlet />
               </div>
-            </>
+              {renderFooter}
+            </div>
           );
         }
 
         // --- USER IS LOGGED IN ---
         if (isCoreAdminPage) {
-          // --- 2. ADMIN IS ON A DASHBOARD PAGE ---
           return (
             <div className="d-lg-flex " style={{ minHeight: '100vh' }}>
               <Sidebar />
@@ -67,17 +71,17 @@ export const Layout = () => {
             </div>
           );
         } else {
-          // --- 3. ADMIN IS VIEWING A PUBLIC PAGE ---
           return (
-            <>
+            <div className="d-flex flex-column" style={{ minHeight: '100vh' }}>
               <AdminBar />
-              <div className="custom-navbar-wrapper" style={{ top: '40px' }}> {/* Push down for AdminBar */}
+              <div className="custom-navbar-wrapper" style={{ top: '40px' }}>
                 <CustomNavbar1 />
               </div>
               <div className="unprotected-container" style={{ marginTop: '110px' }}>
                 <Outlet />
               </div>
-            </>
+              {renderFooter}
+            </div>
           );
         }
       })()}

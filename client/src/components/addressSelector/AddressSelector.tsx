@@ -26,64 +26,45 @@ export const AddressSelector: React.FC<AddressSelectorProps> = ({ value, onChang
   const [provinces] = useState<TProvince[]>(getAllProvinces());
   const [cities, setCities] = useState<TMunicipality[]>([]);
   const [barangays, setBarangays] = useState<TBarangay[]>([]);
-  const [selectedProvinceCode, setSelectedProvinceCode] = useState(() => {
-    if (value.province) {
-      const initialProvince = provinces.find(p => p.name === value.province);
-      return initialProvince ? initialProvince.psgcCode : '';
+
+  // Effect to populate dropdowns based on codes
+  useEffect(() => {
+    // This effect populates the cities dropdown whenever the selected province changes.
+    const province = provinces.find(p => p.name === value.province);
+    if (province) {
+      setCities(getMunicipalitiesByProvince(province.psgcCode));
+    } else {
+      setCities([]); // If province is custom or cleared, empty the cities list.
     }
-    return '';
-  });
-  const [selectedCityCode, setSelectedCityCode] = useState('');
+  }, [value.province, provinces]);
 
   useEffect(() => {
-    // This effect runs on initial mount to pre-populate the dropdowns.
-    if (value.province) {
-      const province = provinces.find(p => p.name === value.province);
-      if (province) {
-        setSelectedProvinceCode(province.psgcCode);
+    // This effect populates the barangays dropdown whenever the selected city changes.
+    const province = provinces.find(p => p.name === value.province);
+    if (province) {
         const municipalities = getMunicipalitiesByProvince(province.psgcCode);
-        setCities(municipalities);
-
-        // If there's also a pre-selected city, load its barangays too.
-        if (value.city) {
-          const city = municipalities.find(m => m.name === value.city);
-          if (city) {
-            setSelectedCityCode(city.psgcCode);
+        const city = municipalities.find(m => m.name === value.city);
+        if (city) {
             setBarangays(getBarangaysByMunicipality(city.psgcCode));
-          }
+        } else {
+            setBarangays([]); // If city is custom or cleared, empty the barangays list.
         }
-      }
+    } else {
+        setBarangays([]);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [value.province, value.city, provinces]);
 
-  useEffect(() => {
-    if (selectedProvinceCode) setCities(getMunicipalitiesByProvince(selectedProvinceCode));
-    else setCities([]);
-  }, [selectedProvinceCode]);
 
-  useEffect(() => {
-    if (selectedCityCode) setBarangays(getBarangaysByMunicipality(selectedCityCode));
-    else setBarangays([]);
-  }, [selectedCityCode]);
-
-  // --- 2. Create new, more flexible handlers for the Typeahead component ---
   const handleProvinceChange = (selected: any[]) => {
     if (selected.length > 0) {
       const selection = selected[0];
-      // `customOption` is true when the user types a new value
-      const provinceCode = selection.customOption ? '' : selection.psgcCode;
-      const provinceName = selection.name;
-
-      setSelectedProvinceCode(provinceCode);
-      setSelectedCityCode('');
+      const provinceName = typeof selection === 'string' ? selection : selection.name;
       onChange('province', provinceName);
+      // When province changes, always reset city and barangay
       onChange('city', '');
       onChange('barangay', '');
     } else {
       // Handle clearing the input
-      setSelectedProvinceCode('');
-      setSelectedCityCode('');
       onChange('province', '');
       onChange('city', '');
       onChange('barangay', '');
@@ -93,14 +74,11 @@ export const AddressSelector: React.FC<AddressSelectorProps> = ({ value, onChang
   const handleCityChange = (selected: any[]) => {
     if (selected.length > 0) {
       const selection = selected[0];
-      const cityCode = selection.customOption ? '' : selection.psgcCode;
-      const cityName = selection.name;
-      
-      setSelectedCityCode(cityCode);
+      const cityName = typeof selection === 'string' ? selection : selection.name;
       onChange('city', cityName);
+      // When city changes, always reset barangay
       onChange('barangay', '');
     } else {
-      setSelectedCityCode('');
       onChange('city', '');
       onChange('barangay', '');
     }
@@ -109,7 +87,7 @@ export const AddressSelector: React.FC<AddressSelectorProps> = ({ value, onChang
   const handleBarangayChange = (selected: any[]) => {
     if (selected.length > 0) {
       const selection = selected[0];
-      const barangayName = selection.name;
+      const barangayName = typeof selection === 'string' ? selection : selection.name;
       onChange('barangay', barangayName);
     } else {
       onChange('barangay', '');
@@ -119,6 +97,10 @@ export const AddressSelector: React.FC<AddressSelectorProps> = ({ value, onChang
   const colProps = layout === 'horizontal' 
     ? { xs: 12, md: 6, lg: 3 } 
     : { xs: 12, md: 6 };
+
+  const selectedProvince = value.province ? [{ name: value.province }] : [];
+  const selectedCity = value.city ? [{ name: value.city }] : [];
+  const selectedBarangay = value.barangay ? [{ name: value.barangay }] : [];
 
   return (
     <>
@@ -132,7 +114,7 @@ export const AddressSelector: React.FC<AddressSelectorProps> = ({ value, onChang
             labelKey="name" // <-- Tells Typeahead to display the 'name' property from the objects
             options={provinces}
             onChange={handleProvinceChange}
-            selected={provinces.filter(p => p.name === value.province)}
+            selected={selectedProvince}
             placeholder="Choose or type a province..."
             isInvalid={!!errors.province}
           />
@@ -151,7 +133,7 @@ export const AddressSelector: React.FC<AddressSelectorProps> = ({ value, onChang
             labelKey="name"
             options={cities}
             onChange={handleCityChange}
-            selected={cities.filter(c => c.name === value.city)}
+            selected={selectedCity}
             placeholder="Choose or type a city..."
             disabled={!value.province}
             isInvalid={!!errors.city}
@@ -171,7 +153,7 @@ export const AddressSelector: React.FC<AddressSelectorProps> = ({ value, onChang
             labelKey="name"
             options={barangays}
             onChange={handleBarangayChange}
-            selected={barangays.filter(b => b.name === value.barangay)}
+            selected={selectedBarangay}
             placeholder="Choose or type a barangay..."
             disabled={!value.city}
             isInvalid={!!errors.barangay}

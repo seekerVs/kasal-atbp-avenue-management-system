@@ -47,6 +47,16 @@ export const BookingCard: React.FC<BookingCardProps> = ({
     const rental = booking as RentalOrder;
     const reservation = booking as Reservation;
 
+    let isPurchaseOnly = false;
+    if (isRental) {
+      const hasRentalItems = 
+        (rental.singleRents?.length ?? 0) > 0 || 
+        (rental.packageRents?.length ?? 0) > 0 || 
+        rental.customTailoring?.some(item => item.tailoringType === 'Tailored for Rent-Back');
+      const hasPurchaseItems = rental.customTailoring?.some(item => item.tailoringType === 'Tailored for Purchase');
+      isPurchaseOnly = hasPurchaseItems && !hasRentalItems;
+    }
+
     const getStatusBadgeVariant = (status: RentalStatus | Reservation['status']): BadgeVariant => {
       const variants: { [key in RentalStatus | Reservation['status']]?: BadgeVariant } = {
         Pending: 'primary',
@@ -126,6 +136,7 @@ export const BookingCard: React.FC<BookingCardProps> = ({
         ? `${format(new Date(rental.rentalStartDate), 'MMM dd, yyyy')} - ${format(new Date(rental.rentalEndDate), 'MMM dd, yyyy')}`
         : format(new Date(reservation.reserveDate), 'MMM dd, yyyy'),
       viewDetailsPath: isRental ? `/rentals/${booking._id}` : `/reservations/${booking._id}`,
+      isPurchaseOnly: isPurchaseOnly,
     };
   }, [booking, type]);
 
@@ -135,9 +146,12 @@ export const BookingCard: React.FC<BookingCardProps> = ({
   const hasMoreItems = displayData.allItems.length > ITEMS_TO_SHOW_INITIALLY;
   const displayedItems = displayData.allItems.slice(0, ITEMS_TO_SHOW_INITIALLY);
   const hiddenItems = displayData.allItems.slice(ITEMS_TO_SHOW_INITIALLY);
+  const shouldShowDateSection = 
+    type === 'reservation' || 
+    (type === 'rental' && !displayData.isPurchaseOnly && !['Pending', 'To Pickup'].includes(displayData.status));
 
   return (
-    <Card className="mb-4 shadow-sm">
+    <Card className="mb-2 shadow-sm">
       <Card.Header className="d-flex justify-content-between align-items-center bg-light">
         <div>
           <strong>ID: {displayData.id}</strong>
@@ -201,7 +215,9 @@ export const BookingCard: React.FC<BookingCardProps> = ({
               <p className="mb-0 text-muted small">Total Amount</p>
               <p className="fw-bold fs-5 mb-0"><span className="text-danger">₱{formatCurrency(displayData.grandTotal)}</span></p>
               <p className="text-muted fst-italic mb-0" style={{ fontSize: '0.75rem' }}>(Includes ₱{formatCurrency(displayData.deposit)} deposit)</p>
-              <p className="mb-1 text-muted small mt-2">{displayData.mainDateLabel}: {displayData.mainDateValue}</p>
+              {shouldShowDateSection && (
+                <p className="mb-1 text-muted small mt-2">{displayData.mainDateLabel}: {displayData.mainDateValue}</p>
+              )}
             </Col>
             <Col className="d-flex justify-content-end align-items-center">
               <Button

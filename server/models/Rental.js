@@ -76,9 +76,10 @@ const CustomTailoringItemSchema = new mongoose.Schema({
   materials: { type: [String] },
   designSpecifications: { type: String },
   referenceImages: { type: [String] },
+  fittingDate: { type: Date, required: true },
+  completionDate: { type: Date, required: true },
 }, { _id: false });
 
-// NEW: Schema for detailed payment info
 const PaymentDetailSchema = new mongoose.Schema({
     amount: { type: Number, required: true, default: 0 },
     date: { type: Date },
@@ -86,7 +87,6 @@ const PaymentDetailSchema = new mongoose.Schema({
     receiptImageUrl: { type: String, default: null }
 }, { _id: false });
 
-// UPDATED: Financials schema to use the new payment details
 const FinancialsSchema = new mongoose.Schema({
   shopDiscount: { type: Number, default: 0 },
   depositAmount: { type: Number, default: 0 },
@@ -96,7 +96,7 @@ const FinancialsSchema = new mongoose.Schema({
 
 // --- MAIN RENTAL SCHEMA ---
 const RentalSchema = new mongoose.Schema({
-  _id: { // <-- MAJOR CHANGE #1
+  _id: {
     type: String,
     required: true,
   },
@@ -107,7 +107,7 @@ const RentalSchema = new mongoose.Schema({
   singleRents: [SingleRentItemSchema],
   packageRents: [PackageRentItemSchema],
   customTailoring: [CustomTailoringItemSchema],
-  financials: { // <-- MAJOR CHANGE #2
+  financials: {
     type: FinancialsSchema, 
     required: true 
   },
@@ -119,9 +119,13 @@ const RentalSchema = new mongoose.Schema({
     enum: ['Pending', 'To Pickup', 'To Return', 'Completed', 'Cancelled'],
     default: 'Pending',
   },
+  pendingInventoryConversion: {
+    type: [CustomTailoringItemSchema],
+    default: [],
+  },
 }, {
   timestamps: true,
-  _id: false, // <-- Crucial for using custom string _id
+  _id: false,
 });
 
 const RentalModel = mongoose.model("rentals", RentalSchema);

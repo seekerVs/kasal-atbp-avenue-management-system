@@ -56,7 +56,7 @@ router.post('/', protect, sanitizeRequestBody, asyncHandler(async (req, res) => 
 
     try {
         // --- 2. Prepare the base rental data object ---
-        const newRentalId = `rent_${nanoid(8)}`;
+        const newRentalId = `KSL_${nanoid(8)}`;
         const startDate = new Date();
         const endDate = new Date(startDate);
         endDate.setDate(startDate.getDate() + 3); // Default 4-day rental period
@@ -994,7 +994,7 @@ router.post('/from-booking', asyncHandler(async (req, res) => {
             throw new Error('Source booking for the appointment could not be found.');
         }
 
-        const newRentalId = `rent_${nanoid(8)}`;
+        const newRentalId = `KSL_${nanoid(8)}`;
 
         const rentalData = {
             _id: newRentalId,
@@ -1172,7 +1172,7 @@ router.post('/from-reservation', protect, asyncHandler(async (req, res) => {
     endDate.setDate(startDate.getDate() + 3);
 
     const newRental = new RentalModel({
-      _id: `rent_${nanoid(8)}`,
+      _id: `KSL_${nanoid(8)}`,
       customerInfo: [reservation.customerInfo],
       singleRents: reservation.itemReservations.map(item => ({
           itemId: item.itemId,
@@ -1227,6 +1227,34 @@ router.post('/from-reservation', protect, asyncHandler(async (req, res) => {
   }
 }));
 
+router.delete('/:rentalId/pending-conversion/:customItemId', protect, asyncHandler(async (req, res) => {
+    const { rentalId, customItemId } = req.params;
+
+    // Use findByIdAndUpdate with the $pull operator to atomically remove the item
+    // from the pendingInventoryConversion array.
+    const updatedRental = await RentalModel.findByIdAndUpdate(
+        rentalId,
+        {
+            $pull: {
+                pendingInventoryConversion: { _id: customItemId }
+            }
+        },
+        { new: true } // Return the updated document after the pull operation
+    );
+
+    if (!updatedRental) {
+        res.status(404);
+        throw new Error('Rental not found or item already processed.');
+    }
+
+    // Recalculate financials and send back the final, updated rental object
+    const finalData = { 
+        ...updatedRental.toObject(), 
+        financials: calculateFinancials(updatedRental.toObject()) 
+    };
+    res.status(200).json(finalData);
+}));
+
 // METHOD: PUT /api/rentals/:id/process-return
 router.put('/:id/process-return', protect, asyncHandler(async (req, res) => {
     const { id } = req.params;
@@ -1246,25 +1274,16 @@ router.put('/:id/process-return', protect, asyncHandler(async (req, res) => {
             throw new Error(`Cannot process return for a rental with status "${rental.status}".`);
         }
 
-        // --- 1. Process and Log All Damaged Items ---
-        const damagedItemsMap = new Map(); // Key: 'itemId-variation', Value: quantity damaged
+        const damagedItemsMap = new Map();
         if (damagedItems && Array.isArray(damagedItems) && damagedItems.length > 0) {
             const newDamagedRecords = damagedItems.map(item => {
-                // Use a consistent key for both standard and custom items
                 const key = `${item.itemId}-${item.variation}`;
                 damagedItemsMap.set(key, (damagedItemsMap.get(key) || 0) + item.quantity);
-
-                return {
-                    ...item, // Spread all properties from the payload
-                    rentalId: id,
-                    status: 'Awaiting Repair', // Default status for new entries
-                };
+                return { ...item, rentalId: id, status: 'Awaiting Repair' };
             });
-            // Create all damaged records in the database in a single operation
             await DamagedItem.insertMany(newDamagedRecords, { session });
         }
 
-        // --- 2. Calculate Stock to Restore for UNDAMAGED Standard Items ---
         const stockUpdateOperations = [];
         const allStandardRentedItems = [
             ...rental.singleRents.map(item => ({
@@ -1287,7 +1306,6 @@ router.put('/:id/process-return', protect, asyncHandler(async (req, res) => {
             const key = `${rentedItem.itemId}-${rentedItem.variation}`;
             const damagedQty = damagedItemsMap.get(key) || 0;
             const undamagedQty = rentedItem.quantity - damagedQty;
-
             if (undamagedQty > 0) {
                 const [color, size] = rentedItem.variation.split(',').map(s => s.trim());
                 stockUpdateOperations.push({
@@ -1307,38 +1325,22 @@ router.put('/:id/process-return', protect, asyncHandler(async (req, res) => {
             await ItemModel.bulkWrite(stockUpdateOperations, { session });
         }
 
-        // --- 3. Process UNDAMAGED "Rent-Back" Items by Adding Them to Inventory ---
-        const rentBackItems = rental.customTailoring.filter(
-            item => item.tailoringType === 'Tailored for Rent-Back'
-        );
-
-        for (const rentBackItem of rentBackItems) {
-            const key = `${rentBackItem._id}-${rentBackItem.outfitType}`; // A unique key for custom items
-            const isDamaged = damagedItemsMap.has(key);
-
-            if (!isDamaged) {
-                // If the item is NOT damaged, create a new entry in the main 'items' inventory.
-                const newItemForInventory = new ItemModel({
-                    name: rentBackItem.name,
-                    price: rentBackItem.price,
-                    category: rentBackItem.outfitCategory,
-                    description: rentBackItem.designSpecifications,
-                    composition: rentBackItem.materials,
-                    variations: [{
-                        // Here you would ideally use a more sophisticated way to get the color name/hex.
-                        // For now, we'll use a placeholder.
-                        color: { name: "As Specified", hex: "#000000" }, 
-                        // You can use your size converter utility here if available
-                        size: convertMeasurementsToSize(rentBackItem.measurements),
-                        quantity: rentBackItem.quantity,
-                        imageUrl: rentBackItem.referenceImages[0] || ''
-                    }],
-                });
-                await newItemForInventory.save({ session });
+        // 1. Identify undamaged "Rent-Back" items
+        const undamagedRentBackItems = rental.customTailoring.filter(item => {
+            if (item.tailoringType !== 'Tailored for Rent-Back') {
+                return false; // Not a rent-back item
             }
+            // A unique key for a custom item (using its own _id and type)
+            const key = `${item._id}-Custom (${item.outfitType})`;
+            // If the item's key is in the damaged map, it's damaged.
+            return !damagedItemsMap.has(key);
+        });
+        
+        // 2. Add these items to the new 'pendingInventoryConversion' field
+        if (undamagedRentBackItems.length > 0) {
+            rental.pendingInventoryConversion.push(...undamagedRentBackItems);
         }
         
-        // --- 4. Finalize the Rental Document ---
         rental.status = 'Completed';
         if (depositReimbursed !== undefined) {
             if (parseFloat(depositReimbursed) > rental.financials.depositAmount) {
@@ -1350,7 +1352,6 @@ router.put('/:id/process-return', protect, asyncHandler(async (req, res) => {
         const updatedRental = await rental.save({ session });
         await session.commitTransaction();
 
-        // --- 5. Send Final Response ---
         const calculatedFinancials = calculateFinancials(updatedRental.toObject());
         const finalResponse = {
             ...updatedRental.toObject(),
@@ -1360,7 +1361,7 @@ router.put('/:id/process-return', protect, asyncHandler(async (req, res) => {
 
     } catch (error) {
         await session.abortTransaction();
-        throw error; // Let the global error handler manage the response
+        throw error;
     } finally {
         session.endSession();
     }

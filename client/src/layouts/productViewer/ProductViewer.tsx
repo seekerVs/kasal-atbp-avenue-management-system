@@ -7,8 +7,6 @@ import {
 import { X } from "react-bootstrap-icons";
 import { SizeChart } from "../../assets/images";
 import { useNavigate, useParams } from "react-router-dom";
-import CustomFooter from "../../components/customFooter/CustomFooter";
-
 import { InventoryItem, ItemVariation } from "../../types";
 import api from "../../services/api";
 
@@ -238,9 +236,6 @@ const ProductViewer: React.FC = () => {
           </Col>
         </Row>
       </div>
-      <footer className="text-dark py-3 mt-5">
-        <CustomFooter />
-      </footer>
 
       <Modal show={showSizeChart} onHide={() => setShowSizeChart(false)} centered size="lg">
         <Modal.Header closeButton><Modal.Title>Size Chart</Modal.Title></Modal.Header>

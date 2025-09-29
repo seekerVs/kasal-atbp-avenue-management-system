@@ -1,6 +1,7 @@
 import React from 'react';
 import { Row, Col, Image, Button, ButtonGroup, Badge } from 'react-bootstrap';
-import { BoxSeam, PencilSquare, Trash } from 'react-bootstrap-icons';
+import { BoxSeam, PencilSquare, Trash, CalendarEvent } from 'react-bootstrap-icons';
+import { format } from 'date-fns';
 import { SingleRentItem, RentedPackage, CustomTailoringItem } from '../../types';
 
 // --- COMPONENT PROPS INTERFACE ---
@@ -105,7 +106,18 @@ const RentalItemsList: React.FC<RentalItemsListProps> = ({
             <Col>
                 <p className="mb-1 fw-medium">{item.name}</p>
                 <p className="text-muted small mb-0">Qty: {item.quantity}</p>
-                {/* You can add more details here if needed, like status or type */}
+                {item.fittingDate && (
+                  <p className="text-muted small mb-0">
+                    <CalendarEvent size={12} className="me-1"/> 
+                    Fitting: {format(new Date(item.fittingDate), 'MMM dd, yyyy')}
+                  </p>
+                )}
+                 {item.completionDate && (
+                  <p className="text-muted small mb-0">
+                    <CalendarEvent size={12} className="me-1"/> 
+                    Completion: {format(new Date(item.completionDate), 'MMM dd, yyyy')}
+                  </p>
+                )}
                 <Badge bg="info" pill className="mt-1">{statusText}</Badge>
             </Col>
             <Col xs="auto" className="text-end">

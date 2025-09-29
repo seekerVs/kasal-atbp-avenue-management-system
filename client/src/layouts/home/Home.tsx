@@ -1,7 +1,6 @@
 // src/layouts/home/Home.tsx
 import React, { useState, useEffect } from "react";
 import { Container, Spinner } from "react-bootstrap";
-import CustomFooter from "../../components/customFooter/CustomFooter";
 
 // Import the new section components
 import { HeroSection } from './HeroSection';
@@ -54,9 +53,6 @@ function Home() {
       <FeaturesSection data={pageContent.features} />
       <ServicesSection data={pageContent.services} />
       <QualityCTASection data={pageContent.qualityCTA} />
-      <footer className="bg-white text-dark py-3">
-        <CustomFooter />
-      </footer>
     </Container>
   );
 }

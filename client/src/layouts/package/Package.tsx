@@ -3,7 +3,6 @@
 import React, { useEffect, useState } from "react";
 import { Alert, Col, Row, Spinner, Container } from "react-bootstrap";
 import PackageCard from "../../components/packageCard/PackageCard";
-import CustomFooter from "../../components/customFooter/CustomFooter";
 import { useNavigate } from "react-router-dom";
 
 import api from '../../services/api';
@@ -69,10 +68,6 @@ function Package() {
           </Row>
         )}
       </div>
-
-      <footer className="text-dark py-3 mt-5 border-top">
-        <CustomFooter />
-      </footer>
     </>
   );
 }

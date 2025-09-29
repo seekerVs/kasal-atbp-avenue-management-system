@@ -145,7 +145,7 @@ const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({ s
             </Form>
           </Col>
           <Col md={5}>
-            <h6 className="text-uppercase small fw-bold">System Feedback</h6>
+            <h6 className="text-uppercase small fw-bold">Reminder</h6>
             {(() => {
               if (!recommendedSize) {
                 return (

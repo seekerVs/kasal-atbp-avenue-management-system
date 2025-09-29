@@ -6,7 +6,6 @@ import { format } from 'date-fns';
 import { Appointment, FormErrors, ShopSettings } from '../../types';
 import { ValidatedInput } from '../../components/forms/ValidatedInput';
 import { AddressSelector } from '../../components/addressSelector/AddressSelector';
-import CustomFooter from '../../components/customFooter/CustomFooter';
 import api from '../../services/api';
 import { useAlert } from '../../contexts/AlertContext';
 import { DayBlockPicker } from '../../components/dayBlockPicker/DayBlockPicker';
@@ -296,8 +295,6 @@ function CreateAppointmentPage() {
         onHide={() => setShowPrivacyModal(false)}
         onProceed={handleProceedWithSubmit}
       />
-
-      <footer className="bg-white text-dark py-3 border-top"><CustomFooter /></footer>
     </>
   );
 }

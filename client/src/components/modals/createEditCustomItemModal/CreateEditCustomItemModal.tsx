@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Modal, Button, Spinner } from 'react-bootstrap';
+import { format } from 'date-fns';
 import { CustomTailoringItem, MeasurementRef } from '../../../types';
 import { v4 as uuidv4 } from 'uuid';
 import { MultiImageDropzoneRef } from '../../multiImageDropzone/MultiImageDropzone';
@@ -24,6 +25,8 @@ const getInitialItem = (name: string): CustomTailoringItem => ({
     outfitCategory: '',
     outfitType: '',
     measurements: {},
+    fittingDate: '',
+    completionDate: '',
 });
 
 interface CreateEditCustomItemModalProps {
@@ -35,6 +38,8 @@ interface CreateEditCustomItemModalProps {
   onSave: (stagedItem: CustomTailoringItem, pendingFiles?: File[]) => void;
   isForPackage?: boolean;
   uploadMode?: 'immediate' | 'deferred';
+  initialFittingDate?: Date | string | null;
+  isFittingDateDisabled?: boolean;
 }
 
 const CreateEditCustomItemModal: React.FC<CreateEditCustomItemModalProps> = ({ 
@@ -45,7 +50,9 @@ const CreateEditCustomItemModal: React.FC<CreateEditCustomItemModalProps> = ({
     measurementRefs, 
     onSave,
     isForPackage,
-    uploadMode = 'deferred'
+    uploadMode = 'deferred',
+    initialFittingDate,
+    isFittingDateDisabled = false,
 }) => {
   const { addAlert } = useAlert();
   const { sensorData, isLoading, error } = useSensorData(show);
@@ -56,6 +63,7 @@ const CreateEditCustomItemModal: React.FC<CreateEditCustomItemModalProps> = ({
   const [warnings, setWarnings] = useState<string[]>([]);
   const [activeMeasurementField, setActiveMeasurementField] = useState<string | null>(null);
   const [lastInsertedTimestamp, setLastInsertedTimestamp] = useState<string | null>(null);
+  const [priceInput, setPriceInput] = useState('0');
 
   const isCreateMode = !item;
   const dropzoneRef = useRef<MultiImageDropzoneRef>(null);
@@ -83,7 +91,12 @@ const CreateEditCustomItemModal: React.FC<CreateEditCustomItemModalProps> = ({
             initialData.tailoringType = 'Tailored for Rent-Back';
         }
 
+        if (initialFittingDate) {
+          initialData.fittingDate = format(new Date(initialFittingDate), 'yyyy-MM-dd');
+        }
+
         setFormData(initialData);
+        setPriceInput(String(initialData.price || '0'));
         initialImageUrlsRef.current = initialData.referenceImages || [];
     }
   }, [show, item, itemName, isCreateMode, isForPackage]);
@@ -134,12 +147,41 @@ const CreateEditCustomItemModal: React.FC<CreateEditCustomItemModalProps> = ({
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     setErrors({});
-    if (errors.length > 0) setErrors([]);
     const { name, value } = e.target;
-    setFormData(prev => ({
+    
+    if (name === 'price') {
+      if (value === '' || /^\d*\.?\d*$/.test(value)) {
+        setPriceInput(value);
+      }
+    } else {
+      setFormData(prev => ({
         ...prev,
-        [name]: (name === 'price' || name === 'quantity') ? parseFloat(value) || 0 : value
-    }));
+        [name]: (name === 'quantity') ? parseFloat(value) || 0 : value
+      }));
+    }
+  };
+
+  const handlePriceBlur = () => {
+    const numericValue = parseFloat(priceInput) || 0;
+    setFormData(prev => ({ ...prev, price: numericValue }));
+    setPriceInput(String(numericValue));
+  };
+
+  const handleDateChange = (field: 'fittingDate' | 'completionDate', date: Date | null) => {
+    if (field === 'fittingDate') {
+      // If the fitting date is changed, also clear the completion date
+      setFormData(prev => ({
+        ...prev,
+        fittingDate: date ? format(date, 'yyyy-MM-dd') : '',
+        completionDate: '', // Reset the completion date
+      }));
+    } else {
+      // Otherwise, just update the completion date
+      setFormData(prev => ({
+        ...prev,
+        completionDate: date ? format(date, 'yyyy-MM-dd') : ''
+      }));
+    }
   };
 
   const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => { 
@@ -200,6 +242,12 @@ const checkForIssues = (): { isValid: boolean, warnings: string[] } => {
     if (formData.quantity < 1) newErrors.quantity = "Quantity must be at least 1.";
     if (!formData.outfitCategory) newErrors.outfitCategory = "Outfit Category is required.";
     if (!selectedRefId) newErrors.outfitType = "Outfit Type is required.";
+    if (!formData.fittingDate) {
+      newErrors.fittingDate = "Fitting Date is required.";
+    }
+    if (!formData.completionDate) {
+      newErrors.completionDate = "Target Completion Date is required.";
+    }
     
     // Check measurements only if an outfit type has been selected
     if (selectedRef) {
@@ -306,7 +354,7 @@ const checkForIssues = (): { isValid: boolean, warnings: string[] } => {
     const { isValid, warnings: newWarnings } = checkForIssues();
     
     if (!isValid) {
-      addAlert("Please correct the errors before saving.", "warning");
+      addAlert("Please fill in all required fields marked with an asterisk (*).", "danger");
       return;
     }
 
@@ -327,6 +375,8 @@ const checkForIssues = (): { isValid: boolean, warnings: string[] } => {
         <Modal.Body style={{ maxHeight: '75vh', overflowY: 'auto' }}>
           <CustomItemForm
             formData={formData}
+            priceInput={priceInput}
+            onPriceBlur={handlePriceBlur}
             measurementRefs={measurementRefs}
             selectedCategory={formData.outfitCategory || ''} 
             selectedRefId={selectedRefId}
@@ -334,6 +384,8 @@ const checkForIssues = (): { isValid: boolean, warnings: string[] } => {
             isForPackage={isForPackage}
             isCreateMode={isCreateMode} 
             onInputChange={handleInputChange}
+            onDateChange={handleDateChange}
+            isFittingDateDisabled={isFittingDateDisabled}
             onCategoryChange={handleCategoryChange}
             onRefChange={handleRefChange}
             onMeasurementChange={handleMeasurementChange}

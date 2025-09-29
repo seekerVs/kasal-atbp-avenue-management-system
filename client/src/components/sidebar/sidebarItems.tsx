@@ -29,12 +29,12 @@ export const sidebarItems: NavItem[] = [
     icon: HouseDoorFill,
   },
   {
-    title: "Rentals",
+    title: "Orders",
     path: "#",
     icon: CalendarPlus,
     subItems: [
-      { title: "New Rental", path: "/new-rental" },
-      { title: "Manage Rentals", path: "/manageRentals" },
+      { title: "New Order", path: "/new-rental" },
+      { title: "Manage Orders", path: "/manageRentals" }, 
     ],
   },
   {
