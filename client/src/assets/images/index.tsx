@@ -19,6 +19,7 @@ import Logo from "./logo.svg";
 import Logo2 from "./logo2.svg";
 import Package1 from "./Package1.jpg";
 import Package2 from "./Package2.jpg";
+import HowToMeasure from "./howToMeasure.jpg"
 
 export {
   Store_1,
@@ -42,4 +43,5 @@ export {
   Package1,
   Package2,
   Logo2,
+  HowToMeasure,
 };

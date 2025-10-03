@@ -186,7 +186,7 @@ function SingleRent() {
         variation: variation, // Pass the whole variation object
         price: product.price,
         quantity: quantity,
-        imageUrl: variation.imageUrl,
+        imageUrl: variation.imageUrls[0] || '',
       };
     });
 
@@ -262,7 +262,7 @@ function SingleRent() {
                       <ListGroup.Item key={`${item.product._id}-${variationKey}`} className="px-2 py-3 border-bottom">
                         <Row className="align-items-center gx-0">
                           <Col xs="auto">
-                            <BsImage src={item.variation.imageUrl} thumbnail style={{ width: '80px', height: '80px', objectFit: 'cover', marginRight:'1rem' }} />
+                            <BsImage src={item.variation.imageUrls[0] || 'https://placehold.co/80x80'} thumbnail style={{ width: '80px', height: '80px', objectFit: 'cover', marginRight:'1rem' }} />
                           </Col>
                           <Col>
                             <p className="fw-bold mb-1">{item.product.name}</p>

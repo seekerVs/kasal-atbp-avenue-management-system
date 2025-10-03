@@ -93,6 +93,7 @@ function RentalViewer() {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [itemsToConvertToInventory, setItemsToConvertToInventory] = useState<CustomTailoringItem[]>([]);
   const [showAddItemModal, setShowAddItemModal] = useState(false);
+  const [isSendingReminder, setIsSendingReminder] = useState(false); 
 
   // --- DATA FETCHING & SYNCING ---
   useEffect(() => {
@@ -179,6 +180,24 @@ function RentalViewer() {
       // The items remain in the `pendingInventoryConversion` array on the backend to be processed later.
       addAlert('Inventory conversion cancelled. You can resume this process later.', 'info');
       setItemsToConvertToInventory([]);
+    }
+  };
+
+  const handleSendReminder = async () => {
+    if (!rental) return;
+
+    setIsSendingReminder(true);
+    try {
+      // Call the new backend endpoint we created in the previous phase
+      const response = await api.post(`/rentals/${rental._id}/send-reminder`);
+      
+      // Update the main rental state with the response data from the API
+      setRental(response.data);
+      addAlert('Return reminder email sent successfully!', 'success');
+    } catch (err: any) {
+      addAlert(err.response?.data?.message || 'Failed to send reminder.', 'danger');
+    } finally {
+      setIsSendingReminder(false);
     }
   };
 
@@ -826,6 +845,9 @@ function RentalViewer() {
               onInitiatePickup={handleInitiatePickup}
               onInitiateMarkAsPickedUp={handleInitiateMarkAsPickedUp}
               onInitiateCancel={() => setShowCancelModal(true)}
+              onInitiateSendReminder={handleSendReminder}
+              isSendingReminder={isSendingReminder}
+              returnReminderSent={rental.returnReminderSent || false}
             />
           </Col>
         </Row>

@@ -1,0 +1,14 @@
+/* client/src/components/modals/sizeGuideModal/sizeGuideModal.css */
+    
+.size-guide-table {
+  font-size: 0.9rem;
+  vertical-align: middle;
+  text-align: center; /* Center the text in the table */
+}
+
+
+/* Style for the image to prevent it from becoming too large */
+.measure-diagram {
+  max-width: 50%; /* Constrain the width of the measurement diagram */
+  margin: 0 auto;  /* Center the image within its column */
+}

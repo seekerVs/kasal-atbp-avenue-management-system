@@ -1,7 +1,7 @@
 // client/src/components/rentalViewer/OrderActions.tsx
 
 import React, { useMemo, useState } from 'react';
-import { Row, Col, Card, Badge, Button, Form, InputGroup, Alert, Accordion, ListGroup } from 'react-bootstrap';
+import { Row, Col, Card, Badge, Button, Form, InputGroup, Alert, Accordion, ListGroup, Spinner } from 'react-bootstrap';
 import {
   CalendarCheck,
   BoxSeam,
@@ -11,7 +11,8 @@ import {
   XCircleFill,
   CashCoin,
   Image as ImageIcon,
-  ArrowRightCircleFill
+  ArrowRightCircleFill,
+  Envelope
 } from 'react-bootstrap-icons';
 import { RentalStatus, Financials, RentalOrder, CustomTailoringItem, PaymentDetail } from '../../types'; // Import from centralized types
 import { formatCurrency } from '../../utils/formatters';
@@ -59,6 +60,9 @@ interface OrderActionsProps {
   onInitiatePickup: () => void;
   onInitiateMarkAsPickedUp: () => void;
   onInitiateCancel: () => void;
+  onInitiateSendReminder: () => void;
+  isSendingReminder: boolean;
+  returnReminderSent: boolean;
 }
 
 // ===================================================================================
@@ -90,6 +94,9 @@ const OrderActions: React.FC<OrderActionsProps> = ({
   onInitiateMarkAsPickedUp,
   onInitiatePickup,
   onInitiateCancel,
+  onInitiateSendReminder,
+  isSendingReminder,
+  returnReminderSent,
 }) => {
   const { addAlert } = useAlert();
   const { hasRentalItems, hasPurchaseItems, isPurchaseOnly } = useMemo(() => {
@@ -449,6 +456,24 @@ const OrderActions: React.FC<OrderActionsProps> = ({
                 <ArrowCounterclockwise className="me-2" />
                 Mark as Returned
             </Button>
+          )}
+
+          {status === 'To Return' && (
+            returnReminderSent ? (
+              <Alert variant="light" className="text-center small py-2 mt-2 border text-success">
+                <CheckCircleFill className="me-2" />
+                Return reminder email has been sent.
+              </Alert>
+            ) : (
+              <Button   
+                variant="outline-info" 
+                onClick={onInitiateSendReminder} 
+                disabled={isSendingReminder}
+              >
+                {isSendingReminder ? <Spinner as="span" size="sm" className="me-2"/> : <Envelope className="me-2" />}
+                {isSendingReminder ? 'Sending...' : 'Send Return Reminder'}
+              </Button>
+            )
           )}
 
           {status === 'Completed' && (

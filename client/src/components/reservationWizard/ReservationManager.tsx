@@ -163,7 +163,7 @@ export const ReservationManager: React.FC<ReservationManagerProps> = ({ reservat
             },
             quantity: quantity,
             price: product.price,
-            imageUrl: variation.imageUrl,
+            imageUrl: variation.imageUrls[0],
           };
           // Replace the old object with the new one
           updatedItems[indexToUpdate] = updatedItem;
@@ -200,7 +200,7 @@ export const ReservationManager: React.FC<ReservationManagerProps> = ({ reservat
             },
             quantity: quantity,
             price: product.price,
-            imageUrl: variation.imageUrl,
+            imageUrl: variation.imageUrls[0],
           };
           updatedItems.push(newItemReservation);
         }

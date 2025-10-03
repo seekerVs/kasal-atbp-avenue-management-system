@@ -13,7 +13,7 @@ const { protect } = require('../middleware/authMiddleware.js');
 const { sanitizeRequestBody } = require('../middleware/sanitizeMiddleware');
 const DamagedItem = require('../models/DamagedItem');
 const namer = require('color-namer');
-
+const { sendReturnReminder } = require('../utils/emailService.js');
 const router = express.Router();
 
 // GET all rentals with filtering
@@ -184,6 +184,41 @@ router.post('/', protect, sanitizeRequestBody, asyncHandler(async (req, res) => 
     } finally {
         session.endSession();
     }
+}));
+
+// POST /api/rentals/:id/send-reminder
+router.post('/:id/send-reminder', protect, asyncHandler(async (req, res) => {
+    const { id } = req.params;
+
+    // Find the rental by its ID
+    const rental = await RentalModel.findById(id);
+    if (!rental) {
+        res.status(404);
+        throw new Error('Rental not found.');
+    }
+
+    // Check if the customer has an email address
+    const customer = rental.customerInfo[0];
+    if (!customer || !customer.email) {
+        res.status(400);
+        throw new Error('Cannot send reminder: Customer email address is missing.');
+    }
+
+    // Call the email service utility to send the email
+    await sendReturnReminder(rental);
+
+    // If the email was sent successfully, update the flag and save
+    rental.returnReminderSent = true;
+    const updatedRental = await rental.save();
+
+    // Recalculate financials and send the final response to update the frontend
+    const calculatedFinancials = calculateFinancials(updatedRental.toObject());
+    const finalResponse = {
+        ...updatedRental.toObject(),
+        financials: calculatedFinancials,
+    };
+
+    res.status(200).json(finalResponse);
 }));
 
 router.put('/:id/process', protect, sanitizeRequestBody, asyncHandler(async (req, res) => {
@@ -470,7 +505,7 @@ router.put('/:rentalId/items/:itemId', protect, asyncHandler(async (req, res) =>
             
             // Update the item's details in the rental document
             itemToUpdate.variation = newVariation; // The whole object
-            itemToUpdate.imageUrl = newVarDetails.imageUrl;
+            itemToUpdate.imageUrl = newVarDetails.imageUrls[0] || '';
         } else {
             const currentVarDetails = product.variations.find(v => v.color.hex === originalVariation.color.hex && v.size === originalVariation.size);
             if (!currentVarDetails) throw new Error("Current variation not found in inventory.");

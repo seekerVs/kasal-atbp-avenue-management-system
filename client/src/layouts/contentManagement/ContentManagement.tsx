@@ -4,20 +4,68 @@ import React, { useState, useEffect } from 'react';
 import { Container, Card, Form, Button, Row, Col, Spinner, Alert, Accordion, Nav } from 'react-bootstrap';
 import { Book, Image as ImageIcon, CardChecklist, Gear, Star, HandThumbsUp, Save, QuestionCircle, Trash, PlusCircle, EyeSlash, Eye } from 'react-bootstrap-icons';
 import api from '../../services/api';
+import { uploadFile } from '../../services/api'; 
 
-import { HomePageContent, AboutPageData } from "../../types"; // Import all needed types
+import { HomePageContent, AboutPageData, CustomTailoringPageContent } from "../../types"; // Import all needed types
 import { ImageDropzone } from '../../components/imageDropzone/ImageDropzone';
 import { ComponentPreview } from '../../components/componentPreview/ComponentPreview';
 import Home from '../home/Home';
 import About from '../about/About';
+import CustomTailoring from '../customTailoring/CustomTailoring';
 import { IconPicker } from '../../components/iconPicker/IconPicker';
 import { useAlert } from '../../contexts/AlertContext';
+
+interface CmsImageUploaderProps {
+  label: string;
+  currentImage: string;
+  onUploadSuccess: (newUrl: string) => void;
+}
+
+const CmsImageUploader: React.FC<CmsImageUploaderProps> = ({ label, currentImage, onUploadSuccess }) => {
+  const { addAlert } = useAlert();
+  const [stagedFile, setStagedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const handleFileSelect = async (file: File | null) => {
+    if (!file) {
+      // If the user removes the image, we might want to handle this differently,
+      // for now we'll just clear the stage. A null URL could be an "empty" state.
+      onUploadSuccess(''); // Pass an empty string to signify removal
+      setStagedFile(null);
+      return;
+    }
+
+    setStagedFile(file);
+    setIsUploading(true);
+    try {
+      addAlert('Uploading image...', 'info');
+      const newUrl = await uploadFile(file);
+      onUploadSuccess(newUrl); // Call the parent's final success handler
+    } catch (error) {
+      addAlert('Image upload failed. Please try again.', 'danger');
+      setStagedFile(null); // Clear the failed file
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // The component decides whether to show the existing URL or the newly staged file preview
+  const displayImage = stagedFile || currentImage;
+
+  return (
+    <ImageDropzone
+      label={label}
+      currentImage={displayImage}
+      onFileSelect={handleFileSelect}
+    />
+  );
+};
 
 function ContentManagement() {
   const { addAlert } = useAlert();
 
   // --- 1. STATE MANAGEMENT ---
-  const [activePage, setActivePage] = useState<'home' | 'about'>('home');
+  const [activePage, setActivePage] = useState<'home' | 'about' | 'custom-tailoring'>('home');
   const [homeContent, setHomeContent] = useState<HomePageContent | null>(null);
   const [aboutContent, setAboutContent] = useState<AboutPageData | null>(null);
   
@@ -27,6 +75,7 @@ function ContentManagement() {
   const [previewVersion, setPreviewVersion] = useState(0);
   const [activeKey, setActiveKey] = useState<string | null>('0');
   const [isPreviewVisible, setIsPreviewVisible] = useState(true);
+  const [customContent, setCustomContent] = useState<CustomTailoringPageContent | null>(null);
 
   // --- 2. DATA FETCHING ---
   useEffect(() => {
@@ -35,12 +84,14 @@ function ContentManagement() {
       setError(null);
       try {
         // Fetch both pages' content in parallel for efficiency
-        const [homeResponse, aboutResponse] = await Promise.all([
+        const [homeResponse, aboutResponse, customResponse] = await Promise.all([
           api.get('/content/home'),
-          api.get('/content/about')
+          api.get('/content/about'),
+          api.get('/content/custom-tailoring')
         ]);
         setHomeContent(homeResponse.data);
         setAboutContent(aboutResponse.data);
+        setCustomContent(customResponse.data);
       } catch (err) {
         const errorMessage = 'Failed to load page content. Please try again later.';
         setError(errorMessage);
@@ -54,8 +105,6 @@ function ContentManagement() {
     fetchAllContent();
   }, [addAlert]);
 
-
-  // --- 3. GENERIC CHANGE HANDLERS ---
   // In ContentManagement.tsx
   // --- HOME PAGE HANDLERS ---
   const handleHomeFieldChange = (section: keyof HomePageContent, field: string, value: string) => {
@@ -152,6 +201,50 @@ function ContentManagement() {
     );
   };
 
+  // --- CUSTOM TAILORING PAGE HANDLERS ---
+  const handleCustomFieldChange = (field: keyof Omit<CustomTailoringPageContent, 'galleryImages'>, value: string) => {
+    setCustomContent(prev => {
+      if (!prev) return null;
+      return { ...prev, [field]: value };
+    });
+  };
+
+  const handleCustomImageArrayChange = (index: number, field: 'altText', value: string) => {
+    setCustomContent(prev => {
+      if (!prev) return null;
+      const newImages = [...prev.galleryImages];
+      newImages[index] = { ...newImages[index], [field]: value };
+      return { ...prev, galleryImages: newImages };
+    });
+  };
+
+  const handleCustomImageUpload = (index: number, newImageUrl: string) => {
+    setCustomContent(prev => {
+      if (!prev) return null;
+      const newImages = [...prev.galleryImages];
+      newImages[index] = { ...newImages[index], imageUrl: newImageUrl };
+      return { ...prev, galleryImages: newImages };
+    });
+    addAlert('Image has been uploaded and is ready to be saved.', 'success');
+  };
+
+  const handleAddCustomImage = () => {
+    setCustomContent(prev => {
+      if (!prev) return null;
+      const newImages = [...prev.galleryImages, { imageUrl: '', altText: '' }];
+      return { ...prev, galleryImages: newImages };
+    });
+  };
+
+  const handleRemoveCustomImage = (index: number) => {
+    setCustomContent(prev => {
+      if (!prev) return null;
+      const newImages = prev.galleryImages.filter((_, i) => i !== index);
+      return { ...prev, galleryImages: newImages };
+    });
+    addAlert('Image slot removed. Save changes to finalize.', 'info');
+  };
+
   const handleAccordionSelect = (eventKey: any) => {
     // The nullish coalescing operator '??' ensures that if eventKey is
     // null or undefined, we pass `null` to the state setter.
@@ -162,9 +255,10 @@ function ContentManagement() {
   // --- 4. SAVE HANDLER ---
   const handleSave = async () => {
     const isHomePage = activePage === 'home';
-    const contentToSave = isHomePage ? homeContent : aboutContent;
+    const isAboutPage = activePage === 'about';
+    const contentToSave = isHomePage ? homeContent : isAboutPage ? aboutContent : customContent;
     const endpoint = `/content/${activePage}`;
-    const pageName = isHomePage ? 'Home' : 'About Us';
+    const pageName = isHomePage ? 'Home' : isAboutPage ? 'About Us' : 'Custom Tailoring';
 
     if (!contentToSave) {
       addAlert(
@@ -217,7 +311,7 @@ function ContentManagement() {
           </Button>
           <Button variant="primary" onClick={handleSave} disabled={saving}>
               {saving ? <Spinner as="span" size="sm" /> : <Save className="me-2" />}
-              Save {activePage === 'home' ? 'Home Page' : 'About Page'}
+              Save {activePage === 'home' ? 'Home Page' : activePage === 'about' ? 'About Page' : 'Custom Page'}
           </Button>
         </div>
       </div>  
@@ -225,9 +319,10 @@ function ContentManagement() {
       <Row className="flex-grow-1" style={{ minHeight: 0 }}>
         {/* === LEFT COLUMN: FORMS (Dynamic Width) === */}
         <Col lg={isPreviewVisible ? 5 : 12} className="d-flex flex-column h-100">
-          <Nav variant="tabs" activeKey={activePage} onSelect={(k) => setActivePage(k as 'home' | 'about')} className="mb-3" style={{ flexShrink: 0 }}>
+          <Nav variant="tabs" activeKey={activePage} onSelect={(k) => setActivePage(k as 'home' | 'about' | 'custom-tailoring')} className="mb-3" style={{ flexShrink: 0 }}>
             <Nav.Item><Nav.Link eventKey="home">Home Page</Nav.Link></Nav.Item>
             <Nav.Item><Nav.Link eventKey="about">About Us Page</Nav.Link></Nav.Item>
+            <Nav.Item><Nav.Link eventKey="custom-tailoring">Custom Page</Nav.Link></Nav.Item>
           </Nav>
           
           <div style={{ flexGrow: 1, overflowY: 'auto', paddingRight: '1rem' }}>
@@ -240,7 +335,7 @@ function ContentManagement() {
                   <Accordion.Body>
                     <Form.Group className="mb-3"><Form.Label>Main Title</Form.Label><Form.Control value={homeContent.hero.title} onChange={(e) => handleHomeFieldChange('hero', 'title', e.target.value)} /></Form.Group>
                     <Form.Group className="mb-3"><Form.Label>Search Bar Placeholder</Form.Label><Form.Control value={homeContent.hero.searchPlaceholder} onChange={(e) => handleHomeFieldChange('hero', 'searchPlaceholder', e.target.value)} /></Form.Group>
-                    <ImageDropzone label="Background Image" currentImageUrl={homeContent.hero.imageUrl} onUploadSuccess={(newUrl) => handleHomeImageUpload('hero', newUrl)} />
+                    <CmsImageUploader label="Background Image" currentImage={homeContent.hero.imageUrl} onUploadSuccess={(newUrl) => handleHomeImageUpload('hero', newUrl)} />
                   </Accordion.Body>
                 </Accordion.Item>
                 {/* --- Home Page Features Section Form --- */}
@@ -290,9 +385,9 @@ function ContentManagement() {
                                 onChange={(e) => handleHomeArrayChange('services', index, 'text', e.target.value)} 
                               />
                             </Form.Group>
-                            <ImageDropzone 
+                            <CmsImageUploader 
                               label="Service Image"
-                              currentImageUrl={service.imageUrl}
+                              currentImage={service.imageUrl}
                               onUploadSuccess={(newUrl) => handleHomeImageUpload('services', newUrl, index)}
                             />
                           </Card.Body>
@@ -319,9 +414,9 @@ function ContentManagement() {
                               onChange={(e) => handleHomeFieldChange('qualityCTA', 'buttonText', e.target.value)} 
                             />
                           </Form.Group>
-                          <ImageDropzone  
+                          <CmsImageUploader  
                             label="Section Image"
-                            currentImageUrl={homeContent.qualityCTA.imageUrl}
+                            currentImage={homeContent.qualityCTA.imageUrl}
                             onUploadSuccess={(newUrl) => handleHomeImageUpload('qualityCTA', newUrl)}
                           />
                           <hr/>
@@ -356,7 +451,7 @@ function ContentManagement() {
                 {/* --- About Page Hero Section --- */}
                 <Accordion.Item eventKey="0"><Accordion.Header><ImageIcon className="me-2"/>Hero Section</Accordion.Header><Accordion.Body>
                     <Form.Group className="mb-3"><Form.Label>Alternative Text for Image</Form.Label><Form.Control value={aboutContent.hero.altText} onChange={(e) => handleAboutFieldChange('hero', 'altText', e.target.value)} /></Form.Group>
-                    <ImageDropzone label="Background Image" currentImageUrl={aboutContent.hero.imageUrl} onUploadSuccess={(newUrl) => handleAboutImageUpload('hero', newUrl)} />
+                    <CmsImageUploader label="Background Image" currentImage={aboutContent.hero.imageUrl} onUploadSuccess={(newUrl) => handleAboutImageUpload('hero', newUrl)} />
                   </Accordion.Body></Accordion.Item>
                   {/* --- About Page Welcome Section --- */}
                   <Accordion.Item eventKey="1"><Accordion.Header><Book className="me-2"/>Welcome Section</Accordion.Header><Accordion.Body>
@@ -366,7 +461,7 @@ function ContentManagement() {
                   {/* --- About Page History Section --- */}
                   <Accordion.Item eventKey="2"><Accordion.Header><CardChecklist className="me-2"/>History Section</Accordion.Header><Accordion.Body>
                     <Form.Group className="mb-3"><Form.Label>Paragraph</Form.Label><Form.Control as="textarea" rows={4} value={aboutContent.history.paragraph} onChange={(e) => handleAboutFieldChange('history', 'paragraph', e.target.value)} /></Form.Group>
-                    <ImageDropzone label="Section Image" currentImageUrl={aboutContent.history.imageUrl} onUploadSuccess={(newUrl) => handleAboutImageUpload('history', newUrl)} />
+                    <CmsImageUploader label="Section Image" currentImage={aboutContent.history.imageUrl} onUploadSuccess={(newUrl) => handleAboutImageUpload('history', newUrl)} />
                   </Accordion.Body></Accordion.Item>
                   {/* --- About Page Features Section --- */}
                   <Accordion.Item eventKey="3"><Accordion.Header><Star className="me-2"/>Features Section</Accordion.Header><Accordion.Body>
@@ -400,6 +495,42 @@ function ContentManagement() {
                 </Accordion.Item>
               </Accordion>
             )}
+
+            {activePage === 'custom-tailoring' && customContent && (
+              <Accordion onSelect={handleAccordionSelect}>
+                <Accordion.Item eventKey="0">
+                  <Accordion.Header><Book className="me-2"/>Main Content</Accordion.Header>
+                  <Accordion.Body>
+                    <Form.Group className="mb-3"><Form.Label>Heading</Form.Label><Form.Control value={customContent.heading} onChange={(e) => handleCustomFieldChange('heading', e.target.value)} /></Form.Group>
+                    <Form.Group className="mb-3"><Form.Label>Subheading</Form.Label><Form.Control as="textarea" rows={4} value={customContent.subheading} onChange={(e) => handleCustomFieldChange('subheading', e.target.value)} /></Form.Group>
+                    <Form.Group className="mb-3"><Form.Label>Button Text</Form.Label><Form.Control value={customContent.buttonText} onChange={(e) => handleCustomFieldChange('buttonText', e.target.value)} /></Form.Group>
+                  </Accordion.Body>
+                </Accordion.Item>
+                <Accordion.Item eventKey="1">
+                  <Accordion.Header><ImageIcon className="me-2"/>Image Gallery ({customContent.galleryImages.length})</Accordion.Header>
+                  <Accordion.Body>
+                    {customContent.galleryImages.map((image, index) => (
+                      <Card key={index} className="mb-3">
+                        <Card.Header className="d-flex justify-content-between align-items-center">
+                          Image Slot #{index + 1}
+                          <Button variant="outline-danger" size="sm" onClick={() => handleRemoveCustomImage(index)}><Trash /></Button>
+                        </Card.Header>
+                        <Card.Body>
+                          <CmsImageUploader label="Image File" currentImage={image.imageUrl} onUploadSuccess={(newUrl) => handleCustomImageUpload(index, newUrl)} />
+                          <Form.Group>
+                            <Form.Label>Alternative Text</Form.Label>
+                            <Form.Control value={image.altText} onChange={(e) => handleCustomImageArrayChange(index, 'altText', e.target.value)} />
+                          </Form.Group>
+                        </Card.Body>
+                      </Card>
+                    ))}
+                    {customContent.galleryImages.length < 6 && (
+                      <Button variant="outline-primary" size="sm" onClick={handleAddCustomImage}><PlusCircle className="me-2" />Add Image Slot</Button>
+                    )}
+                  </Accordion.Body>
+                </Accordion.Item>
+              </Accordion>
+            )}
           </div>
         </Col>
 
@@ -409,8 +540,10 @@ function ContentManagement() {
             <ComponentPreview title="Live Page Preview">
               {activePage === 'home' ? (
                 <Home key={`home-preview-${previewVersion}`} />
-              ) : (
+              ) : activePage === 'about' ? (
                 <About key={`about-preview-${previewVersion}`} />
+              ) : (
+                <CustomTailoring key={`custom-preview-${previewVersion}`} />
               )}
             </ComponentPreview>
           </Col>

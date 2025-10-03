@@ -3,10 +3,13 @@ const cors = require("cors");
 const jwt = require('jsonwebtoken'); // For JWT implementation
 require('dotenv').config();
 const connectDB = require("./db.js");
+const { scheduleReturnReminders } = require('./scheduler.js');
 
 // --- Initialize Express App & Connect to DB ---
 const app = express();
 connectDB();
+
+scheduleReturnReminders();
 
 // --- Core Middleware ---
 app.use(cors());

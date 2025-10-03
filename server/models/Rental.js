@@ -123,6 +123,10 @@ const RentalSchema = new mongoose.Schema({
     type: [CustomTailoringItemSchema],
     default: [],
   },
+  returnReminderSent: {
+    type: Boolean,
+    default: false,
+  },
 }, {
   timestamps: true,
   _id: false,

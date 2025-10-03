@@ -114,7 +114,7 @@ export const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({ sh
         groupedItems.set(assigned.itemId, {
         _id: itemDetails._id, // <-- ADD THIS LINE
         name: itemDetails.name,
-        imageUrl: displayVariation?.imageUrl || itemDetails.variations[0]?.imageUrl || '',
+        imageUrl: displayVariation?.imageUrls?.[0] || itemDetails.variations[0]?.imageUrls?.[0] || '',
         availableSizes: availableSizes,
       });
       }

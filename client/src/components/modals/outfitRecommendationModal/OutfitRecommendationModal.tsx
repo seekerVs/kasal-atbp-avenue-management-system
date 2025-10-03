@@ -4,6 +4,7 @@ import { ArrowsCollapse, CheckCircleFill, ExclamationTriangleFill, InfoCircleFil
 import { useAlert } from "../../../contexts/AlertContext";
 import { convertMeasurementsToSize } from "../../../utils/sizeConverter";
 import { useSensorData } from "../../../hooks/useSensorData";
+import { SizeGuideModal } from '../sizeGuideModal/SizeGuideModal';
 
 interface OutfitRecommendationModalProps {
   show: boolean;
@@ -25,6 +26,7 @@ const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({ s
   const [isSizeValid, setIsSizeValid] = useState<boolean>(false); 
   const [activeField, setActiveField] = useState<string | null>(null);
   const [lastInsertedTimestamp, setLastInsertedTimestamp] = useState<string | null>(null);
+  const [showSizeGuide, setShowSizeGuide] = useState(false); 
   const inputRefs = useRef<Map<string, HTMLInputElement | null>>(new Map());
 
   // Reset form when modal opens
@@ -172,6 +174,12 @@ const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({ s
                 </Alert>
               );
             })()}
+
+            <div className="d-grid mb-3">
+                <Button variant="outline-secondary" size="sm" onClick={() => setShowSizeGuide(true)}>
+                    View Full Size Guide
+                </Button>
+            </div>
             
             <Alert variant="info" className="d-flex align-items-center small">
                 <InfoCircleFill className="me-2 flex-shrink-0" size={20} />
@@ -188,6 +196,8 @@ const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({ s
           Recommend Outfits
         </Button>
       </Modal.Footer>
+
+      <SizeGuideModal show={showSizeGuide} onHide={() => setShowSizeGuide(false)} />
     </Modal>
   );
 };

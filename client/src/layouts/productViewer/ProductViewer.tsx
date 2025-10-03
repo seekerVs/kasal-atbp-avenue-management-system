@@ -12,6 +12,7 @@ import api from "../../services/api";
 
 import './productViewer.css'; // Import the new CSS file
 import { DataPrivacyModal } from "../../components/modals/dataPrivacyModal/DataPrivacyModal";
+import { SizeGuideModal } from '../../components/modals/sizeGuideModal/SizeGuideModal';
 
 const ProductViewer: React.FC = () => {
   const navigate = useNavigate();
@@ -25,6 +26,7 @@ const ProductViewer: React.FC = () => {
   const [showSizeChart, setShowSizeChart] = useState(false);
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  const [showSizeGuide, setShowSizeGuide] = useState(false);
 
   useEffect(() => {
     if (!id) {
@@ -63,23 +65,23 @@ const ProductViewer: React.FC = () => {
   }, [product, selectedVariation]);
   
   const imagesForCarousel = useMemo(() => {
-    if (!product) return [];
-    const allImageUrls = product.variations.map(v => v.imageUrl);
-    const uniqueImageUrls = Array.from(new Set(allImageUrls));
-    return uniqueImageUrls;
-  }, [product]);
+      // Priority 1: Show images from the currently selected variation if they exist.
+      if (selectedVariation && selectedVariation.imageUrls && selectedVariation.imageUrls.length > 0) {
+          return selectedVariation.imageUrls;
+      }
+      // Priority 2 (Fallback): If the selected variation has no images, show all unique images from the product.
+      if (product) {
+          const allUniqueUrls = Array.from(new Set(product.variations.flatMap(v => v.imageUrls)));
+          return allUniqueUrls;
+      }
+      // Priority 3 (Default): Return an empty array if there's no data.
+      return [];
+  }, [product, selectedVariation]);
 
   useEffect(() => {
-    if (!selectedVariation || imagesForCarousel.length === 0) {
-      return;
-    }
-    const newIndex = imagesForCarousel.findIndex(
-      (imageUrl) => imageUrl === selectedVariation.imageUrl
-    );
-    if (newIndex !== -1) {
-      setCarouselIndex(newIndex);
-    }
-  }, [selectedVariation, imagesForCarousel]);
+      // When the user selects a new color/size, always reset the carousel to its first image.
+      setCarouselIndex(0);
+  }, [selectedVariation]);
 
 
   const handleColorSelect = (colorObj: { name: string; hex: string; }) => {
@@ -118,7 +120,7 @@ const ProductViewer: React.FC = () => {
         },
         quantity: quantity,
         price: product.price,
-        imageUrl: selectedVariation.imageUrl,
+        imageUrl: selectedVariation.imageUrls[0] || undefined,
       }
     };
 
@@ -203,9 +205,9 @@ const ProductViewer: React.FC = () => {
                   </Button>
                 ))}
               </div>
-              <a href="#sizechart" className="d-block mt-1 text-decoration-underline text-muted" style={{ fontSize: "0.9rem" }} onClick={(e) => { e.preventDefault(); setShowSizeChart(true); }}>
-                Size Chart
-              </a>
+              <Button variant="link" size="sm" className="p-0 text-decoration-underline text-muted" onClick={() => setShowSizeGuide(true)}>
+                Size Guide
+              </Button>
             </div>
 
             <div className="mb-3">
@@ -237,10 +239,7 @@ const ProductViewer: React.FC = () => {
         </Row>
       </div>
 
-      <Modal show={showSizeChart} onHide={() => setShowSizeChart(false)} centered size="lg">
-        <Modal.Header closeButton><Modal.Title>Size Chart</Modal.Title></Modal.Header>
-        <Modal.Body className="text-center"><Image src={SizeChart} fluid /></Modal.Body>
-      </Modal>
+      <SizeGuideModal show={showSizeGuide} onHide={() => setShowSizeGuide(false)} />
 
       <DataPrivacyModal
         show={showPrivacyModal}

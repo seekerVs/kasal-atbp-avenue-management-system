@@ -13,7 +13,6 @@ import api from '../../../services/api';
 import { FulfillmentError, PackageFulfillmentForm } from '../../forms/packageFulfillmentForm/PackageFulfillmentForm';
 import { SizeSelectionModal } from '../sizeSelectionModal/SizeSelectionModal';
 import { useAlert } from '../../../contexts/AlertContext';
-import { format } from 'date-fns';
 
 export interface PackageConfigurationData {
   packageReservation: FulfillmentPreview[];
@@ -62,7 +61,7 @@ export const PackageConfigurationModal: React.FC<PackageConfigurationModalProps>
           itemId: item._id,
           name: item.name,
           variation: fulfill.variation,
-          imageUrl: variationDetails?.imageUrl
+          imageUrl: variationDetails?.imageUrls?.[0] 
         };
       }
       return {
@@ -76,56 +75,94 @@ export const PackageConfigurationModal: React.FC<PackageConfigurationModalProps>
   }, [fulfillmentData, inventoryMap]);
 
   useEffect(() => {
-    if (show && pkg) {
-      setLoading(true);
-      setErrors([]);
-      setSelectedBlock('');
-      setAppointment({ date: null, block: '' });
-      Promise.all([
-        api.get('/unavailability'),
-        api.get('/inventory?limit=1000')
-      ]).then(([unavailableRes, inventoryRes]) => {
-        setUnavailableDates(unavailableRes.data.map((rec: UnavailabilityRecord) => new Date(rec.date)));
-        setAllInventory(inventoryRes.data.items || []);
+      if (show) {
+        setLoading(true);
+        setErrors([]);
+        // Reset appointment state when modal opens
+        setAppointment({ date: null, block: '' });
+        setSelectedBlock('');
 
-        if (initialFulfillmentData) {
-          setFulfillmentData(initialFulfillmentData);
-        } else {
-          let defaultFulfillment: FulfillmentPreview[] = pkg.inclusions.flatMap(inclusion =>
-            Array.from({ length: inclusion.wearerNum }, (_, i) => ({
-              role: inclusion.wearerNum > 1 ? `${inclusion.name} ${i + 1}` : inclusion.name,
-              isCustom: !!inclusion.isCustom,
-              wearerName: ''
-            }))
-          );
-          const selectedMotif = pkg.colorMotifs.find(m => m._id === motifId);
-          if (selectedMotif) {
-              selectedMotif.assignments.forEach(assignment => {
-                  const targetSlots = defaultFulfillment.map((f, i) => ({...f, originalIndex: i}))
-                                        .filter(f => f.role.startsWith(pkg.inclusions.find(inc => inc._id === assignment.inclusionId)?.name || ''));
-                  assignment.assignedItems.forEach((assignedItem, wearerIndex) => {
-                      if (assignedItem && targetSlots[wearerIndex]) {
-                          const originalFulfillmentIndex = targetSlots[wearerIndex].originalIndex;
-                          defaultFulfillment[originalFulfillmentIndex] = {
-                              ...defaultFulfillment[originalFulfillmentIndex],
-                              assignedItemId: assignedItem.itemId,
-                              variation: `${assignedItem.color.name}, ${assignedItem.size}`
-                          };
-                      }
-                  });
-              });
-          }
-          setFulfillmentData(defaultFulfillment);
-        }
-      }).catch(err => {
-        console.error("Failed to fetch data for configuration modal", err);
-      }).finally(() => {
-        setLoading(false);
-      });
-    } else {
-      setFulfillmentData([]);
-    }
-  }, [show, pkg, motifId, initialFulfillmentData]);
+        Promise.all([
+          api.get('/unavailability'),
+          api.get('/inventory?limit=1000')
+        ]).then(([unavailableRes, inventoryRes]) => {
+          setUnavailableDates(unavailableRes.data.map((rec: UnavailabilityRecord) => new Date(rec.date)));
+          setAllInventory(inventoryRes.data.items || []);
+        }).catch(err => {
+          console.error("Failed to fetch data for configuration modal", err);
+          addAlert("Could not load required data for package configuration.", "danger");
+        }).finally(() => {
+          setLoading(false);
+        });
+      } else {
+        // Clear data on close to ensure a fresh state next time
+        setAllInventory([]);
+        setUnavailableDates([]);
+        setFulfillmentData([]);
+      }
+    }, [show, addAlert]);
+
+    // --- NEW EFFECT #2: Data Processing ---
+    // This effect runs when the modal opens OR when the fetched inventory is ready.
+    useEffect(() => {
+      // DO NOT proceed if the modal isn't open, if the package data is missing,
+      // or crucially, if the inventory data hasn't loaded yet.
+      if (!show || !pkg || allInventory.length === 0) {
+        return;
+      }
+
+      // If the parent component provided initial data (i.e., we are in "edit" mode), use it.
+      if (initialFulfillmentData) {
+        setFulfillmentData(initialFulfillmentData);
+        return; // Stop here if we're in edit mode
+      }
+      
+      // --- This is the logic for "create" mode ---
+      // It now runs with the guarantee that `allInventory` is populated.
+      
+      // 1. Build the base structure from the package's inclusions.
+      let defaultFulfillment: FulfillmentPreview[] = pkg.inclusions.flatMap(inclusion =>
+        Array.from({ length: inclusion.wearerNum }, (_, i) => ({
+          role: inclusion.wearerNum > 1 ? `${inclusion.name} ${i + 1}` : inclusion.name,
+          isCustom: !!inclusion.isCustom,
+          wearerName: ''
+        }))
+      );
+      
+      // 2. Find the selected motif to pre-fill assignments.
+      const selectedMotif = pkg.colorMotifs.find(m => m._id === motifId);
+      if (selectedMotif) {
+        const inventoryMap = new Map(allInventory.map(item => [item._id.toString(), item]));
+
+        selectedMotif.assignments.forEach(assignment => {
+          const targetInclusion = pkg.inclusions.find(inc => inc._id === assignment.inclusionId);
+          if (!targetInclusion) return;
+
+          const targetSlots = defaultFulfillment.map((f, i) => ({...f, originalIndex: i}))
+                                .filter(f => f.role.startsWith(targetInclusion.name));
+          
+          assignment.assignedItems.forEach((assignedItem, wearerIndex) => {
+            if (assignedItem && targetSlots[wearerIndex]) {
+              const originalFulfillmentIndex = targetSlots[wearerIndex].originalIndex;
+              const itemDetails = inventoryMap.get(assignedItem.itemId);
+
+              if (itemDetails) {
+                // Populate the assignedItemId and variation string for the form
+                defaultFulfillment[originalFulfillmentIndex] = {
+                  ...defaultFulfillment[originalFulfillmentIndex],
+                  assignedItemId: assignedItem.itemId,
+                  variation: `${assignedItem.color.name}, ${assignedItem.size}`
+                };
+              }
+            }
+          });
+        });
+      }
+      
+      // 3. Set the final, correctly processed fulfillment data.
+      setFulfillmentData(defaultFulfillment);
+
+    }, [show, pkg, motifId, initialFulfillmentData, allInventory]);
   
   const validate = (): boolean => {
     const newErrors: FulfillmentError[] = [];

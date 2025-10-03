@@ -26,13 +26,19 @@ export const DetailView: React.FC<DetailViewProps> = ({
 }) => {
   const [carouselIndex, setCarouselIndex] = useState(0);
   
-  const imagesForCarousel = useMemo(() => Array.from(new Set(item.variations.map(v => v.imageUrl))), [item]);
+  const imagesForCarousel = useMemo(() => {
+      // If a variation is selected, show its specific images.
+      if (selectedVariation && selectedVariation.imageUrls && selectedVariation.imageUrls.length > 0) {
+        return selectedVariation.imageUrls;
+      }
+      // As a fallback, show all unique images from the entire product.
+      return Array.from(new Set(item.variations.flatMap(v => v.imageUrls)));
+  }, [item, selectedVariation]);
   
   useEffect(() => {
-    if (!selectedVariation || imagesForCarousel.length === 0) return;
-    const newIndex = imagesForCarousel.findIndex(img => img === selectedVariation.imageUrl);
-    if (newIndex !== -1) setCarouselIndex(newIndex);
-  }, [selectedVariation, imagesForCarousel]);
+      // When the selected variation changes, reset the carousel to the first image of that variation.
+      setCarouselIndex(0);
+  }, [selectedVariation]);
 
   const availableColors = useMemo(() => {
     const colorsMap = new Map<string, { name: string; hex: string }>();

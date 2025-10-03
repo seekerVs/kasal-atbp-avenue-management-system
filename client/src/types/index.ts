@@ -10,13 +10,14 @@ export * from './custompage';
 
 // --- Represents a single variation of an inventory item ---
 export interface ItemVariation {
+  _id?: string; 
   color: {
     name: string;
     hex: string;
   };
   size: string;
   quantity: number;
-  imageUrl: string;
+  imageUrls: string[];
 }
 
 // --- Represents a single item in your inventory (e.g., a specific gown model) ---
@@ -191,6 +192,7 @@ export interface RentalOrder {
   createdAt: string;
   updatedAt: string;
   pendingInventoryConversion?: CustomTailoringItem[];
+  returnReminderSent?: boolean;
 }
 
 export interface NormalizedFulfillmentItem {

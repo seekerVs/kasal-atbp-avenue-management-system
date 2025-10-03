@@ -34,6 +34,8 @@ import { ColorPickerInput } from '../../components/colorPickerInput/ColorPickerI
 import { SizeChart } from '../../assets/images';
 import { useAlert } from '../../contexts/AlertContext';
 import { ImageDropzone } from '../../components/imageDropzone/ImageDropzone';
+import { MultiImageDropzone, MultiImageDropzoneRef } from '../../components/multiImageDropzone/MultiImageDropzone';
+import { v4 as uuidv4 } from 'uuid';
 
 
 // --- MAIN COMPONENT ---
@@ -215,7 +217,7 @@ function InventoryItems() {
                   </thead>
                   <tbody>
                     {filteredInventory.map(item => {
-                      const displayImage = item.variations?.[0]?.imageUrl || 'https://placehold.co/60x60/e9ecef/adb5bd?text=N/A';
+                      const displayImage = item.variations?.[0]?.imageUrls[0] || 'https://placehold.co/60x60/e9ecef/adb5bd?text=N/A';
                       return (
                         <tr key={item._id}>
                           <td style={{ width: '80px', textAlign: 'center' }}>
@@ -278,7 +280,8 @@ interface ItemFormModalProps {
 
 function ItemFormModal({ show, onHide, onSave, item, categories }: ItemFormModalProps) {
     type FormVariation = Omit<ItemVariation, 'imageUrl'> & {
-        imageUrl: string | File | null;
+        _id?: string; // Add a temporary ID for React keys
+        imageUrls: (string | File)[];
     };
 
     const [formData, setFormData] = useState<{
@@ -291,7 +294,7 @@ function ItemFormModal({ show, onHide, onSave, item, categories }: ItemFormModal
         variations: FormVariation[];
     }>({
         name: '', price: 0, category: '', description: '',
-        features: [], composition: [], variations: [],
+        features: [], composition: [], variations: [{ color: { name: 'Black', hex: '#000000' }, size: '', quantity: 1, imageUrls: [] }],
     });
 
     const { addAlert } = useAlert();
@@ -303,27 +306,39 @@ function ItemFormModal({ show, onHide, onSave, item, categories }: ItemFormModal
     const [showPriceWarningModal, setShowPriceWarningModal] = useState(false);
     const [isCheckingName, setIsCheckingName] = useState(false); // <-- ADD THIS
     const [nameError, setNameError] = useState<string | null>(null);
+    const dropzoneRefs = useRef<Map<string, MultiImageDropzoneRef>>(new Map());
 
     const STANDARD_SIZES = ['2XS', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL'];
     
     useEffect(() => {
       if (item) {
         const { _id, ...editableData } = item;
+        const variationsWithTempIds = editableData.variations.map(v => ({
+          ...v,
+          _id: v._id || uuidv4() // Ensure every variation has a key
+        }));
         setFormData({
           ...editableData,
           description: editableData.description || '', 
           features: editableData.features?.length ? editableData.features : [''],
           composition: editableData.composition?.length ? editableData.composition : [''],
-          variations: editableData.variations ? editableData.variations.map(v => ({...v})) : [],
+          variations: variationsWithTempIds,
         });
         setPriceInput(String(item.price));
-        initialVariationsRef.current = JSON.parse(JSON.stringify(item.variations || []));
+        initialVariationsRef.current = JSON.parse(JSON.stringify(variationsWithTempIds));
       } else {
+        // Reset for "Add New" mode
         setFormData({
           name: '', price: 0, category: '', description: '', 
           features: [''], 
           composition: [''], 
-          variations: [{ color: { name: 'Black', hex: '#000000' }, size: '', quantity: 1, imageUrl: null }]
+          variations: [{ 
+            _id: uuidv4(), // Add a temporary ID for the first variation
+            color: { name: 'Black', hex: '#000000' }, 
+            size: '', 
+            quantity: 1, 
+            imageUrls: [] // Initialize with an empty array
+          }]
         });
         setPriceInput('0');
         initialVariationsRef.current = [];
@@ -384,69 +399,66 @@ function ItemFormModal({ show, onHide, onSave, item, categories }: ItemFormModal
         setFormData(prev => ({ ...prev, variations: newVariations }));
     };
 
+    // Inside ItemFormModal component
     const handleSave = async () => {
-        const initialImageUrls = new Set(
-            initialVariationsRef.current
-                .map(v => v.imageUrl)
-                .filter((url): url is string => typeof url === 'string')
-        );
-        const finalImageUrls = new Set(
-            formData.variations
-                .map(v => v.imageUrl)
-                .filter((url): url is string => typeof url === 'string')
-        );
-        const urlsToDelete: string[] = [];
-        initialImageUrls.forEach(initialUrl => {
-            if (!finalImageUrls.has(initialUrl)) {
-                urlsToDelete.push(initialUrl);
-            }
-        });
+      const allInitialImageUrls = new Set(
+        initialVariationsRef.current.flatMap(v => v.imageUrls)
+      );
+      const allFinalImageUrls = new Set(
+        formData.variations.flatMap(v => v.imageUrls.filter(url => typeof url === 'string'))
+      );
 
-        const finalVariations = [...formData.variations];
-        const uploadPromises: Promise<void>[] = [];
-
-        finalVariations.forEach((variation, index) => {
-            if (variation.imageUrl instanceof File) {
-                const fileToUpload = variation.imageUrl;
-                const uploadPromise = uploadFile(fileToUpload)
-                    .then(newUrl => {
-                        finalVariations[index] = { ...variation, imageUrl: newUrl };
-                    })
-                    .catch(err => {
-                        console.error(`Upload failed for variation #${index + 1}:`, err);
-                        throw new Error(`Upload failed for an image. Please try again.`);
-                    });
-                uploadPromises.push(uploadPromise);
-            }
-        });
-
-        try {
-            await Promise.all(uploadPromises);
-            const baseItemData = {
-                ...formData,
-                price: parseFloat(priceInput) || 0,
-                variations: finalVariations.map(v => {
-                    const parsedQuantity = parseInt(String(v.quantity), 10);
-                    return {
-                        ...v,
-                        quantity: !isNaN(parsedQuantity) ? parsedQuantity : 0,
-                        imageUrl: v.imageUrl as string,
-                    };
-                }),
-            };
-            let itemToSave: InventoryItem;
-            if (item) {
-                // If we are editing, include the original _id.
-                itemToSave = { ...baseItemData, _id: item._id };
-            } else {
-                // If we are creating, do NOT include an _id field.
-                // We cast to InventoryItem, but the _id is omitted.
-                itemToSave = baseItemData as InventoryItem;
-            }
-            onSave(itemToSave, urlsToDelete);
-        } catch (error: any) {
-            addAlert(error.message, 'danger');
+      const urlsToDelete: string[] = [];
+      allInitialImageUrls.forEach(initialUrlOrFile => {
+        // 1. Only consider items that are actually strings (i.e., existing URLs).
+        if (typeof initialUrlOrFile === 'string') {
+          // 2. Check if this string URL no longer exists in the final set of URLs.
+          if (!allFinalImageUrls.has(initialUrlOrFile)) {
+            // 3. If it's gone, add it to the list of URLs to be deleted from the server.
+            urlsToDelete.push(initialUrlOrFile);
+          }
         }
+      });
+
+      try {
+        const uploadPromises = formData.variations.map(async (variation) => {
+          const dropzoneRef = dropzoneRefs.current.get(variation._id!);
+          if (dropzoneRef) {
+            // Upload all new files for this variation and get back the new URLs
+            const newUrls = await dropzoneRef.uploadAll(); 
+            return {
+              ...variation,
+              imageUrls: newUrls, // The final array of URLs (old + new)
+            };
+          }
+          return variation; // Return as-is if no ref found (shouldn't happen)
+        });
+
+        const finalVariations = await Promise.all(uploadPromises);
+
+        const baseItemData = {
+          ...formData,
+          price: parseFloat(priceInput) || 0,
+          variations: finalVariations.map(v => {
+            const { _id, ...rest } = v; // Remove the temporary _id before sending to backend
+            return {
+              ...rest,
+              quantity: parseInt(String(v.quantity), 10) || 0,
+            };
+          }),
+        };
+        
+        let itemToSave: InventoryItem;
+        if (item) {
+          itemToSave = { ...baseItemData, _id: item._id };
+        } else {
+          itemToSave = baseItemData as InventoryItem;
+        }
+
+        onSave(itemToSave, urlsToDelete);
+      } catch (error: any) {
+        addAlert(error.message || "An error occurred during image uploads.", 'danger');
+      }
     };
     
     const handleVariationChange = (index: number, field: keyof ItemVariation, value: any) => {
@@ -460,10 +472,16 @@ function ItemFormModal({ show, onHide, onSave, item, categories }: ItemFormModal
     };
 
     const handleAddVariation = () => {
-        setFormData({
-            ...formData,
-            variations: [...formData.variations, { color: { name: 'Black', hex: '#000000' }, size: '', quantity: 1, imageUrl: null }],
-        });
+      setFormData({
+          ...formData,
+          variations: [...formData.variations, { 
+            _id: uuidv4(), // Add a temporary ID
+            color: { name: 'Black', hex: '#000000' }, 
+            size: '', 
+            quantity: 1, 
+            imageUrls: [] // Initialize with an empty array
+          }],
+      });
     };
     const handleRemoveVariation = (index: number) => {
         const newVariations = formData.variations.filter((_, i) => i !== index);
@@ -518,7 +536,7 @@ function ItemFormModal({ show, onHide, onSave, item, categories }: ItemFormModal
           }
           if (!variation.size.trim()) variationErrors.size = true;
           if (parseInt(String(variation.quantity), 10) < 0) variationErrors.quantity = true;
-          if (!variation.imageUrl) variationErrors.imageUrl = true;
+          if (variation.imageUrls.length === 0) variationErrors.imageUrls = true;
           
           if (Object.keys(variationErrors).length > 0) {
             newErrors.variations[index] = variationErrors;
@@ -670,16 +688,27 @@ function ItemFormModal({ show, onHide, onSave, item, categories }: ItemFormModal
                     </Form.Group>
                   </Col>
                   <Col lg={4} md={6} sm={12}>
-                    <ImageDropzone
-                      label="Variation Image"
-                      currentImage={v.imageUrl}
-                      onFileSelect={(file) => handleVariationChange(index, 'imageUrl', file)}
-                    />
-                    {!!errors.variations?.[index]?.imageUrl && (
-                        <div className="text-danger small mt-1">
-                            An image is required for this variation.
-                        </div>
-                    )}
+                    <Form.Group>
+                      <Form.Label>Variation Images<span className="text-danger">*</span></Form.Label>
+                      <MultiImageDropzone
+                        ref={el => {
+                          // We need to manage the refs in a map using the variation's temp ID
+                          const key = v._id!;
+                          if (el) {
+                            dropzoneRefs.current.set(key, el);
+                          } else {
+                            dropzoneRefs.current.delete(key);
+                          }
+                        }}
+                        existingImageUrls={v.imageUrls}
+                        maxFiles={3} // Allow up to 3 images
+                      />
+                      {!!errors.variations?.[index]?.imageUrls && (
+                          <div className="text-danger small mt-1">
+                              At least one image is required.
+                          </div>
+                      )}
+                    </Form.Group>
                   </Col>
                   <Col lg={1} md={12} sm={12} className="d-flex justify-content-end align-items-center mt-lg-4">
                     <Button variant="outline-danger" size="sm" onClick={() => handleRemoveVariation(index)}>

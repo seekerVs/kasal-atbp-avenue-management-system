@@ -3,8 +3,7 @@
 import React from 'react';
 import { Form, InputGroup, Button, Row, Col } from 'react-bootstrap';
 import { Funnel, Search } from 'react-bootstrap-icons';
-
-const STANDARD_SIZES = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL'];
+import { sizeOrder } from '../../data/sizeChartData';
 
 export interface FilterFormProps {
   categories: string[];
@@ -86,7 +85,7 @@ export const FilterForm: React.FC<FilterFormProps> = ({
         
         {/* --- 2. WRAP the size options in a Row component --- */}
         <Row>
-            {STANDARD_SIZES.map(size => (
+            {sizeOrder.map(size => (
                 // Each size option is now in a Col, taking up half the width
                 <Col xs={6} key={size}>
                     <Form.Check

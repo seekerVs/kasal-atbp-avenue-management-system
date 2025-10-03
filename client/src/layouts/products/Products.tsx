@@ -234,7 +234,7 @@ function Products() {
                 {products.map((product) => (
                   <Col key={product._id}>
                     <ProductCard
-                      image={product.variations[0]?.imageUrl || 'https://via.placeholder.com/400x500?text=No+Image'}
+                      image={product.variations?.[0]?.imageUrls?.[0] || 'https://via.placeholder.com/400x500?text=No+Image'}
                       title={product.name}
                       price={product.price}
                       sizes={Array.from(new Set(product.variations.map(v => v.size)))}

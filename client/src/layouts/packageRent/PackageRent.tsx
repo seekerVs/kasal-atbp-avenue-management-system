@@ -196,7 +196,7 @@ function PackageRent() {
                         itemId: assignedItem.itemId,
                         name: itemDetails.name,
                         variation: `${assignedItem.color.name}, ${assignedItem.size}`,
-                        imageUrl: variationDetails?.imageUrl || itemDetails.variations[0]?.imageUrl,
+                        imageUrl: variationDetails?.imageUrls[0] || itemDetails.variations[0]?.imageUrls[0],
                     };
                 }
             }
@@ -555,7 +555,7 @@ function PackageRent() {
       name: product.name,
       // FIX IS HERE: Was `variation.color`, should be `variation.color.name`
       variation: `${variation.color.name}, ${variation.size}`, 
-      imageUrl: variation.imageUrl
+      imageUrl: variation.imageUrls[0] || ''
     };
 
     setFulfillmentData(newFulfillmentData);

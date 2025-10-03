@@ -115,7 +115,7 @@ const EditPackageModal: React.FC<EditPackageModalProps> = ({ show, onHide, pkg, 
       itemId: product._id,
       name: product.name,
       variation: `${variation.color}, ${variation.size}`,
-      imageUrl: variation.imageUrl,
+      imageUrl: variation.imageUrls[0] || '',
     };
 
     setFulfillment(updatedFulfillment);
