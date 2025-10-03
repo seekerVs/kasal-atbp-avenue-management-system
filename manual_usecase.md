@@ -13,55 +13,40 @@ The [manual_rental_system.puml](manual_rental_system.puml) file contains the Pla
 Below is a MermaidJS representation of the same use case diagram that can be viewed in most Markdown editors:
 
 ```mermaid
-graph TD
-    Customer([Customer])
-    Staff([Shop Staff])
-    Manager([Shop Owner/Manager])
-    
-    subgraph "Manual Rental Process"
-        UC1[Inquire About Outfits]
-        UC2[Book an Appointment]
-        UC3[Create Reservation]
-        UC4[Create Rental Order]
-        UC5[Process Return]
+---
+title: Use Case Diagram for Manual Rental System
+---
+usecaseDiagram
+    actor Customer
+    actor "Shop Staff" as Staff
+    actor "Shop Owner/Manager" as Manager
+
+    rectangle "Manual Rental Process" {
+        Customer -- (Inquire About Outfits)
+        Customer -- (Book an Appointment)
+        Customer -- (Create Reservation)
+        Customer -- (Create Rental Order)
+        Customer -- (Process Return)
+
+        Staff -- (Check Item Availability)
+        Staff -- (Record Appointment)
+        Staff -- (Process Payment)
+        Staff -- (Inspect Items)
+        Staff -- (Log Damaged Item)
         
-        UC_Check[Check Item Availability]
-        UC_Record[Record Appointment]
-        UC_Pay[Process Payment]
-        UC_Inspect[Inspect Items]
-        UC_Damage[Log Damaged Item]
-        
-        UC_Report[Generate Sales Report]
-        UC_Inventory[Manage Inventory]
-    end
-    
-    %% Actor Associations
-    Customer --- UC1
-    Customer --- UC2
-    Customer --- UC3
-    Customer --- UC4
-    Customer --- UC5
-    
-    Staff --- UC_Check
-    Staff --- UC_Record
-    Staff --- UC_Pay
-    Staff --- UC_Inspect
-    Staff --- UC_Damage
-    
-    Manager --- UC_Report
-    Manager --- UC_Inventory
-    
-    %% Actor Generalization
-    Manager -.->|is a| Staff
-    
-    %% Internal Relationships
-    UC2 -.->|<<include>>| UC_Record
-    UC3 -.->|<<include>>| UC_Check
-    UC3 -.->|<<include>>| UC_Pay
-    UC4 -.->|<<include>>| UC_Check
-    UC4 -.->|<<include>>| UC_Pay
-    UC5 -.->|<<include>>| UC_Inspect
-    UC_Damage -.->|<<extend>>| UC5
+        Manager -- (Generate Sales Report)
+        Manager -- (Manage Inventory)
+
+        (Book an Appointment) ..> (Record Appointment) : <<include>>
+        (Create Reservation) ..> (Check Item Availability) : <<include>>
+        (Create Reservation) ..> (Process Payment) : <<include>>
+        (Create Rental Order) ..> (Check Item Availability) : <<include>>
+        (Create Rental Order) ..> (Process Payment) : <<include>>
+        (Process Return) ..> (Inspect Items) : <<include>>
+        (Process Return) <.. (Log Damaged Item) : <<extend>>
+    }
+
+    Manager --|> Staff
 ```
 
 ## Use Case Descriptions
