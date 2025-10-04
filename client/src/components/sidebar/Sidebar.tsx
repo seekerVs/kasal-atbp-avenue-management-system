@@ -12,7 +12,7 @@ import {
 import { BoxArrowRight } from "react-bootstrap-icons";
 import { sidebarItems, NavItem } from "./sidebarItems";
 import { SidebarNavItem } from "./SidebarNavItem"; 
-import "./Sidebar.css";
+import "./sidebar.css";
 import { Logo2 } from "../../assets/images";
 import { dispatchAuthChangeEvent } from "../../services/authEvent";
 import api from "../../services/api";
