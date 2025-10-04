@@ -16,8 +16,12 @@ interface UseSensorDataReturn {
   error: string | null;
 }
 
-// A fixed URL for the sensor endpoint.
-const SENSOR_API_URL = 'http://localhost:3001/sensor/sensorData';
+const SENSOR_API_URL = `${import.meta.env.VITE_SENSOR_URL}/sensorData`;
+
+// (Optional but Recommended) Add a check to ensure the variable is set
+if (!import.meta.env.VITE_SENSOR_URL) {
+  throw new Error("VITE_SENSOR_URL is not defined. Please check your .env file.");
+}
 
 /**
  * A custom hook to poll and manage data from the KasalDevice measurement sensor.
