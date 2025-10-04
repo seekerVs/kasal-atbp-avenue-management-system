@@ -12,7 +12,7 @@ import { HistorySection } from './HistorySection';
 import { FeaturesSection } from './FeaturesSection';
 import { NewsletterSection } from './NewsletterSection';
 import { Coat_display, Dress_display } from "../../assets/images";
-import "./About.css";
+import "./about.css";
 import { FaqSection } from "./FaqSection";
 
 function About() {
