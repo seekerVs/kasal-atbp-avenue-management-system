@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import './ComponentPreview.css';
+import './componentPreview.css';
 
 interface ComponentPreviewProps {
   title: string;

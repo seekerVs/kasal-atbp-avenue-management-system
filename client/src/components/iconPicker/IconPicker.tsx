@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { Form, InputGroup, ListGroup } from 'react-bootstrap';
 import * as icons from 'react-bootstrap-icons';
-import './IconPicker.css'; // We'll create this CSS file next
+import './iconPicker.css'; // We'll create this CSS file next
 
 // A list of all available icon names from the library
 const ALL_ICON_NAMES = Object.keys(icons);
