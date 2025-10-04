@@ -6,6 +6,7 @@ import "../styles.css";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import "react-bootstrap-icons";
 import { ErrorBoundary } from "react-error-boundary";
+import { Analytics } from "@vercel/analytics/react";
 
 // Context Providers
 import { AlertProvider } from "./contexts/AlertContext";
@@ -101,6 +102,7 @@ function App() {
       <AlertProvider>
         <InactivityManager />
         <RouterProvider router={router} />
+        <Analytics />
       </AlertProvider>
     </ErrorBoundary>
   );

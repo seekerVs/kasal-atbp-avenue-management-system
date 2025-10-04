@@ -309,9 +309,10 @@ function ItemFormModal({ show, onHide, onSave, item, categories }: ItemFormModal
     const [errors, setErrors] = useState<any>({});
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [showPriceWarningModal, setShowPriceWarningModal] = useState(false);
-    const [isCheckingName, setIsCheckingName] = useState(false); // <-- ADD THIS
+    const [isCheckingName, setIsCheckingName] = useState(false);
     const [nameError, setNameError] = useState<string | null>(null);
     const dropzoneRefs = useRef<Map<string, MultiImageDropzoneRef>>(new Map());
+    const [isSaving, setIsSaving] = useState(false);
     
     useEffect(() => {
       if (item) {
@@ -406,66 +407,72 @@ function ItemFormModal({ show, onHide, onSave, item, categories }: ItemFormModal
         setFormData(prev => ({ ...prev, variations: newVariations }));
     };
 
-    // Inside ItemFormModal component
     const handleSave = async () => {
-      const allInitialImageUrls = new Set(
-        initialVariationsRef.current.flatMap(v => v.imageUrls)
-      );
-      const allFinalImageUrls = new Set(
-        formData.variations.flatMap(v => v.imageUrls.filter(url => typeof url === 'string'))
-      );
-
-      const urlsToDelete: string[] = [];
-      allInitialImageUrls.forEach(initialUrlOrFile => {
-        // 1. Only consider items that are actually strings (i.e., existing URLs).
-        if (typeof initialUrlOrFile === 'string') {
-          // 2. Check if this string URL no longer exists in the final set of URLs.
-          if (!allFinalImageUrls.has(initialUrlOrFile)) {
-            // 3. If it's gone, add it to the list of URLs to be deleted from the server.
-            urlsToDelete.push(initialUrlOrFile);
-          }
-        }
-      });
-
-      try {
-        const uploadPromises = formData.variations.map(async (variation) => {
-          const dropzoneRef = dropzoneRefs.current.get(variation._id!);
-          if (dropzoneRef) {
-            // Upload all new files for this variation and get back the new URLs
-            const newUrls = await dropzoneRef.uploadAll(); 
-            return {
-              ...variation,
-              imageUrls: newUrls, // The final array of URLs (old + new)
-            };
-          }
-          return variation; // Return as-is if no ref found (shouldn't happen)
-        });
-
-        const finalVariations = await Promise.all(uploadPromises);
-
-        const baseItemData = {
-          ...formData,
-          price: parseFloat(priceInput) || 0,
-          variations: finalVariations.map(v => {
-            const { _id, ...rest } = v; // Remove the temporary _id before sending to backend
-            return {
-              ...rest,
-              quantity: parseInt(String(v.quantity), 10) || 0,
-            };
-          }),
-        };
+        setIsSaving(true);
         
-        let itemToSave: InventoryItem;
-        if (item) {
-          itemToSave = { ...baseItemData, _id: item._id };
-        } else {
-          itemToSave = baseItemData as InventoryItem;
-        }
+        try {
+            // --- STEP 1: Process all image uploads for all variations ---
+            const uploadPromises = formData.variations.map(async (variation) => {
+                const dropzoneRef = dropzoneRefs.current.get(variation._id!);
+                if (dropzoneRef) {
+                    // This function from MultiImageDropzone handles everything:
+                    // - It finds which files are new (File objects).
+                    // - It uploads only the new files.
+                    // - It returns a complete array of final URLs (old strings + new strings).
+                    const finalUrls = await dropzoneRef.uploadAll();
+                    
+                    // Return a new variation object with the final URLs and without the temp _id
+                    const { _id, ...rest } = variation; 
+                    return {
+                        ...rest,
+                        imageUrls: finalUrls,
+                        quantity: parseInt(String(variation.quantity), 10) || 0,
+                    };
+                }
+                // Fallback if ref is not found (should not happen)
+                const { _id, ...rest } = variation;
+                return rest;
+            });
 
-        onSave(itemToSave, urlsToDelete);
-      } catch (error: any) {
-        addAlert(error.message || "An error occurred during image uploads.", 'danger');
-      }
+            // Wait for all variations to have their images uploaded and processed
+            const finalVariations = await Promise.all(uploadPromises);
+
+            // --- STEP 2: Calculate which old URLs need to be deleted ---
+            const initialImageUrls = new Set(initialVariationsRef.current.flatMap(v => v.imageUrls).filter(url => typeof url === 'string'));
+            const finalImageUrls = new Set(finalVariations.flatMap(v => v.imageUrls));
+            
+            const urlsToDelete: string[] = [];
+            initialImageUrls.forEach(initialUrl => {
+                if (!finalImageUrls.has(initialUrl)) {
+                    urlsToDelete.push(initialUrl);
+                }
+            });
+            
+            // --- STEP 3: Build the final payload for the backend ---
+            const finalPayload: Omit<InventoryItem, '_id'> = {
+                name: formData.name,
+                price: parseFloat(priceInput) || 0,
+                category: formData.category,
+                description: formData.description,
+                features: formData.features,
+                composition: formData.composition,
+                ageGroup: formData.ageGroup,
+                gender: formData.gender,
+                variations: finalVariations as ItemVariation[], // Assert the type after processing
+            };
+
+            // If we are editing, add the original _id back to the payload
+            const itemToSave = item ? { ...finalPayload, _id: item._id } : finalPayload;
+
+            // --- STEP 4: Call the parent's onSave function ---
+            onSave(itemToSave as InventoryItem, urlsToDelete);
+
+        } catch (error: any) {
+            console.error("Save process failed:", error);
+            addAlert(error.message || "An error occurred during image uploads.", 'danger');
+        } finally {
+            setIsSaving(false); // Stop the local saving state
+        }
     };
     
     const handleVariationChange = (index: number, field: keyof ItemVariation, value: any) => {
@@ -543,7 +550,11 @@ function ItemFormModal({ show, onHide, onSave, item, categories }: ItemFormModal
           }
           if (!variation.size.trim()) variationErrors.size = true;
           if (parseInt(String(variation.quantity), 10) < 0) variationErrors.quantity = true;
-          if (variation.imageUrls.length === 0) variationErrors.imageUrls = true;
+          const dropzoneRef = dropzoneRefs.current.get(variation._id!);
+          const stagedFileCount = dropzoneRef ? dropzoneRef.getFiles().length : 0;
+          if (stagedFileCount === 0) {
+              variationErrors.imageUrls = true;
+          }
           
           if (Object.keys(variationErrors).length > 0) {
             newErrors.variations[index] = variationErrors;
@@ -817,26 +828,23 @@ function ItemFormModal({ show, onHide, onSave, item, categories }: ItemFormModal
         <Modal.Footer>
           <Button variant="secondary" onClick={onHide}>Cancel</Button>
           <Button 
-            variant="primary" 
+            disabled={isSaving}
             onClick={() => {
-              // Step 1: Run standard validation first.
+              // This is the crucial validation call.
               if (!validateForm()) {
                 addAlert('Please fill in all required fields marked with an asterisk (*).', 'danger');
-                return; // Stop if there are basic errors.
+                return; // Stop if validation fails.
               }
               
-              // --- THIS IS THE NEW LOGIC ---
-              // Step 2: Check if the price is zero.
+              // If validation passes, then proceed with the confirmation logic.
               if (parseFloat(priceInput) <= 0) {
-                // If price is zero, show the price warning modal first.
                 setShowPriceWarningModal(true);
               } else {
-                // If price is valid, proceed directly to the final confirmation modal.
                 setShowConfirmModal(true);
               }
             }}
           >
-            Save Item
+            {isSaving ? <><Spinner as="span" size="sm"/> Saving...</> : 'Save Item'}
           </Button>
         </Modal.Footer>
         </Modal>
