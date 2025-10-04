@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { Form, Button, Table, Image, Badge } from 'react-bootstrap';
+import React from 'react';
+import { Form, Table } from 'react-bootstrap';
 import { NormalizedFulfillmentItem } from '../../../types';
 import './packageFulfillmentForm.css';
 import { DayBlockPicker } from '../../dayBlockPicker/DayBlockPicker';

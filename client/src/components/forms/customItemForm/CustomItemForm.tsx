@@ -1,5 +1,5 @@
 import React, { Ref, useMemo } from 'react';
-import { Form, Row, Col, InputGroup, Button, Tooltip, OverlayTrigger, Alert } from 'react-bootstrap';
+import { Form, Row, Col, InputGroup, Button, Alert } from 'react-bootstrap';
 import { PlusCircleFill, Trash, CardText, CashCoin, Hash, PencilSquare, Palette, Image, FileText, Grid3x3GapFill, ArrowsCollapse, CalendarEvent } from 'react-bootstrap-icons';
 import { CustomTailoringItem, MeasurementRef, SensorData } from '../../../types';
 import { MultiImageDropzone, MultiImageDropzoneRef } from '../../multiImageDropzone/MultiImageDropzone';

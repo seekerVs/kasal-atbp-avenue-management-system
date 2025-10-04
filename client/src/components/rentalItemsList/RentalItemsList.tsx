@@ -1,5 +1,5 @@
 import React from 'react';
-import { Row, Col, Image, Button, ButtonGroup, Badge } from 'react-bootstrap';
+import { Row, Col, Image, Button, Badge } from 'react-bootstrap';
 import { BoxSeam, PencilSquare, Trash, CalendarEvent } from 'react-bootstrap-icons';
 import { format } from 'date-fns';
 import { SingleRentItem, RentedPackage, CustomTailoringItem } from '../../types';

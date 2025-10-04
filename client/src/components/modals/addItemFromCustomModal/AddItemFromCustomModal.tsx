@@ -23,8 +23,8 @@ type VariationFormData = {
   imageUrl: string | File | null;
 };
 
-type VariationInForm = Omit<ItemVariation, 'imageUrl'> & {
-  imageUrl: string | File | null;
+type VariationInForm = Omit<ItemVariation, 'imageUrls'> & {
+  imageUrls: (string | File)[];
 };
 
 const AddItemFromCustomModal: React.FC<AddItemFromCustomModalProps> = ({ show, onFinished, itemToProcess }) => {
@@ -69,7 +69,7 @@ const AddItemFromCustomModal: React.FC<AddItemFromCustomModalProps> = ({ show, o
           color: { name: 'Black', hex: '#000000' },
           size: calculatedSize,
           quantity: itemToProcess.quantity,
-          imageUrl: null, // Initialize as null, not an empty string.
+          imageUrls: [],
         };
 
         setFormData({
@@ -142,14 +142,16 @@ const AddItemFromCustomModal: React.FC<AddItemFromCustomModalProps> = ({ show, o
                   return;
               }
 
-            let finalImageUrl = '';
-            if (newVariationForm.imageUrl instanceof File) {
-                finalImageUrl = await uploadFile(newVariationForm.imageUrl);
+            let finalImageUrls: string[] = [];
+            // The image is now in an array. Check if the first element is a File.
+            if (newVariationForm.imageUrls[0] instanceof File) {
+                const uploadedUrl = await uploadFile(newVariationForm.imageUrls[0]);
+                finalImageUrls.push(uploadedUrl);
             }
 
             const finalPayload = {
                 ...formData,
-                variations: [{ ...newVariationForm, imageUrl: finalImageUrl }],
+                variations: [{ ...newVariationForm, imageUrls: finalImageUrls }],
             };
 
             await api.post('/inventory', finalPayload);
@@ -163,15 +165,16 @@ const AddItemFromCustomModal: React.FC<AddItemFromCustomModalProps> = ({ show, o
                   return;
               }
 
-            let finalImageUrl = '';
+            let finalImageUrls: string[] = [];
             if (variationData.imageUrl instanceof File) {
-                finalImageUrl = await uploadFile(variationData.imageUrl);
+                const uploadedUrl = await uploadFile(variationData.imageUrl);
+                finalImageUrls.push(uploadedUrl);
             }
 
             const newVariation: ItemVariation = {
                 color: variationData.color,
                 size: variationData.size,
-                imageUrl: finalImageUrl,
+                imageUrls: finalImageUrls, // Use the new array
                 quantity: itemToProcess.quantity,
             };
             
@@ -273,10 +276,10 @@ const AddItemFromCustomModal: React.FC<AddItemFromCustomModalProps> = ({ show, o
                     <Col>
                         <ImageDropzone
                             label="Variation Image"
-                            currentImage={formData.variations[0].imageUrl}
+                            currentImage={formData.variations[0].imageUrls[0]}
                             onFileSelect={(file) => {
                                 const newVariations = [...formData.variations];
-                                newVariations[0].imageUrl = file;
+                                newVariations[0].imageUrls = file ? [file] : [];
                                 setFormData({ ...formData, variations: newVariations });
                             }}
                         />

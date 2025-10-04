@@ -51,6 +51,7 @@ export const SingleItemSelectionModal: React.FC<ItemSelectionModalProps> = ({
   const [selectedAge, setSelectedAge] = useState("");
   const [selectedGender, setSelectedGender] = useState("");
   const [showFilters, setShowFilters] = useState(true);
+  const [selectedSize, setSelectedSize] = useState("");
   const ITEMS_PER_PAGE = 12;
 
   useEffect(() => {
@@ -113,6 +114,8 @@ export const SingleItemSelectionModal: React.FC<ItemSelectionModalProps> = ({
         else if (selectedSort === "Price Desc") params.sort = 'price_desc'; 
         else if (selectedSort === "Latest") params.sort = 'latest';
 
+        if (selectedSize) params.size = selectedSize;
+
         const response = await api.get('/inventory', { params });
         setInventory(response.data.items || []);
         setTotalPages(response.data.totalPages || 1);
@@ -127,9 +130,9 @@ export const SingleItemSelectionModal: React.FC<ItemSelectionModalProps> = ({
     fetchProducts();
   }, [show, currentPage, searchTerm, selectedSort, attireType, selectedAge, selectedGender, addAlert, preselectedItemId, filterByColorHex, assignmentScope, mode, filterByCategoryType, initialSelectedItem]);
   
-  useEffect(() => { if (currentPage !== 1) setCurrentPage(1); }, [searchTerm, selectedSort, attireType, selectedAge, selectedGender, assignmentScope]);
+  useEffect(() => { if (currentPage !== 1) setCurrentPage(1); }, [searchTerm, selectedSort, attireType, selectedAge, selectedGender, assignmentScope, selectedSize]);
 
-  const handleResetFilters = () => { setSearchTerm(""); setAttireType(""); setSelectedAge(""); setSelectedGender(""); setSelectedSort("Relevance"); setAssignmentScope('matching'); };
+  const handleResetFilters = () => { setSearchTerm(""); setAttireType(""); setSelectedAge(""); setSelectedGender(""); setSelectedSort("Relevance"); setAssignmentScope('matching'); setSelectedSize("");};
   const handleGoBack = () => { setSelectedItem(null); setSelectedVariation(null); setQuantity(1); };
   
   const handleSelectItem = (item: InventoryItem) => {
@@ -205,7 +208,8 @@ export const SingleItemSelectionModal: React.FC<ItemSelectionModalProps> = ({
               filterByColorHex={filterByColorHex}
               assignmentScope={assignmentScope}
               onAssignmentScopeChange={setAssignmentScope}
-              // --- (1) REMOVED isFilterDisabled and filterDisabledReason props ---
+              selectedSize={selectedSize}
+              onSizeChange={setSelectedSize}  
             />
         )}
       </Modal.Body>

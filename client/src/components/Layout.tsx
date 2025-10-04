@@ -1,6 +1,5 @@
 // client/src/components/Layout.tsx
 
-import React from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import CustomNavbar1 from './customNavbar/CustomNavbar1';
 import Sidebar from './sidebar/Sidebar';

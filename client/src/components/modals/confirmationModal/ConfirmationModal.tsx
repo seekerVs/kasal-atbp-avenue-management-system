@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, Button, ListGroup, Alert } from 'react-bootstrap';
+import { Modal, Button, ListGroup } from 'react-bootstrap';
 import { ExclamationTriangleFill } from 'react-bootstrap-icons';
 
 interface ConfirmationModalProps {

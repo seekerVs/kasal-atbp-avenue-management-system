@@ -49,7 +49,7 @@ export const ReservedPackageDetailsModal: React.FC<ReservedPackageDetailsModalPr
                 v => v.color.name === colorName && v.size === size
               );
               if (variationDetails) {
-                imageUrl = variationDetails.imageUrl;
+                imageUrl = variationDetails.imageUrls[0];
               }
             }
             // --- END OF NEW LOGIC ---

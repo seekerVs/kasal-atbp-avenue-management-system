@@ -1,7 +1,7 @@
 // client/src/components/modals/singleItemSelectionModal/GridView.tsx
 
 import React from 'react';
-import { Row, Col, Button, DropdownButton, Dropdown, ButtonGroup, Spinner, Alert } from 'react-bootstrap';
+import { Row, Col, Button, DropdownButton, Dropdown, ButtonGroup, Alert } from 'react-bootstrap';
 import { SortDown, Funnel } from 'react-bootstrap-icons';
 import { InventoryItem } from '../../../types';
 import { FilterForm } from '../../forms/FilterForm';
@@ -35,6 +35,8 @@ interface GridViewProps {
   filterByColorHex?: string;
   assignmentScope: 'matching' | 'all';
   onAssignmentScopeChange: (scope: 'matching' | 'all') => void;
+  selectedSize: string;      // ADD THIS
+  onSizeChange: (size: string) => void;
 }
 
 export const GridView: React.FC<GridViewProps> = ({
@@ -42,7 +44,7 @@ export const GridView: React.FC<GridViewProps> = ({
   showFilters, onToggleFilters, searchTerm, onSearchTermChange, attireType, onAttireTypeChange,
   selectedAge, onAgeChange, selectedGender, onGenderChange, selectedSort, onSortChange,
   onResetFilters,
-  mode, filterByColorHex, assignmentScope, onAssignmentScopeChange
+  mode, filterByColorHex, assignmentScope, onAssignmentScopeChange,selectedSize, onSizeChange 
 }) => {
 
   const renderGridContent = () => {
@@ -70,7 +72,7 @@ export const GridView: React.FC<GridViewProps> = ({
             <ProductCard 
               title={item.name} 
               price={item.price} 
-              image={item.variations[0]?.imageUrl || 'https://placehold.co/400x500'} 
+              image={item.variations[0]?.imageUrls[0] || 'https://placehold.co/400x500'}
               // --- CHANGED: Ensure unique sizes are displayed ---
               sizes={Array.from(new Set(item.variations.map(v => v.size)))} 
               heartCount={item.heartCount || 0} 
@@ -99,6 +101,8 @@ export const GridView: React.FC<GridViewProps> = ({
             filterByColorHex={filterByColorHex}
             assignmentScope={assignmentScope}
             onAssignmentScopeChange={onAssignmentScopeChange}
+            selectedSize={selectedSize}
+            setSelectedSize={onSizeChange}
           />
         </Col>
       )}

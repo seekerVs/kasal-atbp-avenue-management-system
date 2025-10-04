@@ -1,7 +1,7 @@
 // client/src/components/modals/singleItemSelectionModal/DetailView.tsx
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Row, Col, Form, Button, Image, Accordion, Carousel } from 'react-bootstrap';
+import { Form, Button, Image, Accordion, Carousel } from 'react-bootstrap';
 import { InventoryItem, ItemVariation } from '../../../types';
 
 interface DetailViewProps {

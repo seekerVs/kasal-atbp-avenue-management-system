@@ -36,7 +36,6 @@ type BlockType = 'morning' | 'afternoon' | '';
 export const PackageConfigurationModal: React.FC<PackageConfigurationModalProps> = ({ show, onHide, onSave, pkg, motifId, initialFulfillmentData  }) => {
   const [fulfillmentData, setFulfillmentData] = useState<FulfillmentPreview[]>([]);
   const [appointment, setAppointment] = useState<{ date: Date | null; block: BlockType }>({ date: null, block: '' });
-  const [selectedBlock, setSelectedBlock] = useState<BlockType>('');
   const {addAlert} = useAlert()
   const [unavailableDates, setUnavailableDates] = useState<Date[]>([]);
   const [allInventory, setAllInventory] = useState<InventoryItem[]>([]);
@@ -80,7 +79,6 @@ export const PackageConfigurationModal: React.FC<PackageConfigurationModalProps>
         setErrors([]);
         // Reset appointment state when modal opens
         setAppointment({ date: null, block: '' });
-        setSelectedBlock('');
 
         Promise.all([
           api.get('/unavailability'),

@@ -1,9 +1,9 @@
 // client/src/components/reservationWizard/ReservationManager.tsx
 
 import React, { useEffect, useState } from 'react';
-import { Button, Alert, Row, Col } from 'react-bootstrap';
+import { Button, Row, Col } from 'react-bootstrap';
 import { PatchCheckFill, BoxSeam } from 'react-bootstrap-icons';
-import { PackageReservation, ItemReservation, Package, Reservation, FulfillmentPreview } from '../../types';
+import { ItemReservation, Package, Reservation, FulfillmentPreview } from '../../types';
 import { ReservationList } from './ReservationList'; // We can reuse this component
 import { PackageSelectionData, PackageSelectionModal } from '../modals/packageSelectionModal/PackageSelectionModal';
 import { SelectedItemData, SingleItemSelectionModal } from '../modals/singleItemSelectionModal/SingleItemSelectionModal';

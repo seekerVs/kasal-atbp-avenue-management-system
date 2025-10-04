@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { Modal, Button, Form, Row, Col, Image, InputGroup, ListGroup, Alert, Card, Spinner, Accordion } from 'react-bootstrap';
-import { ExclamationTriangleFill, ArrowCounterclockwise } from 'react-bootstrap-icons';
-import { RentalOrder, SingleRentItem, RentedPackage, CustomTailoringItem } from '../../../types';
+import { Modal, Button, Form, Row, Col, Image, InputGroup, Alert, Card, Spinner, Accordion } from 'react-bootstrap';
+import { ArrowCounterclockwise } from 'react-bootstrap-icons';
+import { RentalOrder } from '../../../types';
 import { useAlert } from '../../../contexts/AlertContext';
 import { formatCurrency } from '../../../utils/formatters';
 

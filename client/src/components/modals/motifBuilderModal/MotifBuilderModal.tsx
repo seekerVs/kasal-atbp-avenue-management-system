@@ -1,9 +1,9 @@
 // client/src/components/modals/motifBuilderModal/MotifBuilderModal.tsx
 
-import React, { useState, useMemo } from 'react';
-import { Modal, Button, Row, Col, Card, Form, InputGroup } from 'react-bootstrap';
+import  { useState, useMemo } from 'react';
+import { Modal, Row, Col, Card, Form, InputGroup } from 'react-bootstrap';
 import { Search } from 'react-bootstrap-icons';
-import { InventoryItem, InclusionItem } from '../../../types';
+import { InventoryItem } from '../../../types';
 import './motifBuilderModal.css';
 
 interface ColorInfo {

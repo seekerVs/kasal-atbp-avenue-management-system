@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Modal, Button, Row, Col, Form, Spinner, InputGroup, Alert, Card } from "react-bootstrap";
-import { ArrowsCollapse, CheckCircleFill, ExclamationTriangleFill, InfoCircleFill } from "react-bootstrap-icons";
+import { Modal, Button, Row, Col, Form, InputGroup, Alert } from "react-bootstrap";
+import { ArrowsCollapse, ExclamationTriangleFill, InfoCircleFill } from "react-bootstrap-icons";
 import { useAlert } from "../../../contexts/AlertContext";
 import { convertMeasurementsToSize } from "../../../utils/sizeConverter";
 import { useSensorData } from "../../../hooks/useSensorData";

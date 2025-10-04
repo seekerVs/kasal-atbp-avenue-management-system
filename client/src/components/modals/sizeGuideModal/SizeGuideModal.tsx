@@ -1,7 +1,7 @@
 // client/src/components/modals/sizeGuideModal/SizeGuideModal.tsx
 
-import React, { useState, useEffect } from 'react';
-import { Modal, Button, Row, Col, Image, Form, InputGroup, Table, Badge } from 'react-bootstrap';
+import React from 'react';
+import { Modal, Button, Row, Col, Image, Table, Badge } from 'react-bootstrap';
 import { HowToMeasure } from '../../../assets/images';
 import { sizeChart, sizeOrder } from '../../../data/sizeChartData';
 import './sizeGuideModal.css';

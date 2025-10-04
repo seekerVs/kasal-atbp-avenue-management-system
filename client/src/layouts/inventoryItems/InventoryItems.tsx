@@ -20,7 +20,7 @@ import {
   PlusCircleFill,
   BoxSeam,
   Palette,
-  Image as ImageIcon,
+
   TagFill,
   InfoCircleFill,
   CardText,

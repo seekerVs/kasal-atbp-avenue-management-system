@@ -13,7 +13,7 @@ interface ReservationSuccessModalProps {
   reservation: Reservation | null;
 }
 
-export const ReservationSuccessModal: React.FC<ReservationSuccessModalProps> = ({ show, onHide, reservation }) => {
+export const ReservationSuccessModal: React.FC<ReservationSuccessModalProps> = ({ show, onHide }) => {
   return (
     // The modal is now smaller and more focused
     <Modal show={show} onHide={onHide} centered backdrop="static" keyboard={false}>

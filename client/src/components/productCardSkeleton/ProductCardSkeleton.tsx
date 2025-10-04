@@ -1,6 +1,5 @@
 // client/src/components/productCardSkeleton/ProductCardSkeleton.tsx
 
-import React from 'react';
 import { Card } from 'react-bootstrap';
 import './productCardSkeleton.css'; // We will create this next
 

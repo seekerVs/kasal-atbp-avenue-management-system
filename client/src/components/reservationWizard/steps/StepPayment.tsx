@@ -1,5 +1,5 @@
 import React from 'react';
-import { Form, Row, Col, Alert, ListGroup } from 'react-bootstrap';
+import { Form, Row, Col, Alert } from 'react-bootstrap';
 import { Reservation, Payment, FormErrors } from '../../../types';
 import { formatCurrency } from '../../../utils/formatters';
 import { OrderSummaryCard } from '../../orderSummaryCard/OrderSummaryCard';

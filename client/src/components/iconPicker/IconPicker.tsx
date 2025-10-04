@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { Form, InputGroup, ListGroup } from 'react-bootstrap';
 import * as icons from 'react-bootstrap-icons';
 import './IconPicker.css'; // We'll create this CSS file next
