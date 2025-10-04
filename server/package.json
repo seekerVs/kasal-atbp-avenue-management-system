@@ -30,6 +30,7 @@
     "node-cron": "^4.2.1",
     "nodemailer": "^7.0.6",
     "nodemon": "^3.1.10",
-    "pdfkit": "^0.17.2"
+    "pdfkit": "^0.17.2",
+    "winston-mongodb": "^7.0.1"
   }
 }
