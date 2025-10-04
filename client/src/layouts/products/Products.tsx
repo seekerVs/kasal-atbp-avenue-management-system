@@ -1,6 +1,6 @@
 // client/src/layouts/products/Products.tsx
 
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
   Col,
   Dropdown,

@@ -1,6 +1,6 @@
 // client/src/layouts/packageViewer/PackageViewer.tsx
 
-import React, { useMemo, useState, useEffect, useRef } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { Col, Row, Image, Stack, Form, Button, Alert, Carousel, ListGroup, Accordion } from "react-bootstrap";
 import { X, Check2 } from "react-bootstrap-icons";
 import { useLocation, useNavigate } from "react-router-dom";

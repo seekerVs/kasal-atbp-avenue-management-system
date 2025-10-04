@@ -1,8 +1,8 @@
 // client/src/layouts/singleRent/SingleRent.tsx
 
-import React, { useState, useEffect, useMemo } from 'react';
+import  { useState, useEffect, useMemo } from 'react';
 import { Container, Row, Col, Button, Card, Image as BsImage, Spinner, Alert, Modal, ListGroup } from 'react-bootstrap';
-import { BoxSeam, Tag, ExclamationTriangleFill, Hash, Palette, PencilSquare, Trash } from 'react-bootstrap-icons';
+import { BoxSeam, ExclamationTriangleFill, PencilSquare, Trash } from 'react-bootstrap-icons';
 import { useNavigate } from 'react-router-dom';
 
 import CustomerDetailsCard from '../../components/CustomerDetailsCard';

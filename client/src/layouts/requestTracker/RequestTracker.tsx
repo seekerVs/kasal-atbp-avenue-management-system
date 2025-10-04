@@ -3,7 +3,6 @@ import { Row, Col, Card, Form, Button, Spinner, Alert, Badge } from 'react-boots
 import { Search, InfoCircleFill, BoxSeam, CalendarEvent } from 'react-bootstrap-icons';
 import api from '../../services/api';
 import { Reservation, Appointment } from '../../types';
-import { format } from 'date-fns';
 import { StatusTimeline } from '../../components/statusTimeline/StatusTimeline';
 import './requestTracker.css';
 import TrackerBackgroundImage from '../../assets/images/tracker_image.jpg';

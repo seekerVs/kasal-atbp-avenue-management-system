@@ -2,10 +2,9 @@
 
 import React, { useEffect, useState, useMemo } from "react";
 import {
-  Row, Col, Button, Image, Spinner, Carousel, Modal, Alert, Accordion,
+  Row, Col, Button, Image, Spinner, Carousel, Alert, Accordion,
 } from "react-bootstrap"; 
 import { X } from "react-bootstrap-icons";
-import { SizeChart } from "../../assets/images";
 import { useNavigate, useParams } from "react-router-dom";
 import { InventoryItem, ItemVariation } from "../../types";
 import api from "../../services/api";
@@ -23,7 +22,6 @@ const ProductViewer: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [selectedVariation, setSelectedVariation] = useState<ItemVariation | null>(null);
   const [quantity, setQuantity] = useState(1);
-  const [showSizeChart, setShowSizeChart] = useState(false);
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showSizeGuide, setShowSizeGuide] = useState(false);
