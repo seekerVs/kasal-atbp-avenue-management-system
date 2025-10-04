@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Image, Form, Button } from 'react-bootstrap';
 import { CloudUpload, Trash } from 'react-bootstrap-icons';
-import './ImageDropzone.css';
+import './imageDropzone.css';
 
 interface ImageDropzoneProps {
   // Can be a string (existing URL) or a File object (staged file)
