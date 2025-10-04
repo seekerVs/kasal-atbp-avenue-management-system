@@ -695,19 +695,16 @@ function ItemFormModal({ show, onHide, onSave, item, categories }: ItemFormModal
                           Size Chart
                         </Button>
                       </div>
-                      <div className="d-flex gap-1 flex-wrap mt-1">
+                      <Form.Select
+                        value={v.size}
+                        onChange={e => handleVariationChange(index, 'size', e.target.value)}
+                        isInvalid={!!errors.variations?.[index]?.size}
+                      >
+                        <option value="">-- Select Size --</option>
                         {sizeOrder.map(size => (
-                          <Button
-                            key={size}
-                            variant={v.size === size ? 'dark' : 'outline-dark'}
-                            size="sm"
-                            onClick={() => handleVariationChange(index, 'size', size)}
-                            className={!!errors.variations?.[index]?.size && !v.size ? 'is-invalid' : ''}
-                          >
-                            {size}
-                          </Button>
+                          <option key={size} value={size}>{size}</option>
                         ))}
-                      </div>
+                      </Form.Select>
                     </Form.Group>
                   </Col>
                   <Col lg={2} md={6} sm={12}>
