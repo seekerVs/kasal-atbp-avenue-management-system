@@ -69,9 +69,8 @@ export const SingleItemSelectionModal: React.FC<ItemSelectionModalProps> = ({
   useEffect(() => {
     if (show) {
       setAssignmentScope(mode === 'assignment' ? 'matching' : 'all');
-      // Optionally reset other filters here too if desired when the modal re-opens
-      // setCurrentPage(1);
-      // setSearchTerm('');
+      setCurrentPage(1);
+      setSearchTerm('');
     }
   }, [show, mode, filterByColorHex]); 
 
@@ -101,10 +100,18 @@ export const SingleItemSelectionModal: React.FC<ItemSelectionModalProps> = ({
         }
 
         if (filterByCategoryType === 'Accessory') {
+            // If the modal is explicitly asked to show ONLY accessories, do that.
             params.categories = ACCESSORY_CATEGORIES.join(',');
-        } else {
+        } else if (mode === 'rental') {
+            // If the modal is in 'rental' mode (e.g., for SingleRent page),
+            // then exclude accessories to focus on main outfits.
             params.excludeCategory = 'Accessory';
-            // Only use the manual attireType filter if not in accessory mode
+            if (attireType) {
+                params.category = attireType;
+            }
+        } else {
+            // For any other mode (like 'assignment'), don't exclude anything by default.
+            // Just apply the regular filters.
             if (attireType) {
                 params.category = attireType;
             }

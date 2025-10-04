@@ -22,7 +22,7 @@ function NewRental() {
           >
             <Card.Body className="p-4">
               <TagFill className="rental-hub-icon" />
-              <Card.Title as="h4">Single Item Rent</Card.Title>
+              <Card.Title as="h4">Outfit Rent</Card.Title>
               <Card.Text className="text-muted">
                 For renting one or more individual, ready-to-wear items.
               </Card.Text>

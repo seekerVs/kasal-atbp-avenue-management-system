@@ -25,7 +25,9 @@ import {
   CardText,
   Gem,
   Search,
-  ExclamationTriangleFill
+  ExclamationTriangleFill,
+  PersonStanding,
+  GenderAmbiguous
 } from 'react-bootstrap-icons';
 import { InventoryItem, ItemVariation, MeasurementRef } from '../../types';
 import api from '../../services/api';
@@ -290,9 +292,13 @@ function ItemFormModal({ show, onHide, onSave, item, categories }: ItemFormModal
         features: string[];
         composition: string[];
         variations: FormVariation[];
+        ageGroup?: 'Adult' | 'Kids';
+        gender?: 'Male' | 'Female' | 'Unisex';
     }>({
         name: '', price: 0, category: '', description: '',
         features: [], composition: [], variations: [{ color: { name: 'Black', hex: '#000000' }, size: '', quantity: 1, imageUrls: [] }],
+        ageGroup: 'Adult',
+        gender: 'Unisex',
     });
 
     const { addAlert } = useAlert();
@@ -321,6 +327,8 @@ function ItemFormModal({ show, onHide, onSave, item, categories }: ItemFormModal
           features: editableData.features?.length ? editableData.features : [''],
           composition: editableData.composition?.length ? editableData.composition : [''],
           variations: variationsWithTempIds,
+          ageGroup: item.ageGroup || 'Adult',
+          gender: item.gender || 'Unisex',
         });
         setPriceInput(String(item.price));
         initialVariationsRef.current = JSON.parse(JSON.stringify(variationsWithTempIds));
@@ -336,7 +344,9 @@ function ItemFormModal({ show, onHide, onSave, item, categories }: ItemFormModal
             size: '', 
             quantity: 1, 
             imageUrls: [] // Initialize with an empty array
-          }]
+          }],
+          ageGroup: 'Adult',
+          gender: 'Unisex',
         });
         setPriceInput('0');
         initialVariationsRef.current = [];
@@ -572,41 +582,68 @@ function ItemFormModal({ show, onHide, onSave, item, categories }: ItemFormModal
         <Modal.Body style={{ height: '75vh', overflowY: 'auto' }}>
           <Form>
             <Row>
-                <Col md={6}>
-                  <Form.Group className="mb-3">
-                    <Form.Label><InfoCircleFill className="me-1" /> Item Name<span className="text-danger">*</span></Form.Label>
-                    <InputGroup hasValidation>
-                      <Form.Control 
-                        type="text" 
-                        name="name" 
-                        value={formData.name} 
-                        onChange={handleMainFormChange} 
-                        isInvalid={!!errors.name || !!nameError}
-                        required
-                      />
-                      {isCheckingName && (
-                        <InputGroup.Text>
-                          <Spinner animation="border" size="sm" />
-                        </InputGroup.Text>
-                      )}
-                      <Form.Control.Feedback type="invalid">
-                        {errors.name || nameError}
-                      </Form.Control.Feedback>
-                    </InputGroup>
-                  </Form.Group>
+                <Col md={12}>
+                    <Form.Group className="mb-3">
+                        <Form.Label><InfoCircleFill className="me-1" /> Item Name<span className="text-danger">*</span></Form.Label>
+                        <InputGroup hasValidation>
+                            <Form.Control 
+                              type="text" 
+                              name="name" 
+                              value={formData.name} 
+                              onChange={handleMainFormChange} 
+                              isInvalid={!!errors.name || !!nameError}
+                              required
+                            />
+                            {isCheckingName && (
+                              <InputGroup.Text>
+                                <Spinner animation="border" size="sm" />
+                              </InputGroup.Text>
+                            )}
+                            <Form.Control.Feedback type="invalid">
+                              {errors.name || nameError}
+                            </Form.Control.Feedback>
+                        </InputGroup>
+                    </Form.Group>
                 </Col>
+            </Row>
+            <Row>
                 <Col md={3}>
                   <Form.Group className="mb-3">
                     <Form.Label><TagFill className="me-1" /> Category <span className="text-danger">*</span></Form.Label>
                     <Form.Select name="category" value={formData.category} onChange={handleMainFormChange} isInvalid={!!errors.category}>
-                      <option value="">-- Select a Category --</option>
+                      <option value="">-- Select --</option>
                       {categories.map(cat => (<option key={cat} value={cat}>{cat}</option>))}
                     </Form.Select>
                   </Form.Group>
                 </Col>
-                <Col md={3}><Form.Group className="mb-3"><Form.Label>Price<span className="text-danger">*</span></Form.Label><InputGroup><InputGroup.Text>₱</InputGroup.Text>
-                  <Form.Control type="text" inputMode="decimal" name="price" value={priceInput} onChange={handlePriceInputChange} onBlur={handlePriceBlur} isInvalid={!!errors.price}/></InputGroup>
-                  </Form.Group></Col>
+                <Col md={3}>
+                  <Form.Group className="mb-3">
+                    <Form.Label><PersonStanding className="me-1" /> Age Group</Form.Label>
+                    <Form.Select name="ageGroup" value={formData.ageGroup} onChange={handleMainFormChange}>
+                      <option value="Adult">Adult</option>
+                      <option value="Kids">Kids</option>
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+                <Col md={3}>
+                  <Form.Group className="mb-3">
+                    <Form.Label><GenderAmbiguous className="me-1" /> Gender</Form.Label>
+                    <Form.Select name="gender" value={formData.gender} onChange={handleMainFormChange}>
+                      <option value="Unisex">Unisex</option>
+                      <option value="Female">Female</option>
+                      <option value="Male">Male</option>
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+                <Col md={3}>
+                    <Form.Group className="mb-3">
+                        <Form.Label>Price<span className="text-danger">*</span></Form.Label>
+                        <InputGroup>
+                            <InputGroup.Text>₱</InputGroup.Text>
+                            <Form.Control type="text" inputMode="decimal" name="price" value={priceInput} onChange={handlePriceInputChange} onBlur={handlePriceBlur} isInvalid={!!errors.price}/>
+                        </InputGroup>
+                  </Form.Group>
+                </Col>
             </Row>
             <Form.Group className="mb-3"><Form.Label><CardText className="me-1" /> Description<span className="text-danger">*</span></Form.Label><Form.Control as="textarea" name="description" rows={2} value={formData.description} onChange={handleMainFormChange} isInvalid={!!errors.description}  /></Form.Group>
             <Row>

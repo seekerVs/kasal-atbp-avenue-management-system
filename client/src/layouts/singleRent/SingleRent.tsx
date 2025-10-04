@@ -246,7 +246,7 @@ function SingleRent() {
 
   return (
     <Container fluid>
-      <h2 className="mb-4">Single Item Rent</h2>
+      <h2 className="mb-4">Outfit Rent</h2>
       {loading ? ( <div className="text-center py-5"><Spinner /></div> ) : (
       <Row className="g-4">
         <Col lg={6} xl={7}>
@@ -309,7 +309,7 @@ function SingleRent() {
                 <div className="text-center my-auto">
                   <p className="text-muted fs-5">Your rental list is empty.</p>
                   <Button onClick={() => setShowItemModal(true)}>
-                    Select an Item to Rent
+                    Select an outfit to rent
                   </Button>
                 </div>
               )}
