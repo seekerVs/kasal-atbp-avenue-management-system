@@ -36,6 +36,7 @@ import { SizeChart } from '../../assets/images';
 import { useAlert } from '../../contexts/AlertContext';
 import { MultiImageDropzone, MultiImageDropzoneRef } from '../../components/multiImageDropzone/MultiImageDropzone';
 import { v4 as uuidv4 } from 'uuid';
+import { sizeOrder } from '../../data/sizeChartData';
 
 
 // --- MAIN COMPONENT ---
@@ -311,8 +312,6 @@ function ItemFormModal({ show, onHide, onSave, item, categories }: ItemFormModal
     const [isCheckingName, setIsCheckingName] = useState(false); // <-- ADD THIS
     const [nameError, setNameError] = useState<string | null>(null);
     const dropzoneRefs = useRef<Map<string, MultiImageDropzoneRef>>(new Map());
-
-    const STANDARD_SIZES = ['2XS', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL'];
     
     useEffect(() => {
       if (item) {
@@ -696,16 +695,19 @@ function ItemFormModal({ show, onHide, onSave, item, categories }: ItemFormModal
                           Size Chart
                         </Button>
                       </div>
-                      <Form.Select
-                        value={v.size}
-                        onChange={e => handleVariationChange(index, 'size', e.target.value)}
-                        isInvalid={!!errors.variations?.[index]?.size}
-                      >
-                        <option value="">Select</option>
-                        {STANDARD_SIZES.map(size => (
-                          <option key={size} value={size}>{size}</option>
+                      <div className="d-flex gap-1 flex-wrap mt-1">
+                        {sizeOrder.map(size => (
+                          <Button
+                            key={size}
+                            variant={v.size === size ? 'dark' : 'outline-dark'}
+                            size="sm"
+                            onClick={() => handleVariationChange(index, 'size', size)}
+                            className={!!errors.variations?.[index]?.size && !v.size ? 'is-invalid' : ''}
+                          >
+                            {size}
+                          </Button>
                         ))}
-                      </Form.Select>
+                      </div>
                     </Form.Group>
                   </Col>
                   <Col lg={2} md={6} sm={12}>
