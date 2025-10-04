@@ -1,6 +1,6 @@
 import React from 'react';
 import { CheckLg } from 'react-bootstrap-icons';
-import './BookingProgressBar.css';
+import './bookingProgressBar.css';
 
 interface BookingProgressBarProps {
   currentStep: number;
