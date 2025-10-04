@@ -276,12 +276,8 @@ const AddItemFromCustomModal: React.FC<AddItemFromCustomModalProps> = ({ show, o
                     <Col>
                         <ImageDropzone
                             label="Variation Image"
-                            currentImage={formData.variations[0].imageUrls[0]}
-                            onFileSelect={(file) => {
-                                const newVariations = [...formData.variations];
-                                newVariations[0].imageUrls = file ? [file] : [];
-                                setFormData({ ...formData, variations: newVariations });
-                            }}
+                            currentImage={variationData.imageUrl}
+                            onFileSelect={handleVariationImageFileSelect}
                         />
                     </Col>
                 </Row>
@@ -407,8 +403,12 @@ const AddItemFromCustomModal: React.FC<AddItemFromCustomModalProps> = ({ show, o
                     <Col>
                         <ImageDropzone
                             label="Variation Image"
-                            currentImage={variationData.imageUrl}
-                            onFileSelect={handleVariationImageFileSelect} // Correct prop name and handler
+                            currentImage={formData.variations[0].imageUrls[0]}
+                            onFileSelect={(file) => {
+                                const newVariations = [...formData.variations];
+                                newVariations[0].imageUrls = file ? [file] : [];
+                                setFormData({ ...formData, variations: newVariations });
+                            }}
                         />
                     </Col>
                 </Row>

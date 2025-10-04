@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Row, Col, Form } from 'react-bootstrap';
+import { Col, Form } from 'react-bootstrap';
 import {
   getAllProvinces,
   getMunicipalitiesByProvince,

@@ -1,4 +1,3 @@
-import React from "react";
 import { Button } from "react-bootstrap";
 import "./customButton1.css";
 import { Magic } from "react-bootstrap-icons";

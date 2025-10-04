@@ -1,5 +1,5 @@
 // src/layouts/home/Home.tsx
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Container, Spinner } from "react-bootstrap";
 
 // Import the new section components

@@ -1,7 +1,7 @@
 // client/src/layouts/package/Package.tsx
 
-import React, { useEffect, useState } from "react";
-import { Alert, Col, Row, Spinner, Container } from "react-bootstrap";
+import { useEffect, useState } from "react";
+import { Alert, Col, Row, Spinner } from "react-bootstrap";
 import PackageCard from "../../components/packageCard/PackageCard";
 import { useNavigate } from "react-router-dom";
 

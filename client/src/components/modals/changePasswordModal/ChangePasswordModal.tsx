@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Modal, Button, Form, Spinner } from 'react-bootstrap';
+import { Modal, Button, Form } from 'react-bootstrap';
 import { useAlert } from '../../../contexts/AlertContext';
 import api from '../../../services/api';
 import { ValidatedInput } from '../../forms/ValidatedInput';

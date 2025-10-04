@@ -1,4 +1,3 @@
-import React from 'react';
 import { WelcomeData } from '../../types'; 
 
 interface WelcomeSectionProps {

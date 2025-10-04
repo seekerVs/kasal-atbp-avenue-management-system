@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Container, Row, Col, Card, Button, Form, Spinner, Alert, Badge } from 'react-bootstrap';
-import { CalendarEvent, ChatQuote, CheckCircleFill, Download } from 'react-bootstrap-icons';
+import { ChatQuote, CheckCircleFill, Download } from 'react-bootstrap-icons';
 import { format } from 'date-fns';
 
 import { Appointment, FormErrors, ShopSettings } from '../../types';

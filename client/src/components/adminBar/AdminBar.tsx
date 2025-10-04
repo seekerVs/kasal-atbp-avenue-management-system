@@ -1,6 +1,5 @@
 // client/src/components/adminBar/AdminBar.tsx
 
-import React from 'react';
 import { Container, Nav } from 'react-bootstrap';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { Speedometer2, BoxArrowRight } from 'react-bootstrap-icons';

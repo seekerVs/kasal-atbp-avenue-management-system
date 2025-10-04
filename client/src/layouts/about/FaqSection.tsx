@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Accordion, Form, InputGroup } from 'react-bootstrap';
 import { Search } from 'react-bootstrap-icons';
 import { FaqItem } from '../../types'; // Adjust path if necessary

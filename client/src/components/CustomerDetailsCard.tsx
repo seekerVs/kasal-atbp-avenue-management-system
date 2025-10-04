@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Card, Button, Form, ListGroup, Spinner, Alert, Row, Col } from 'react-bootstrap';
-import { PersonFill, TelephoneFill, Envelope, PeopleFill, PlusCircle, CreditCard } from 'react-bootstrap-icons';
+import { PersonFill, PeopleFill, PlusCircle, CreditCard } from 'react-bootstrap-icons';
 
 import { CustomerInfo, RentalOrder, Address, FormErrors } from '../types';
 import { ValidatedInput } from './forms/ValidatedInput'; // Assuming this path is correct

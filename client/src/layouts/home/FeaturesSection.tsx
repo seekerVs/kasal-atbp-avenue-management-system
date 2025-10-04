@@ -1,6 +1,5 @@
 // src/layouts/home/FeaturesSection.tsx
 
-import React from 'react';
 import * as icons from 'react-bootstrap-icons';
 import { FeatureData } from "../../types";
 

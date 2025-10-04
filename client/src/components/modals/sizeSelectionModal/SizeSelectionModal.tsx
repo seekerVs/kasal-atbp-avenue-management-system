@@ -65,8 +65,6 @@ export const SizeSelectionModal: React.FC<SizeSelectionModalProps> = ({
           // Quantity is not used in this mode, so we pass dummy values/handlers
           quantity={1}
           onQuantityChange={() => {}} 
-          // All colors will be disabled since the initial color is fixed
-          isColorSelectionDisabled={() => true} 
           availableSizesForDisplay={availableSizesForDisplay}
         />
       </Modal.Body>

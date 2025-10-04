@@ -1,6 +1,6 @@
 // src/layouts/home/QualityCTASection.tsx
 
-import React, { useState, useEffect } from 'react';
+import  { useState, useEffect } from 'react';
 import { Button, Image } from 'react-bootstrap';
 import { CheckCircleFill } from 'react-bootstrap-icons';
 import { useNavigate } from 'react-router-dom';

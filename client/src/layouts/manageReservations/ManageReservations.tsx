@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 // --- 1. IMPORT NEW COMPONENTS AND ICONS ---
 import { Container, Card, Nav, Spinner, Alert, InputGroup, Form } from 'react-bootstrap';
 import { Search } from 'react-bootstrap-icons';

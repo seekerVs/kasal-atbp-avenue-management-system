@@ -20,7 +20,6 @@ import {
   PlusCircleFill,
   BoxSeam,
   Palette,
-
   TagFill,
   InfoCircleFill,
   CardText,
@@ -29,11 +28,10 @@ import {
   ExclamationTriangleFill
 } from 'react-bootstrap-icons';
 import { InventoryItem, ItemVariation, MeasurementRef } from '../../types';
-import api, { uploadFile } from '../../services/api';
+import api from '../../services/api';
 import { ColorPickerInput } from '../../components/colorPickerInput/ColorPickerInput';
 import { SizeChart } from '../../assets/images';
 import { useAlert } from '../../contexts/AlertContext';
-import { ImageDropzone } from '../../components/imageDropzone/ImageDropzone';
 import { MultiImageDropzone, MultiImageDropzoneRef } from '../../components/multiImageDropzone/MultiImageDropzone';
 import { v4 as uuidv4 } from 'uuid';
 

@@ -1,6 +1,6 @@
 // src/layouts/about/About.tsx
 
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Container, Alert, Spinner } from "react-bootstrap";
 import api from "../../services/api"; // Use the centralized API service
 import { AboutPageData } from "../../types";

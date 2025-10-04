@@ -1,6 +1,6 @@
 // client/src/layouts/manageAppointments/ManageAppointments.tsx
 
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Container, Card, Nav, Spinner, Alert, InputGroup, Form, Button, Row, Col, Badge, Modal } from 'react-bootstrap';
 import { Search, EyeFill, CalendarPlus, CheckCircleFill, XCircleFill, ChatQuote, CalendarWeek, JournalCheck } from 'react-bootstrap-icons';

@@ -1,6 +1,6 @@
 // client/src/layouts/accounts/Accounts.tsx
 
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
     Container, Row, Col, Button, Card, InputGroup, Form,
     Spinner, Alert, Badge, Modal

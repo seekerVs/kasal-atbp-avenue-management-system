@@ -1,4 +1,3 @@
-import React from 'react'
 import { Container, Row, Col } from 'react-bootstrap';
 import { CCircle, Facebook, Instagram, Tiktok } from 'react-bootstrap-icons';
 import './customFooter.css';

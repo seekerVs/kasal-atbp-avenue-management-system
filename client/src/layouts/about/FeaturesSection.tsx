@@ -1,4 +1,3 @@
-import React from 'react';
 import { Container, Row, Col } from 'react-bootstrap';
 import * as icons from 'react-bootstrap-icons'; // Import the entire icon library dynamically
 import { Feature } from '../../types';

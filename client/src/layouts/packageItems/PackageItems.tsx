@@ -1,6 +1,6 @@
 // client/src/layouts/packageItems/PackageItems.tsx
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Container, Row, Col, Button, Card, Table, Modal, Form, Spinner, Alert, InputGroup, Image } from 'react-bootstrap'; // <-- Add Image
 import { PlusCircleFill, BoxSeam, PencilSquare, Trash, Search } from 'react-bootstrap-icons';
 import { Package } from '../../types';
