@@ -76,8 +76,12 @@ function Products() {
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
-        const response = await api.get('/inventory');
-        const uniqueCategories = Array.from(new Set((response.data.items as InventoryItem[]).map(item => item.category)));
+        const response = await api.get('/inventory?limit=1000'); // Fetch a larger sample
+        const allCategories = (response.data.items as InventoryItem[]).map(item => item.category);
+        
+        const uniqueCategories = Array.from(new Set(allCategories))
+          .filter(category => category !== 'Accessory');
+
         setCategories(uniqueCategories.sort());
       } catch (err) { console.error("Could not fetch categories", err); }
     };
