@@ -3,7 +3,7 @@
 import { NavLink } from "react-router-dom";
 import { Collapse, Nav, NavDropdown } from "react-bootstrap";
 import { ChevronDown } from "react-bootstrap-icons";
-import { NavItem, SubNavItem } from "./sidebarItems"; // We'll update sidebarItems next
+import { NavItem } from "./sidebarItems"; // We'll update sidebarItems next
 
 interface SidebarNavItemProps {
   item: NavItem;

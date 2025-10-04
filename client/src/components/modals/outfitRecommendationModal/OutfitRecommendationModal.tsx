@@ -18,7 +18,7 @@ const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({ s
   const { addAlert } = useAlert();
   
   // Call the hook to get live sensor data. It will only be active when `show` is true.
-  const { sensorData, isLoading: isSensorLoading, error: sensorError } = useSensorData(show);
+  const { sensorData } = useSensorData(show);
 
   // --- Component-specific state ---
   const [measurementValues, setMeasurementValues] = useState<Record<string, string>>({});

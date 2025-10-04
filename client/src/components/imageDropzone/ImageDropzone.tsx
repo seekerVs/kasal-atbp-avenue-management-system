@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Image, Form, Button } from 'react-bootstrap';
 import { CloudUpload, Trash } from 'react-bootstrap-icons';

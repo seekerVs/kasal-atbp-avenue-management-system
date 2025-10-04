@@ -139,8 +139,6 @@ export const ReservationManager: React.FC<ReservationManagerProps> = ({ reservat
 
   const handleAddItem = (selection: SelectedItemData) => {
     const { product, variation, quantity } = selection;
-    
-    let updatedProductName = '';
 
     setReservation(prev => {
       const updatedItems = [...prev.itemReservations];
@@ -177,7 +175,6 @@ export const ReservationManager: React.FC<ReservationManagerProps> = ({ reservat
         );
 
         if (existingItemIndex > -1) {
-          // --- THIS IS THE CRITICAL FIX ---
           // 1. Create a new object by copying the existing item's properties.
           const updatedItem = {
             ...updatedItems[existingItemIndex],
@@ -186,9 +183,7 @@ export const ReservationManager: React.FC<ReservationManagerProps> = ({ reservat
           };
           // 3. Replace the old object in the array with our new, updated one.
           updatedItems[existingItemIndex] = updatedItem;
-          // --- END OF FIX ---
 
-          updatedProductName = product.name;
         } else {
           const newItemReservation: ItemReservation = {
             reservationId: `item_${Date.now()}`,

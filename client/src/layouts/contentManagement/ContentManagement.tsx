@@ -24,7 +24,6 @@ interface CmsImageUploaderProps {
 const CmsImageUploader: React.FC<CmsImageUploaderProps> = ({ label, currentImage, onUploadSuccess }) => {
   const { addAlert } = useAlert();
   const [stagedFile, setStagedFile] = useState<File | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
 
   const handleFileSelect = async (file: File | null) => {
     if (!file) {
@@ -36,7 +35,6 @@ const CmsImageUploader: React.FC<CmsImageUploaderProps> = ({ label, currentImage
     }
 
     setStagedFile(file);
-    setIsUploading(true);
     try {
       addAlert('Uploading image...', 'info');
       const newUrl = await uploadFile(file);
@@ -44,8 +42,6 @@ const CmsImageUploader: React.FC<CmsImageUploaderProps> = ({ label, currentImage
     } catch (error) {
       addAlert('Image upload failed. Please try again.', 'danger');
       setStagedFile(null); // Clear the failed file
-    } finally {
-      setIsUploading(false);
     }
   };
 
@@ -73,7 +69,6 @@ function ContentManagement() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previewVersion, setPreviewVersion] = useState(0);
-  const [activeKey, setActiveKey] = useState<string | null>('0');
   const [isPreviewVisible, setIsPreviewVisible] = useState(true);
   const [customContent, setCustomContent] = useState<CustomTailoringPageContent | null>(null);
 
@@ -245,13 +240,6 @@ function ContentManagement() {
     addAlert('Image slot removed. Save changes to finalize.', 'info');
   };
 
-  const handleAccordionSelect = (eventKey: any) => {
-    // The nullish coalescing operator '??' ensures that if eventKey is
-    // null or undefined, we pass `null` to the state setter.
-    // Otherwise, we pass the string value. This satisfies the type requirements.
-    setActiveKey(eventKey ?? null);
-};
-
   // --- 4. SAVE HANDLER ---
   const handleSave = async () => {
     const isHomePage = activePage === 'home';
@@ -328,7 +316,7 @@ function ContentManagement() {
           <div style={{ flexGrow: 1, overflowY: 'auto', paddingRight: '1rem' }}>
             {/* Home Page Forms */}
             {activePage === 'home' && homeContent && (
-              <Accordion onSelect={handleAccordionSelect}>
+              <Accordion >
                 {/* Paste your existing Home Page Accordion.Items here */}
                 <Accordion.Item eventKey="0">
                   <Accordion.Header><ImageIcon className="me-2"/>Hero Section</Accordion.Header>
@@ -447,7 +435,7 @@ function ContentManagement() {
 
             {/* About Page Forms */}
             {activePage === 'about' && aboutContent && (
-              <Accordion onSelect={handleAccordionSelect}>
+              <Accordion>
                 {/* --- About Page Hero Section --- */}
                 <Accordion.Item eventKey="0"><Accordion.Header><ImageIcon className="me-2"/>Hero Section</Accordion.Header><Accordion.Body>
                     <Form.Group className="mb-3"><Form.Label>Alternative Text for Image</Form.Label><Form.Control value={aboutContent.hero.altText} onChange={(e) => handleAboutFieldChange('hero', 'altText', e.target.value)} /></Form.Group>
@@ -497,7 +485,7 @@ function ContentManagement() {
             )}
 
             {activePage === 'custom-tailoring' && customContent && (
-              <Accordion onSelect={handleAccordionSelect}>
+              <Accordion >
                 <Accordion.Item eventKey="0">
                   <Accordion.Header><Book className="me-2"/>Main Content</Accordion.Header>
                   <Accordion.Body>
