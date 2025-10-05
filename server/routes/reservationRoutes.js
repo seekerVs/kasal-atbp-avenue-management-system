@@ -203,7 +203,7 @@ router.get(
         const fullItem = itemMap.get(item.itemId.toString());
         // Find variation by color HEX, which is more reliable than name
         const variation = fullItem?.variations.find(v => v.color.hex === item.variation.color.hex && v.size === item.variation.size);
-        return { ...item, imageUrl: variation?.imageUrl || null };
+        return { ...item, imageUrl: variation?.imageUrls?.[0] || null };
       });
       const enrichedPackages = res.packageReservations.map(pkg => {
         const fullPackage = packageMap.get(pkg.packageId.toString());

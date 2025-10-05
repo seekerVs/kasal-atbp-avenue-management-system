@@ -13,6 +13,6 @@ export const sizeChart = {
 };
 
 // The order of sizes for a deterministic search and display.
-export const sizeOrder: (keyof typeof sizeChart)[] = [
-  'XS', 'S', 'M', 'L', 'XL', 'XXL'
+export const sizeOrder = [
+  'XS', 'S', 'M', 'L', 'XL', 'XXL', 'CUSTOM'
 ];

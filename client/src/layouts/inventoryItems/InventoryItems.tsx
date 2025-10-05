@@ -32,11 +32,11 @@ import {
 import { InventoryItem, ItemVariation, MeasurementRef } from '../../types';
 import api from '../../services/api';
 import { ColorPickerInput } from '../../components/colorPickerInput/ColorPickerInput';
-import { SizeChart } from '../../assets/images';
 import { useAlert } from '../../contexts/AlertContext';
 import { MultiImageDropzone, MultiImageDropzoneRef } from '../../components/multiImageDropzone/MultiImageDropzone';
 import { v4 as uuidv4 } from 'uuid';
 import { sizeOrder } from '../../data/sizeChartData';
+import { SizeGuideModal } from '../../components/modals/sizeGuideModal/SizeGuideModal';
 
 
 // --- MAIN COMPONENT ---
@@ -280,9 +280,10 @@ interface ItemFormModalProps {
 } 
 
 function ItemFormModal({ show, onHide, onSave, item, categories }: ItemFormModalProps) {
-    type FormVariation = Omit<ItemVariation, 'imageUrl'> & {
-        _id?: string; // Add a temporary ID for React keys
-        imageUrls: (string | File)[];
+    type FormVariation = Omit<ItemVariation, 'imageUrls' | 'quantity'> & { // <-- Also Omit 'quantity'
+        _id?: string; 
+        imageUrls: (string | File)[]; 
+        quantity: number | ''; // <-- This is the key change
     };
 
     const [formData, setFormData] = useState<{
@@ -305,7 +306,6 @@ function ItemFormModal({ show, onHide, onSave, item, categories }: ItemFormModal
     const { addAlert } = useAlert();
     const [priceInput, setPriceInput] = useState('0');
     const initialVariationsRef = useRef<FormVariation[]>([]);
-    const [showSizeChartModal, setShowSizeChartModal] = useState(false);
     const [errors, setErrors] = useState<any>({});
     const [showConfirmModal, setShowConfirmModal] = useState(false);
     const [showPriceWarningModal, setShowPriceWarningModal] = useState(false);
@@ -313,6 +313,7 @@ function ItemFormModal({ show, onHide, onSave, item, categories }: ItemFormModal
     const [nameError, setNameError] = useState<string | null>(null);
     const dropzoneRefs = useRef<Map<string, MultiImageDropzoneRef>>(new Map());
     const [isSaving, setIsSaving] = useState(false);
+    const [showSizeGuide, setShowSizeGuide] = useState(false);
     
     useEffect(() => {
       if (item) {
@@ -397,14 +398,14 @@ function ItemFormModal({ show, onHide, onSave, item, categories }: ItemFormModal
     };
 
     const handleQuantityBlur = (index: number) => {
-        const newVariations = [...formData.variations];
-        const variation = newVariations[index];
-        let numericValue = parseInt(String(variation.quantity), 10);
-        if (isNaN(numericValue) || numericValue < 0) {
-            numericValue = 0;
-        }
-        newVariations[index] = { ...variation, quantity: numericValue };
-        setFormData(prev => ({ ...prev, variations: newVariations }));
+      const newVariations = [...formData.variations];
+      const variation = newVariations[index];
+      // If the value is an empty string or not a valid number after the user leaves the field, default it to 0.
+      const numericValue = parseInt(String(variation.quantity), 10);
+      if (isNaN(numericValue)) {
+          newVariations[index] = { ...variation, quantity: 0 };
+          setFormData(prev => ({ ...prev, variations: newVariations }));
+      }
     };
 
     const handleSave = async () => {
@@ -475,13 +476,33 @@ function ItemFormModal({ show, onHide, onSave, item, categories }: ItemFormModal
         }
     };
     
-    const handleVariationChange = (index: number, field: keyof ItemVariation, value: any) => {
-      const newVariations = formData.variations.map((v, i) => {
-        if (i === index) {
-          return { ...v, [field]: value };
+    const handleVariationChange = (index: number, field: keyof FormVariation, value: any) => {
+      const newVariations = formData.variations.map((v, i): FormVariation => { // <-- Explicitly type the return value
+        if (i !== index) {
+          return v; // Return unchanged items first
         }
-        return v;
+
+        // Handle changes for the target item
+        if (field === 'quantity') {
+          const stringValue = String(value); // Ensure we're working with a string
+
+          if (stringValue === '') {
+            return { ...v, quantity: '' }; // Handle empty string case
+          }
+          
+          // Use a regex to ensure only whole numbers are considered
+          if (/^[0-9]+$/.test(stringValue)) {
+            return { ...v, quantity: parseInt(stringValue, 10) };
+          }
+          
+          // If the new value is invalid (e.g., "1e", "1.5"), keep the old value.
+          return v; 
+        }
+
+        // For all other fields (color, size), update as normal
+        return { ...v, [field]: value };
       });
+
       setFormData({ ...formData, variations: newVariations });
     };
 
@@ -702,8 +723,8 @@ function ItemFormModal({ show, onHide, onSave, item, categories }: ItemFormModal
                     <Form.Group>
                       <div className="d-flex justify-content-between align-items-baseline">
                         <Form.Label>Size <span className="text-danger">*</span></Form.Label>
-                        <Button variant="link" size="sm" className="p-0 text-decoration-none" style={{ lineHeight: 1 }} onClick={() => setShowSizeChartModal(true)}>
-                          Size Chart
+                        <Button variant="link" size="sm" className="p-0 text-decoration-none" style={{ lineHeight: 1 }} onClick={() => setShowSizeGuide(true)}>
+                          Size Guide
                         </Button>
                       </div>
                       <Form.Select
@@ -722,8 +743,7 @@ function ItemFormModal({ show, onHide, onSave, item, categories }: ItemFormModal
                     <Form.Group>
                       <Form.Label>Quantity <span className="text-danger">*</span></Form.Label>
                       <Form.Control
-                        type="text"
-                        inputMode="numeric"
+                        type="number"
                         value={v.quantity}
                         onChange={e => handleVariationChange(index, 'quantity', e.target.value)}
                         onBlur={() => handleQuantityBlur(index)}
@@ -768,14 +788,7 @@ function ItemFormModal({ show, onHide, onSave, item, categories }: ItemFormModal
             </Form>
         </Modal.Body>
 
-        <Modal show={showSizeChartModal} onHide={() => setShowSizeChartModal(false)} centered size="lg">
-          <Modal.Header closeButton>
-            <Modal.Title>Size Chart</Modal.Title>
-          </Modal.Header>
-          <Modal.Body className="text-center">
-            <img src={SizeChart} alt="Size Chart" style={{ maxWidth: '100%' }} />
-          </Modal.Body>
-        </Modal>
+        <SizeGuideModal show={showSizeGuide} onHide={() => setShowSizeGuide(false)} />
 
         <Modal show={showPriceWarningModal} onHide={() => setShowPriceWarningModal(false)} centered>
           <Modal.Header closeButton>
