@@ -27,7 +27,12 @@ export const convertMeasurementsToSize = (
 
   // Iterate through the predefined size order to find the first matching size.
   for (const size of sizeOrder) {
-    const chartEntry = sizeChart[size];
+    // If the size is 'CUSTOM', skip this iteration of the loop.
+    if (size === 'CUSTOM') {
+      continue;
+    }
+    // Now, TypeScript knows that 'size' can only be 'XS', 'S', 'M', etc. within this block.
+    const chartEntry = sizeChart[size as keyof typeof sizeChart];
     
     // Check if the chest measurement fits within the range for this size.
     const isChestMatch = chest >= chartEntry.Chest.min && chest <= chartEntry.Chest.max;
