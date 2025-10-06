@@ -1,6 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { SensorData } from '../types';
+
+// Define the shape of the sensor data we expect from the backend
+interface SensorData {
+  sensorType: 'LengthMeasurement' | 'Control' | 'Heartbeat' | string;
+  centimeters?: number;
+  command?: 'focusNext' | string;
+  updatedAt: string;
+}
 
 // Define the shape of the object our hook will return
 interface UseSensorDataReturn {
@@ -9,8 +16,15 @@ interface UseSensorDataReturn {
   error: string | null;
 }
 
-// A fixed URL for the sensor endpoint.
-const SENSOR_API_URL = 'http://localhost:3001/sensor/sensorData';
+// 1. Construct the full URL by combining the base URL from the .env file with the specific endpoint.
+const SENSOR_API_URL = `${import.meta.env.VITE_SENSOR_URL}`;
+
+// 2. (Highly Recommended) Add a check to ensure the environment variable is set.
+// This prevents silent failures and makes debugging easier.
+if (!import.meta.env.VITE_SENSOR_URL) {
+  throw new Error("VITE_SENSOR_URL is not defined. Please check your .env file.");
+}
+
 
 /**
  * A custom hook to poll and manage data from the KasalDevice measurement sensor.
@@ -52,12 +66,10 @@ export const useSensorData = (isEnabled: boolean): UseSensorDataReturn => {
           );
         }
 
-        // Now this check will work correctly because the effect has the latest 'error' state.
         if (error) setError(null);
       } catch (err: any) {
         setError(err.response?.data?.message || 'Device not connected or server is down.');
       } finally {
-        // This check will also work correctly.
         if (isLoading) setIsLoading(false);
       }
     };
@@ -84,10 +96,6 @@ export const useSensorData = (isEnabled: boolean): UseSensorDataReturn => {
       window.removeEventListener('visibilitychange', handleVisibilityChange);
     };
     
-  // --- THIS IS THE CORRECTED DEPENDENCY ARRAY ---
-  // By including all dependencies that the effect relies on, we ensure
-  // that the functions inside it are never "stale" and always have
-  // access to the most up-to-date state.
   }, [isEnabled, error, isLoading]); 
 
   return { sensorData, isLoading, error };
