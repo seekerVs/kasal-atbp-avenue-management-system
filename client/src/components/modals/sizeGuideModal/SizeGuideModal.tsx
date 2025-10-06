@@ -65,7 +65,12 @@ export const SizeGuideModal: React.FC<SizeGuideModalProps> = ({ show, onHide }) 
               </thead>
               <tbody>
                 {sizeOrder.map(sizeKey => {
-                  const sizeData = sizeChart[sizeKey];
+                  // If the sizeKey is 'CUSTOM', we don't have data for it, so don't render a row.
+                  if (sizeKey === 'CUSTOM') {
+                    return null;
+                  }
+                  // For all other valid size keys, render the row as before.
+                  const sizeData = sizeChart[sizeKey as keyof typeof sizeChart];
                   return (
                     <tr key={sizeKey}>
                       <td>{sizeKey}</td>
