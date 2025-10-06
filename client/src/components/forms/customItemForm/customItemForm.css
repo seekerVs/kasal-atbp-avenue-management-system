@@ -1,0 +1,17 @@
+/* client/src/components/forms/customItemForm/customItemForm.css */
+
+.measurement-guide-container {
+  min-height: 50px; /* Reserve space to prevent layout jump */
+  padding-top: 0.5rem;
+  transition: opacity 0.3s ease-in-out;
+}
+
+.measurement-guide-text {
+  font-size: 0.85rem;
+  color: var(--bs-gray-600);
+  background-color: var(--bs-gray-100);
+  border-radius: 0.375rem;
+  padding: 0.75rem 1rem;
+  border-left: 4px solid var(--bs-primary);
+  margin: 0;
+}

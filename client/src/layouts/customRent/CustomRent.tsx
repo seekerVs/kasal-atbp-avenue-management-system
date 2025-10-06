@@ -110,9 +110,11 @@ function CustomRent() {
     const handleSensorCommand = (event: CustomEvent) => {
       if (event.detail.action === 'focusNext' && selectedRef) {
         const measurementFields = selectedRef.measurements;
-        const currentActiveIndex = activeMeasurementField ? measurementFields.indexOf(activeMeasurementField) : -1;
+        const currentActiveIndex = activeMeasurementField 
+        ? measurementFields.findIndex(m => m.label === activeMeasurementField) 
+        : -1;
         const nextIndex = (currentActiveIndex + 1) % measurementFields.length;
-        const nextField = measurementFields[nextIndex];
+        const nextField = measurementFields[nextIndex].label;
         
         const inputElement = document.getElementById(`measurement-${nextField}`);
         inputElement?.focus();
@@ -304,14 +306,16 @@ function CustomRent() {
 
     let anyMeasurementMissing = false;
     if (selectedRef) { // Only check if an outfit type is selected
-        for (const measurement of selectedRef.measurements) {
-            const value = tailoringData.measurements[measurement];
-            // A measurement is considered missing if it's not provided or is an empty string.
-            if (value === undefined || value === null || String(value).trim() === '') {
-                anyMeasurementMissing = true;
-                break; // Found one, no need to check the rest for the warning.
-            }
-        }
+      for (const measurement of selectedRef.measurements) {
+          // Use the .label property of the measurement object as the key
+          const value = tailoringData.measurements[measurement.label];
+
+          // A measurement is considered missing if it's not provided or is an empty string.
+          if (value === undefined || value === null || String(value).trim() === '') {
+              anyMeasurementMissing = true;
+              break; // Found one, no need to check the rest for the warning.
+          }
+      }
     }
     if (anyMeasurementMissing) {
         warnings.push("Measurements");
@@ -377,6 +381,7 @@ function CustomRent() {
                         dropzoneRef={dropzoneRef}
                         onInsertMeasurement={handleInsertMeasurement}
                         onMeasurementFocus={setActiveMeasurementField}
+                        activeMeasurementField={activeMeasurementField}
                         sensorData={sensorData}
                         isSensorLoading={isLoading}
                         sensorError={sensorError}

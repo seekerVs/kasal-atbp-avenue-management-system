@@ -220,12 +220,18 @@ export interface NormalizedFulfillmentItem {
 export type InitialCustomTailoringData = Omit<CustomTailoringItem, 'measurements' | 'outfitCategory' | 'outfitType'>;
 export type MeasurementValues = CustomTailoringItem['measurements'];
 
-// --- For measurement templates ---
+export interface MeasurementDetail {
+  label: string;
+  guide: string;
+}
+
+// Interface for measurement templates ---
 export interface MeasurementRef {
   _id: string;
   outfitName: string;
   category: string;
-  measurements: string[];
+  description?: string; // <-- ADDED description property
+  measurements: MeasurementDetail[]; // <-- THIS IS THE KEY CHANGE
 }
 
 // --- For sensor data ---

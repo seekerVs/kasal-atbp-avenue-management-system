@@ -5,6 +5,7 @@ import { CustomTailoringItem, MeasurementRef, SensorData } from '../../../types'
 import { MultiImageDropzone, MultiImageDropzoneRef } from '../../multiImageDropzone/MultiImageDropzone';
 import DatePicker from 'react-datepicker';
 import { addDays } from 'date-fns';
+import './customItemForm.css';
 
 // --- PROPS INTERFACE (from previous step) ---
 export interface CustomItemFormProps {
@@ -29,6 +30,7 @@ export interface CustomItemFormProps {
   dropzoneRef: Ref<MultiImageDropzoneRef>; 
   onInsertMeasurement: (field: string) => void;
   onMeasurementFocus: (field: string | null) => void;
+  activeMeasurementField: string | null;
   sensorData: SensorData | null;
   isSensorLoading: boolean;
   sensorError: string | null;
@@ -56,7 +58,8 @@ export const CustomItemForm: React.FC<CustomItemFormProps> = ({
   onRemoveDynamicListItem,
   dropzoneRef,
   onInsertMeasurement,
-  onMeasurementFocus
+  onMeasurementFocus,
+  activeMeasurementField
 }) => {
 
   // Memoized calculations are now done inside the reusable component
@@ -179,33 +182,40 @@ export const CustomItemForm: React.FC<CustomItemFormProps> = ({
                 <h6 className="mb-0">Measurements (cm)</h6>
               </div>
               <Row>
-                {(isCreateMode && selectedRef ? selectedRef.measurements : Object.keys(formData.measurements)).map(m => (
-                  <Col md={4} lg={3} key={m} className="mb-2">
-                    <Form.Group>
-                      <Form.Label className="small text-capitalize">{m.replace(/([A-Z])/g, ' $1').trim()}<span className="text-danger">*</span></Form.Label>
-                      <InputGroup>
-                        <Form.Control 
-                          id={`measurement-${m}`}
-                          type="number" 
-                          value={formData.measurements[m] || ''} 
-                          onChange={(e) => onMeasurementChange(m, e.target.value)} 
-                          onFocus={() => onMeasurementFocus(m)}
-                          onBlur={() => onMeasurementFocus(null)}
-                          isInvalid={!!errors.measurements?.[m]}
-                        />
-                        <Button 
-                          variant="outline-secondary" 
-                          title="Get from Device" 
-                          onClick={() => onInsertMeasurement(m)}
-                        >
-                          <ArrowsCollapse /> 
-                        </Button>
-                        <Form.Control.Feedback type="invalid" tooltip>{errors.measurements?.[m]}</Form.Control.Feedback>
-                      </InputGroup>
-                    </Form.Group>
-                  </Col>
-                ))}
-              </Row>
+              {(isCreateMode && selectedRef ? selectedRef.measurements : Object.keys(formData.measurements).map(label => ({ label }))).map(measurement => (
+                <Col md={4} lg={3} key={measurement.label} className="mb-2">
+                  <Form.Group>
+                    <Form.Label className="small text-capitalize">{measurement.label.replace(/([A-Z])/g, ' $1').trim()}<span className="text-danger">*</span></Form.Label>
+                    <InputGroup>
+                      <Form.Control 
+                        id={`measurement-${measurement.label}`}
+                        type="number" 
+                        value={formData.measurements[measurement.label] || ''} 
+                        onChange={(e) => onMeasurementChange(measurement.label, e.target.value)} 
+                        onFocus={() => onMeasurementFocus(measurement.label)}
+                        onBlur={() => onMeasurementFocus(null)}
+                        isInvalid={!!errors.measurements?.[measurement.label]}
+                      />
+                      <Button 
+                        variant="outline-secondary" 
+                        title="Get from Device" 
+                        onClick={() => onInsertMeasurement(measurement.label)}
+                      >
+                        <ArrowsCollapse /> 
+                      </Button>
+                      <Form.Control.Feedback type="invalid" tooltip>{errors.measurements?.[measurement.label]}</Form.Control.Feedback>
+                    </InputGroup>
+                  </Form.Group>
+                </Col>
+              ))}
+            </Row>
+            <div className="measurement-guide-container">
+              {activeMeasurementField && (
+                <p className="measurement-guide-text">
+                  <strong>Guide:</strong> {selectedRef?.measurements.find(m => m.label === activeMeasurementField)?.guide || 'No guide available.'}
+                </p>
+              )}
+            </div>
             </>
           )}
 

@@ -105,9 +105,11 @@ const CreateEditCustomItemModal: React.FC<CreateEditCustomItemModalProps> = ({
     const handleSensorCommand = (event: CustomEvent) => {
       if (event.detail.action === 'focusNext' && selectedRef) {
         const measurementFields = selectedRef.measurements;
-        const currentActiveIndex = activeMeasurementField ? measurementFields.indexOf(activeMeasurementField) : -1;
+        const currentActiveIndex = activeMeasurementField 
+        ? measurementFields.findIndex(m => m.label === activeMeasurementField) 
+        : -1;
         const nextIndex = (currentActiveIndex + 1) % measurementFields.length;
-        const nextField = measurementFields[nextIndex];
+        const nextField = measurementFields[nextIndex].label;
         
         // Find the actual input element and focus it
         const inputElement = document.getElementById(`measurement-${nextField}`);
@@ -252,10 +254,12 @@ const checkForIssues = (): { isValid: boolean, warnings: string[] } => {
     // Check measurements only if an outfit type has been selected
     if (selectedRef) {
       for (const measurement of selectedRef.measurements) {
-        const value = formData.measurements[measurement];
-        // This checks if the value is missing, empty, or not a positive number.
+        // Use the .label property of the measurement object as the key
+        const value = formData.measurements[measurement.label];
+        
         if (value === undefined || value === null || String(value).trim() === '' || isNaN(Number(value)) || Number(value) <= 0) {
-          newErrors.measurements[measurement] = `Required.`;
+          // And use the .label property here as well
+          newErrors.measurements[measurement.label] = `Required.`;
         }
       }
     }
@@ -395,6 +399,7 @@ const checkForIssues = (): { isValid: boolean, warnings: string[] } => {
             dropzoneRef={dropzoneRef}
             onInsertMeasurement={handleInsertMeasurement}
             onMeasurementFocus={setActiveMeasurementField}
+            activeMeasurementField={activeMeasurementField}
             sensorData={sensorData}
             isSensorLoading={isLoading}
             sensorError={error}
