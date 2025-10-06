@@ -231,7 +231,7 @@ export interface MeasurementRef {
 // --- For sensor data ---
 export interface SensorData {
   _id: string;
-  sensorType: 'LengthMeasurement' | 'Control' | 'Heartbeat' | string;
+  sensorType: 'LengthMeasurement' | 'RotaryEncoder' | string;
   position?: number;
   direction?: number;
   centimeters?: number;
