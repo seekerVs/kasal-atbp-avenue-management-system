@@ -10,7 +10,6 @@ function NewRental() {
     <Container fluid>
       <div className="text-center mb-5">
         <h2 className="display-6">Create a New Order</h2>
-        <p className="lead text-muted">Select the type of order you want to create for the customer.</p>
       </div>
       
       <Row className="justify-content-center g-4">
