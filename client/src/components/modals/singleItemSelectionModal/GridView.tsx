@@ -35,8 +35,12 @@ interface GridViewProps {
   filterByColorHex?: string;
   assignmentScope: 'matching' | 'all';
   onAssignmentScopeChange: (scope: 'matching' | 'all') => void;
-  selectedSize: string;      // ADD THIS
+  selectedSize: string;
   onSizeChange: (size: string) => void;
+  targetDate: Date | null;
+  onTargetDateChange: (date: Date | null) => void;
+  isDateDisabled?: boolean;
+  showDatePicker?: boolean;
 }
 
 export const GridView: React.FC<GridViewProps> = ({
@@ -44,7 +48,8 @@ export const GridView: React.FC<GridViewProps> = ({
   showFilters, onToggleFilters, searchTerm, onSearchTermChange, attireType, onAttireTypeChange,
   selectedAge, onAgeChange, selectedGender, onGenderChange, selectedSort, onSortChange,
   onResetFilters,
-  mode, filterByColorHex, assignmentScope, onAssignmentScopeChange,selectedSize, onSizeChange 
+  mode, filterByColorHex, assignmentScope, onAssignmentScopeChange,selectedSize, onSizeChange,
+  targetDate, onTargetDateChange, isDateDisabled, showDatePicker
 }) => {
 
   const renderGridContent = () => {
@@ -103,6 +108,10 @@ export const GridView: React.FC<GridViewProps> = ({
             onAssignmentScopeChange={onAssignmentScopeChange}
             selectedSize={selectedSize}
             setSelectedSize={onSizeChange}
+            targetDate={targetDate}
+            setTargetDate={onTargetDateChange}
+            isDateDisabled={isDateDisabled}
+            showDatePicker={showDatePicker}
           />
         </Col>
       )}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Modal, Button, Row, Col, InputGroup, Form, Spinner, Alert, Image, Accordion, ListGroup, Carousel } from 'react-bootstrap';
+import { Modal, Button, Row, Col, InputGroup, Form, Spinner, Alert, Image, Accordion, ListGroup, Carousel, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import { Search, ArrowLeft, Check2 } from 'react-bootstrap-icons';
 import { InventoryItem, Package, AssignedItem } from '../../../types';
 import api from '../../../services/api';
@@ -7,6 +7,8 @@ import PackageCard from '../../packageCard/PackageCard';
 import namer from 'color-namer';
 import './packageSelectionModal.css';
 import { useAlert } from '../../../contexts/AlertContext';
+import { format } from 'date-fns';
+import { ColorMotif } from '../../../types';
 
 const normalizeHex = (hex: string): string => {
   if (!hex || typeof hex !== 'string') return '';
@@ -16,6 +18,21 @@ const normalizeHex = (hex: string): string => {
   }
   return cleanHex;
 };
+
+interface EnrichedColorMotif extends ColorMotif {
+  isAvailable?: boolean;
+}
+
+interface EnrichedPackage extends Package {
+  colorMotifs: EnrichedColorMotif[];
+}
+
+interface DisplayMotif {
+  _id: string | undefined;
+  name: string;
+  hex: string;
+  isAvailable?: boolean; // Make it optional
+}
 
 // The data structure this modal returns on success
 export interface PackageSelectionData {
@@ -27,15 +44,16 @@ interface PackageSelectionModalProps {
   show: boolean;
   onHide: () => void;
   onSelect: (selection: PackageSelectionData) => void;
+  targetDate?: Date | null;
 }
 
-export const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({ show, onHide, onSelect }) => {
+export const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({ show, onHide, onSelect, targetDate }) => {
   const [allPackages, setAllPackages] = useState<Package[]>([]);
   const {addAlert} = useAlert()
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedPackage, setSelectedPackage] = useState<Package | null>(null);
+  const [selectedPackage, setSelectedPackage] = useState<EnrichedPackage | null>(null);
   const [selectedMotifHex, setSelectedMotifHex] = useState(''); 
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [showMotifPreview, setShowMotifPreview] = useState(true);
@@ -142,7 +160,7 @@ export const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({ sh
     return allPackages.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
   }, [searchTerm, allPackages]);
 
-  const availableMotifs = useMemo(() => {
+  const availableMotifs = useMemo((): DisplayMotif[] => { // <-- Apply the return type here
     if (!selectedPackage) return [];
     
     return selectedPackage.colorMotifs.map(motif => {
@@ -154,15 +172,44 @@ export const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({ sh
       } catch (e) {
         console.warn(`Could not name color for hex: ${motif.motifHex}`, e);
       }
+      // This object now matches the DisplayMotif type
       return {
-        _id: motif._id, // <-- ADD THIS LINE
+        _id: motif._id,
         name: generatedName,
         hex: motif.motifHex,
+        isAvailable: motif.isAvailable // Pass the availability flag through
       };
     });
   }, [selectedPackage]);
 
-  const handleSelectPackage = (pkg: Package) => setSelectedPackage(pkg);
+  const handleSelectPackage = async (pkg: Package) => {
+    if (targetDate) {
+      setLoading(true); // Show a loading state
+      try {
+        const dateStr = format(targetDate, 'yyyy-MM-dd');
+        const response = await api.get(`/packages/${pkg._id}/availability?date=${dateStr}`);
+        setSelectedPackage(response.data);
+        
+        // Automatically select the first available motif
+        const firstAvailable = response.data.colorMotifs.find((m: EnrichedColorMotif) => m.isAvailable);
+        if (firstAvailable) {
+          setSelectedMotifHex(firstAvailable.motifHex);
+        } else {
+          setSelectedMotifHex(''); // Clear selection if no motifs are available
+        }
+
+      } catch (err) {
+        addAlert('Could not load motif availability for this package.', 'danger');
+        setSelectedPackage(pkg); // Fallback to showing the package without availability data
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      // Original behavior if no date is provided
+      setSelectedPackage(pkg);
+    }
+  };
+
   const handleGoBack = () => { setSelectedPackage(null); setSelectedMotifHex(''); };
 
   const handleConfirm = () => {
@@ -208,7 +255,7 @@ export const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({ sh
     return (
       <>
         <Button variant="link" onClick={handleGoBack} className="mb-3 ps-0">
-          <ArrowLeft className="me-2"/>Back to Packages
+          <ArrowLeft className="me-2"/>Back
         </Button>
         
         {/* New Flexbox Layout */}
@@ -227,7 +274,7 @@ export const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({ sh
           {/* Content Column */}
           <div className="flex-grow-1">
             <h3 className="modal-product-title">{selectedPackage.name}</h3>
-            <p className="text-muted">{selectedPackage.description}</p>
+            <p className="lead fs-6 text-muted mt-2">{selectedPackage.description}</p>
             <p className="modal-product-price">₱{selectedPackage.price.toLocaleString()}</p>
             <hr/>
             
@@ -239,13 +286,22 @@ export const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({ sh
               {hasPredefinedMotifs ? (
                 <div className="motif-swatch-container mt-1">
                   {availableMotifs.map((m, index) => (
-                    <Button
+                    <OverlayTrigger
                       key={index}
-                      className={`motif-swatch ${selectedMotifHex === m.hex ? 'active' : ''}`}
-                      style={{ backgroundColor: m.hex }}
-                      title={m.name}
-                      onClick={() => setSelectedMotifHex(m.hex)}
-                    />
+                      placement="top"
+                      overlay={
+                        <Tooltip id={`tooltip-motif-${index}`}>
+                          {!(m as any).isAvailable ? 'Unavailable for selected date' : m.name}
+                        </Tooltip>
+                      }
+                    >
+                      <Button
+                        className={`motif-swatch ${selectedMotifHex === m.hex ? 'active' : ''} ${!(m as any).isAvailable ? 'disabled-swatch' : ''}`}
+                        style={{ backgroundColor: m.hex }}
+                        onClick={() => (m as any).isAvailable && setSelectedMotifHex(m.hex)}
+                        disabled={!(m as any).isAvailable}
+                      />
+                    </OverlayTrigger>
                   ))}
                 </div>
               ) : (
@@ -304,11 +360,19 @@ export const PackageSelectionModal: React.FC<PackageSelectionModalProps> = ({ sh
             )}
             
             <div className="d-grid my-3">
-              <Button onClick={handleConfirm} disabled={!selectedMotifHex.trim()}>Add Package to Reservation</Button>
+              <Button 
+                onClick={handleConfirm} 
+                disabled={
+                  !selectedMotifHex.trim() || 
+                  availableMotifs.find(m => m.hex === selectedMotifHex)?.isAvailable === false
+                }
+              >
+                Add Package to Reservation
+              </Button>
             </div>
 
             {/* New Accordion for Inclusions */}
-            <Accordion defaultActiveKey="0" className="modal-product-accordion">
+            <Accordion defaultActiveKey="0" className="modal-product-accordion lh-1 small">
               <Accordion.Item eventKey="0">
                 <Accordion.Header>Package Inclusions</Accordion.Header>
                 <Accordion.Body>

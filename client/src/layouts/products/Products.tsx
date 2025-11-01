@@ -20,6 +20,7 @@ import CustomPagination from "../../components/customPagination/CustomPagination
 import { useHeartedItems } from "../../hooks/useHeartedItems";
 import { FilterForm } from '../../components/forms/FilterForm';
 import { ProductCardSkeleton } from "../../components/productCardSkeleton/ProductCardSkeleton";
+import { format } from 'date-fns';
 
 function Products() {
   const navigate = useNavigate();
@@ -29,10 +30,11 @@ function Products() {
   const [categories, setCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [targetDate, setTargetDate] = useState<Date | null>(null);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const ITEMS_PER_PAGE = 15;
+  const ITEMS_PER_PAGE = 18;
 
   const [selectedSize, setSelectedSize] = useState(() => searchParams.get('size') || "");
   const [selectedSort, setSelectedSort] = useState("Relevance");
@@ -40,6 +42,7 @@ function Products() {
   const [selectedAge, setSelectedAge] = useState("");
   const [selectedGender, setSelectedGender] = useState("");
   const [searchTerm, setSearchTerm] = useState(() => searchParams.get('search') || "");
+  
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -57,6 +60,10 @@ function Products() {
         if (searchTerm) params.search = searchTerm;
         if (selectedSize) params.size = selectedSize; 
 
+        if (targetDate) {
+          params.availabilityDate = format(targetDate, 'yyyy-MM-dd');
+        }
+
         if (selectedSort === "Price Asc") params.sort = 'price_asc';
         if (selectedSort === "Price Desc") params.sort = 'price_desc';
         if (selectedSort === "Latest") params.sort = 'latest';
@@ -71,7 +78,7 @@ function Products() {
       }
     };
     fetchProducts();
-  }, [attireType, selectedAge, selectedGender, searchTerm, currentPage, selectedSort, selectedSize]);
+  }, [attireType, selectedAge, selectedGender, searchTerm, currentPage, selectedSort, selectedSize, targetDate]);
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -105,6 +112,7 @@ function Products() {
     setSelectedGender("");
     setSelectedSort("Relevance");
     setSelectedSize("");
+    setTargetDate(null);
     setSearchParams({});
   };
 
@@ -147,7 +155,7 @@ function Products() {
     <>
       <div className="products-page-container pt-4">
         <Row>
-          <Col md={3} className="text-start">
+          <Col md={2} className="text-start">
             <div className="d-lg-none mb-3">
               <Accordion>
                 <Accordion.Item eventKey="0">
@@ -172,6 +180,9 @@ function Products() {
                         onAssignmentScopeChange={() => {}}
                         selectedSize={selectedSize}
                         setSelectedSize={setSelectedSize}
+                        targetDate={targetDate}
+                        setTargetDate={setTargetDate}
+                        showDatePicker={true}
                     />
                   </Accordion.Body>
                 </Accordion.Item>
@@ -194,11 +205,14 @@ function Products() {
                   onAssignmentScopeChange={() => {}}
                   selectedSize={selectedSize}
                   setSelectedSize={setSelectedSize}
+                  targetDate={targetDate}
+                  setTargetDate={setTargetDate}
+                  showDatePicker={true}
               />
             </div>
           </Col>
           
-          <Col md={9} className="pb-4 product-grid-container">
+          <Col md={10} className="pb-4 product-grid-container">
             <div className="d-flex justify-content-end align-items-center mb-3">
               <DropdownButton
                 as={ButtonGroup}
@@ -222,7 +236,7 @@ function Products() {
             </div>
             
             {loading ? (
-              <Row xs={2} sm={2} md={3} lg={4} xl={5} className="g-2">
+              <Row xs={2} sm={2} md={3} lg={4} xl={6} className="g-2">
                 {Array.from({ length: ITEMS_PER_PAGE }).map((_, index) => (
                   <Col key={index}>
                     <ProductCardSkeleton />
@@ -234,7 +248,7 @@ function Products() {
             ) : products.length === 0 ? (
                 <Alert variant="info" className="text-center">No items found matching your criteria.</Alert>
             ) : (
-              <Row xs={2} sm={2} md={3} lg={4} xl={5} className="g-2" >
+              <Row xs={2} sm={2} md={3} lg={4} xl={6} className="g-2" >
                 {products.map((product) => (
                   <Col key={product._id}>
                     <ProductCard
@@ -245,7 +259,7 @@ function Products() {
                       heartCount={product.heartCount || 0}
                       isHearted={isHearted(product._id)}
                       onHeartClick={() => handleHeartClick(product._id)}
-                      onCardClick={() => navigate(`/productViewer/${product._id}`)}
+                      onCardClick={() => navigate(`/productViewer/${product._id}`, { state: { targetDate: targetDate } })}
                     />
                   </Col>
                 ))}

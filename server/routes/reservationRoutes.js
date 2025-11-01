@@ -12,6 +12,9 @@ const { sanitizeRequestBody } = require('../middleware/sanitizeMiddleware');
 const mongoose = require('mongoose'); 
 const { calculateFinancials } = require('../utils/financialsCalculator');
 const Rental = require('../models/Rental');
+const { sendReservationConfirmation } = require('../utils/emailService');
+const Settings = require('../models/Settings');
+const { checkAvailability } = require('../utils/availabilityChecker');
 
 const router = express.Router();
 
@@ -25,124 +28,142 @@ router.post(
   '/',
   sanitizeRequestBody,
   asyncHandler(async (req, res) => {
-    const { 
-      customerInfo, 
-      reserveDate, 
-      itemReservations, 
-      packageReservations, 
-      financials, 
+    const {
+      customerInfo,
+      reserveDate,
+      itemReservations,
+      packageReservations,
+      financials,
       packageAppointmentDate,
-      packageAppointmentBlock // New field from request body
+      packageAppointmentBlock
     } = req.body;
 
-    // Backend Validation
-    if (!customerInfo?.name || !customerInfo?.phoneNumber) {
-        res.status(400).json({ message: "Customer name and phone number are required." });
-        return;
+    if (!customerInfo?.name || !customerInfo?.phoneNumber || !customerInfo?.email) {
+      res.status(400);
+      throw new Error("Customer name, phone number, and email are all required.");
     }
     if (!reserveDate) {
-        res.status(400).json({ message: "A reservation date is required." });
-        return;
+      res.status(400);
+      throw new Error("A reservation date is required.");
     }
     const hasItems = (itemReservations && itemReservations.length > 0) || (packageReservations && packageReservations.length > 0);
     if (!hasItems) {
-        res.status(400).json({ message: "A reservation must contain at least one item or package." });
-        return;
+      res.status(400);
+      throw new Error("A reservation must contain at least one item or package.");
     }
 
-    // Prepare data for and call the financials calculator
-    const dataForCalculator = {
-      singleRents: itemReservations || [],
-      packageRents: packageReservations || [],
-      financials: {},
-    };
-    const calculated = calculateFinancials(dataForCalculator);
-    if (!calculated) {
-      res.status(500);
-      throw new Error('Could not calculate reservation financials.');
-    }
+    const session = await mongoose.startSession();
+    let savedReservation; // Variable to hold the result from the transaction
 
-    // Validate payment against the grand total (subtotal + deposit)
-    const grandTotal = calculated.grandTotal;
-    const payment = financials?.payments?.[0];
-
-    if (grandTotal > 0) {
-      if (!payment || !payment.amount) {
-        res.status(400);
-        throw new Error('Payment details are required for this reservation.');
-      }
-      const minimumPayment = grandTotal * 0.5;
-      if (payment.amount < minimumPayment) {
-        res.status(400);
-        throw new Error(`Payment is insufficient. A minimum of 50% (₱${minimumPayment.toFixed(2)}) of the grand total is required.`);
-      }
-    }
-
-    // Assign unique IDs to sub-documents and generate motif names
-    if (itemReservations) {
-        itemReservations.forEach(item => { item.reservationId = `item_${nanoid_subdoc()}`; });
-    }
-    if (packageReservations) {
-        packageReservations.forEach(pkg => { 
-            pkg.packageReservationId = `pkg_${nanoid_subdoc()}`;
-            // The motifHex is already on the object from the frontend, no processing needed.
+    try {
+      // withTransaction will automatically commit if the callback succeeds,
+      // or abort if it throws an error.
+      await session.withTransaction(async () => {
+        const itemsRequired = new Map();
+        (itemReservations || []).forEach(item => {
+            const key = `${item.itemId}-${item.variation.color.name}-${item.variation.size}`;
+            itemsRequired.set(key, (itemsRequired.get(key) || 0) + item.quantity);
         });
-    }
-
-    const newReservation = new Reservation({
-        _id: `RES-${nanoid_reservation()}`,
-        customerInfo,
-        reserveDate,
-        itemReservations,
-        packageReservations,
-        financials: {
-            requiredDeposit: calculated.requiredDeposit,
-            depositAmount: calculated.requiredDeposit, 
-            payments: financials.payments || []
-        },
-        status: 'Pending',
-        packageAppointmentDate,
-        packageAppointmentBlock // Add the new field here
-    });
-
-    // Save the initial reservation
-    await newReservation.save();
-
-    // Check for and create linked appointments
-    if (newReservation.packageReservations && newReservation.packageReservations.length > 0) {
-      await Promise.all(newReservation.packageReservations.map(async (pkg) => {
-        await Promise.all(pkg.fulfillmentPreview.map(async (fulfillment) => {
-          if (fulfillment.isCustom && !fulfillment.linkedAppointmentId) {
-
-            const fullAppointmentDate = newReservation.packageAppointmentDate;
-            if (!fullAppointmentDate) {
-              console.warn(`Skipping appointment creation for reservation ${newReservation._id} due to missing packageAppointmentDate.`);
-              return;
-            }
-
-            const appointmentHour = new Date(fullAppointmentDate).getHours();
-            const timeBlock = appointmentHour < 12 ? 'morning' : 'afternoon';
-
-            const newAppointment = new Appointment({
-              _id: `APT-${nanoid_appointment()}`,
-              customerInfo: newReservation.customerInfo,
-              appointmentDate: newReservation.packageAppointmentDate,
-              timeBlock: newReservation.packageAppointmentBlock, // Use the block from the reservation
-              notes: fulfillment.notes || '',
-              sourceReservationId: newReservation._id,
-              status: 'Pending',
+        (packageReservations || []).forEach(pkg => {
+            (pkg.fulfillmentPreview || []).forEach(f => {
+                if (!f.isCustom && f.assignedItemId && f.variation) {
+                    const [color, size] = f.variation.split(', ');
+                    const key = `${f.assignedItemId}-${color}-${size}`;
+                    itemsRequired.set(key, (itemsRequired.get(key) || 0) + 1);
+                }
             });
-            const savedAppointment = await newAppointment.save();
-            // Link the ID back to the reservation fulfillment
-            fulfillment.linkedAppointmentId = savedAppointment._id;
-          }
-        }));
-      }));
-      await newReservation.save();
+        });
+
+        const { isAvailable, conflictingItems } = await checkAvailability(itemsRequired, reserveDate, null, session);
+
+        if (!isAvailable) {
+          // Throwing an error here will automatically abort the transaction.
+          const error = new Error("One or more items in your cart have become unavailable.");
+          error.statusCode = 409; // 409 Conflict
+          error.conflictingItems = conflictingItems;
+          throw error;
+        }
+        
+        const calculated = calculateFinancials({
+          singleRents: itemReservations || [],
+          packageRents: packageReservations || [],
+          financials: {},
+        });
+
+        if (itemReservations) {
+            itemReservations.forEach(item => { item.reservationId = `item_${nanoid_subdoc()}`; });
+        }
+        if (packageReservations) {
+            packageReservations.forEach(pkg => { pkg.packageReservationId = `pkg_${nanoid_subdoc()}`; });
+        }
+
+        const newReservation = new Reservation({
+            _id: `RES-${nanoid_reservation()}`,
+            customerInfo,
+            reserveDate,
+            itemReservations,
+            packageReservations,
+            financials: {
+                requiredDeposit: calculated.requiredDeposit,
+                depositAmount: calculated.requiredDeposit, 
+                payments: financials.payments || []
+            },
+            status: 'Pending',
+            packageAppointmentDate,
+            packageAppointmentBlock
+        });
+
+        await newReservation.save({ session });
+
+        if (newReservation.packageReservations && newReservation.packageReservations.length > 0) {
+            for (const pkg of newReservation.packageReservations) {
+                for (const fulfillment of pkg.fulfillmentPreview) {
+                    if (fulfillment.isCustom && !fulfillment.linkedAppointmentId && newReservation.packageAppointmentDate) {
+                        const newAppointment = new Appointment({
+                            _id: `APT-${nanoid_appointment()}`,
+                            customerInfo: newReservation.customerInfo,
+                            appointmentDate: newReservation.packageAppointmentDate,
+                            timeBlock: newReservation.packageAppointmentBlock,
+                            notes: fulfillment.notes || `For ${fulfillment.role} in reservation ${newReservation._id}`,
+                            sourceReservationId: newReservation._id,
+                            status: 'Pending',
+                        });
+                        const savedAppointment = await newAppointment.save({ session });
+                        fulfillment.linkedAppointmentId = savedAppointment._id;
+                    }
+                }
+            }
+            await newReservation.save({ session });
+        }
+        
+        // Assign the final object to the outer variable
+        savedReservation = newReservation;
+      }); // End of withTransaction
+
+      // If the transaction was successful, this code will be reached
+      if (savedReservation) {
+        const finalCalculatedFinancials = calculateFinancials(savedReservation.toObject());
+        const finalReservationObject = { ...savedReservation.toObject(), financials: finalCalculatedFinancials };
+
+        Settings.findById('shopSettings').lean().then(shopSettings => {
+            sendReservationConfirmation(finalReservationObject, shopSettings);
+        }).catch(emailError => {
+            console.error(`[Email Error] Failed to send confirmation for reservation ${finalReservationObject._id}:`, emailError);
+        });
+        
+        res.status(201).json(finalReservationObject);
+      } else {
+        // This case should not happen if no error was thrown, but it's a safe fallback.
+        throw new Error("Transaction completed but no reservation was saved.");
+      }
+
+    } catch (error) {
+        // Re-throw the error to be caught by asyncHandler and sent to the global error handler
+        throw error;
+    } finally {
+        // Always end the session
+        await session.endSession();
     }
-    const finalReservationObject = newReservation.toObject();
-    
-    res.status(201).json(finalReservationObject);
   })
 );
 
@@ -306,6 +327,36 @@ router.put(
   })
 );
 
+// GET to check if a reservation reschedule is possible
+router.get('/:id/check-reschedule', protect, asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { date } = req.query;
+
+    const reservation = await Reservation.findById(id).lean();
+    if (!reservation) {
+        res.status(404);
+        throw new Error("Reservation not found.");
+    }
+
+    // Build the list of required items from the reservation
+    const itemsRequired = new Map();
+    reservation.itemReservations.forEach(i => {
+        const key = `${i.itemId}-${i.variation.color.name}-${i.variation.size}`;
+        itemsRequired.set(key, (itemsRequired.get(key) || 0) + i.quantity);
+    });
+    reservation.packageReservations.forEach(p => p.fulfillmentPreview?.forEach(f => {
+        if (!f.isCustom && f.assignedItemId && f.variation) {
+            const [color, size] = f.variation.split(', ');
+            const key = `${f.assignedItemId}-${color}-${size}`;
+            itemsRequired.set(key, (itemsRequired.get(key) || 0) + 1);
+        }
+    }));
+
+    // Call the universal availability checker
+    const result = await checkAvailability(itemsRequired, date, id);
+    res.status(200).json(result);
+}));
+
 router.put(
   '/:id/confirm',
   protect, // Admin only
@@ -328,79 +379,6 @@ router.put(
     const updatedReservation = await reservation.save();
 
     res.status(200).json(updatedReservation);
-  })
-);
-
-router.put(
-  '/:id/cancel',
-  protect, // Admin only
-  asyncHandler(async (req, res) => {
-    const { id } = req.params;
-    const { reason } = req.body; 
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
-    try {
-      const reservation = await Reservation.findById(id).session(session);
-      if (!reservation) {
-        res.status(404);
-        throw new Error('Reservation not found.');
-      }
-      if (reservation.status === 'Completed' || reservation.status === 'Cancelled') {
-        res.status(400);
-        throw new Error(`This reservation cannot be cancelled as it is already ${reservation.status}.`);
-      }
-
-      const stockUpdateOperations = [];
-
-      // Restore stock for single item reservations
-      if (reservation.itemReservations && reservation.itemReservations.length > 0) {
-        for (const item of reservation.itemReservations) {
-          stockUpdateOperations.push({
-            updateOne: {
-              filter: { _id: item.itemId, "variations.color.hex": item.variation.color.hex, "variations.size": item.variation.size },
-              update: { $inc: { "variations.$.quantity": item.quantity } }
-            }
-          });
-        }
-      }
-      
-      // Restore stock for package reservations (if they have assigned items)
-      if (reservation.packageReservations && reservation.packageReservations.length > 0) {
-        for (const pkg of reservation.packageReservations) {
-          for (const fulfillment of pkg.fulfillmentPreview) {
-            if (fulfillment.assignedItemId && fulfillment.variation) {
-              const [colorName, size] = fulfillment.variation.split(',').map(s => s.trim());
-              stockUpdateOperations.push({
-                updateOne: {
-                  filter: { _id: fulfillment.assignedItemId, "variations.color.name": colorName, "variations.size": size },
-                  update: { $inc: { "variations.$.quantity": 1 } }
-                }
-              });
-            }
-          }
-        }
-      }
-
-      // Execute all stock updates if any were generated
-      if (stockUpdateOperations.length > 0) {
-        await ItemModel.bulkWrite(stockUpdateOperations, { session });
-      }
-
-      // Update the reservation status
-      reservation.status = 'Cancelled';
-      reservation.cancellationReason = reason || 'No reason provided.';
-      const updatedReservation = await reservation.save({ session });
-
-      await session.commitTransaction();
-      res.status(200).json(updatedReservation);
-
-    } catch (error) {
-      await session.abortTransaction();
-      throw error;
-    } finally {
-      session.endSession();
-    }
   })
 );
 

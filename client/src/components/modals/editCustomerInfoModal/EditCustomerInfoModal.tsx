@@ -59,10 +59,10 @@ export const EditCustomerInfoModal: React.FC<EditCustomerInfoModalProps> = ({
   };
 
   // Handlers for updating the local draft state
-  const handleDraftChange = (field: keyof Omit<CustomerInfo, 'address'>, value: string) => {
-    if (draftCustomer) {
-      setDraftCustomer({ ...draftCustomer, [field]: value });
-    }
+  const handleDraftChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!draftCustomer) return;
+    const { name, value } = e.target;
+    setDraftCustomer({ ...draftCustomer, [name]: value });
   };
 
   const handleAddressChange = (field: keyof Address, value: string) => {
@@ -86,7 +86,7 @@ export const EditCustomerInfoModal: React.FC<EditCustomerInfoModalProps> = ({
           <ValidatedInput
             label="Name" name="name"
             value={draftCustomer.name}
-            onChange={(e) => handleDraftChange('name', e.target.value)}
+            onChange={handleDraftChange}
             error={errors.name}
             isRequired
           />
@@ -95,7 +95,7 @@ export const EditCustomerInfoModal: React.FC<EditCustomerInfoModalProps> = ({
               <ValidatedInput
                 label="Contact Number" name="phoneNumber"
                 value={draftCustomer.phoneNumber}
-                onChange={(e) => handleDraftChange('phoneNumber', e.target.value)}
+                onChange={handleDraftChange}
                 error={errors.phoneNumber}
                 isRequired
               />
@@ -104,11 +104,12 @@ export const EditCustomerInfoModal: React.FC<EditCustomerInfoModalProps> = ({
               <ValidatedInput
                 label="Email Address" name="email" type="email"
                 value={draftCustomer.email || ''}
-                onChange={(e) => handleDraftChange('email', e.target.value)}
+                onChange={handleDraftChange}
                 error={errors.email}
               />
             </Col>
           </Row>
+
           <hr />
           <Row className="g-3">
             <AddressSelector 

@@ -72,8 +72,6 @@
 
 /* "Add to Booking" Button Styling */
 .add-to-booking-btn {
-  background-color: var(--bs-danger); /* --- CORRECTED: Using theme variable --- */
-  border-color: var(--bs-danger);     /* --- CORRECTED: Using theme variable --- */
   font-weight: 600;
 }
 .add-to-booking-btn:hover {

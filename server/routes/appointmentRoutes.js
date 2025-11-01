@@ -7,6 +7,7 @@ const Settings = require('../models/Settings');
 const asyncHandler = require('../utils/asyncHandler');
 const { protect } = require('../middleware/authMiddleware');
 const { sanitizeRequestBody } = require('../middleware/sanitizeMiddleware');
+const { sendAppointmentConfirmation } = require('../utils/emailService');
 
 const router = express.Router();
 
@@ -22,9 +23,9 @@ router.post(
     const { customerInfo, appointmentDate, notes, timeBlock } = req.body;
 
     // Backend Validation
-    if (!customerInfo?.name || !customerInfo?.phoneNumber) {
-      res.status(400).json({ message: 'Customer name and phone number are required.' });
-      return;
+    if (!customerInfo?.name || !customerInfo?.phoneNumber || !customerInfo?.email) {
+      res.status(400);
+      throw new Error('Customer name, phone number, and email are all required.');
     }
     if (!appointmentDate) {
       res.status(400).json({ message: 'An appointment date is required.' });
@@ -46,6 +47,14 @@ router.post(
     });
 
     const savedAppointment = await newAppointment.save();
+    try {
+      const shopSettings = await Settings.findById('shopSettings').lean();
+      // Call the email function, but don't let it block the response to the user
+      sendAppointmentConfirmation(savedAppointment, shopSettings);
+    } catch (emailError) {
+      // If the email fails, we only log it. The appointment itself was successful.
+      console.error(`[Email Error] Failed to send confirmation for appointment ${savedAppointment._id}:`, emailError);
+    }
     res.status(201).json(savedAppointment);
   })
 );

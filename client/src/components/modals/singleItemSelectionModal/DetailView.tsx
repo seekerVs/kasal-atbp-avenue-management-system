@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Form, Button, Image, Accordion, Carousel } from 'react-bootstrap';
 import { InventoryItem, ItemVariation } from '../../../types';
+import './singleItemSelectionModal.css';
 
 interface DetailViewProps {
   item: InventoryItem;
@@ -62,7 +63,7 @@ export const DetailView: React.FC<DetailViewProps> = ({
   };
 
   return (
-    <div className="d-md-flex gap-4 p-3">
+    <div className="d-md-flex gap-4 p-3 small">
       <div className="flex-shrink-0 text-center mb-3 mb-md-0" style={{ flexBasis: '40%' }}>
         <Carousel activeIndex={carouselIndex} onSelect={setCarouselIndex} interval={3000} variant="dark" className='border rounded'>
           {imagesForCarousel.map((img, idx) => (
@@ -75,7 +76,7 @@ export const DetailView: React.FC<DetailViewProps> = ({
       <div className="flex-grow-1">
         <p className="modal-product-category mb-1">{item.category}</p>
         <h3 className="modal-product-title">{item.name}</h3>
-        <p className="text-muted">{item.description}</p>
+        <p className="text-muted lead fs-6">{item.description}</p>
         <p className="modal-product-price">₱{item.price.toLocaleString()}</p>
         <hr/>
         <div className="mb-3">

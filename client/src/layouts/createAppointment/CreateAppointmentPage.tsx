@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Container, Row, Col, Card, Button, Form, Spinner, Alert, Badge } from 'react-bootstrap';
+import { Container, Row, Col, Card, Button, Form, Spinner, Alert, Badge, Modal } from 'react-bootstrap';
 import { ChatQuote, CheckCircleFill, Download } from 'react-bootstrap-icons';
 import { format } from 'date-fns';
 
@@ -13,6 +13,7 @@ import { DataPrivacyModal } from '../../components/modals/dataPrivacyModal/DataP
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { AppointmentSummary } from '../../components/appointmentSummary/AppointmentSummary';
+import { useNavigate } from 'react-router-dom';
 
 interface UnavailabilityRecord {
   date: string;
@@ -30,6 +31,7 @@ type BlockType = 'morning' | 'afternoon' | '';
 
 function CreateAppointmentPage() {
   const { addAlert } = useAlert();
+  const navigate = useNavigate();
 
   const [appointment, setAppointment] = useState(getInitialAppointmentState);
   const [shopSettings, setShopSettings] = useState<ShopSettings | null>(null);
@@ -40,6 +42,7 @@ function CreateAppointmentPage() {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [submittedAppointment, setSubmittedAppointment] = useState<Appointment | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
   const summaryRef = useRef<HTMLDivElement>(null); 
 
   // 3. Fetch unavailable dates when the component mounts
@@ -62,6 +65,17 @@ function CreateAppointmentPage() {
     fetchInitialData();
   }, []);
 
+  useEffect(() => {
+    if (showSummaryModal && submittedAppointment) {
+      const timer = setTimeout(() => {
+        handleDownloadPdf();
+      }, 500); // 500ms delay to allow modal to render
+
+      return () => clearTimeout(timer);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showSummaryModal]);
+
   const handleCustomerChange = (field: string, value: string) => setAppointment(p => ({ ...p, customerInfo: { ...p.customerInfo, [field]: value } }));
   const handleAddressChange = (field: keyof Appointment['customerInfo']['address'], value: string) => setAppointment(p => ({ ...p, customerInfo: { ...p.customerInfo, address: { ...p.customerInfo.address, [field]: value } } }));
 
@@ -75,8 +89,14 @@ function CreateAppointmentPage() {
 
   const validate = (): boolean => {
     const newErrors: FormErrors = { customerInfo: { address: {} } };
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!appointment.customerInfo.name.trim()) newErrors.customerInfo.name = 'Full name is required.';
     if (!/^09\d{9}$/.test(appointment.customerInfo.phoneNumber)) newErrors.customerInfo.phoneNumber = 'Phone number must be a valid 11-digit number starting with 09.';
+    if (!appointment.customerInfo.email || !appointment.customerInfo.email.trim()) {
+      newErrors.customerInfo.email = 'Email address is required.';
+    } else if (!emailRegex.test(appointment.customerInfo.email)) {
+      newErrors.customerInfo.email = 'Please enter a valid email format.';
+    }
     if (!appointment.customerInfo.address.city) newErrors.customerInfo.address.city = 'City/Municipality is required.';
     if (!appointment.customerInfo.address.barangay) newErrors.customerInfo.address.barangay = 'Barangay is required.';
     if (!appointment.customerInfo.address.street.trim()) newErrors.customerInfo.address.street = 'Street address is required.';
@@ -87,10 +107,12 @@ function CreateAppointmentPage() {
     }
     setErrors(newErrors);
     const hasAddressErrors = Object.keys(newErrors.customerInfo.address).length > 0;
-    const hasCustomerErrors = Object.keys(newErrors.customerInfo).filter(key => key !== 'address').length > 0;
+    // Now, we filter out 'address' AND 'email' to check for other customer errors
+    const hasOtherCustomerErrors = Object.keys(newErrors.customerInfo).filter(key => key !== 'address' && key !== 'email').length > 0;
+    const hasEmailError = !!newErrors.customerInfo.email;
     const hasDateError = !!newErrors.appointmentDate;
 
-    return !hasAddressErrors && !hasCustomerErrors && !hasDateError;
+    return !hasAddressErrors && !hasOtherCustomerErrors && !hasEmailError && !hasDateError;
   };
 
   const handleSubmit = () => {
@@ -122,6 +144,7 @@ function CreateAppointmentPage() {
       addAlert('Your appointment request has been submitted successfully!', 'success');
       setSubmittedAppointment(savedAppointment); 
       setIsSubmitted(true);
+      setShowSummaryModal(true); 
     } catch (err: any) {
       addAlert(err.response?.data?.message || 'Failed to submit appointment request.', 'danger');
     } finally { 
@@ -138,12 +161,12 @@ function CreateAppointmentPage() {
 
     setIsDownloading(true);
 
-    html2canvas(input, { scale: 2, backgroundColor: null }) // Use scale for better resolution, transparent background
+    html2canvas(input, { scale: 2, backgroundColor: null })
       .then((canvas) => {
         const imgData = canvas.toDataURL('image/png');
         const pdf = new jsPDF('p', 'mm', 'a4');
         const pdfWidth = pdf.internal.pageSize.getWidth();
-        const contentWidth = pdfWidth - 20; // 10mm margin on each side
+        const contentWidth = pdfWidth - 20;
         const canvasAspectRatio = canvas.width / canvas.height;
         const contentHeight = contentWidth / canvasAspectRatio;
 
@@ -163,7 +186,8 @@ function CreateAppointmentPage() {
     setAppointment(getInitialAppointmentState());
     setErrors({});
     setSubmittedAppointment(null);
-    setIsSubmitted(false);
+    setIsSubmitted(false); // Reset the "submitted" flag
+    setShowSummaryModal(false); // Ensure the modal is closed
   };
 
   const renderSuccessView = (details: Appointment) => (
@@ -197,14 +221,11 @@ function CreateAppointmentPage() {
       </div>
       
       <div className="d-flex justify-content-center gap-2 mt-4">
-        <Button onClick={handleBookAnother}>Book Another Appointment</Button>
-        <Button variant="success" onClick={handleDownloadPdf} disabled={isDownloading}>
-          {isDownloading ? (
-              <Spinner as="span" size="sm" className="me-2" />
-          ) : (
-              <Download className="me-2"/>
-          )}
-          Download Confirmation
+        <Button variant="primary" onClick={handleBookAnother}>
+          Book Another Appointment
+        </Button>
+        <Button variant="outline-success" onClick={() => setShowSummaryModal(true)}>
+          View Request
         </Button>
       </div>
     </>
@@ -235,7 +256,18 @@ function CreateAppointmentPage() {
                     <ValidatedInput label="Full Name" name="name" value={appointment.customerInfo.name} onChange={(e) => handleCustomerChange('name', e.target.value)} error={errors.customerInfo?.name} isRequired />
                     <Row>
                       <Col md={6}><ValidatedInput label="Phone Number" name="phoneNumber" value={appointment.customerInfo.phoneNumber} onChange={(e) => handleCustomerChange('phoneNumber', e.target.value)} error={errors.customerInfo?.phoneNumber} type="tel" maxLength={11} pattern="09[0-9]{9}" isRequired /></Col>
-                      <Col md={6}><ValidatedInput label="Email Address" name="email" type="email" value={appointment.customerInfo.email || ''} onChange={(e) => handleCustomerChange('email', e.target.value)} error={errors.customerInfo?.email} /></Col>
+                      <Col md={6}>
+                        <ValidatedInput 
+                          label="Email Address" 
+                          name="email" 
+                          type="email" 
+                          value={appointment.customerInfo.email || ''} 
+                          onChange={(e) => handleCustomerChange('email', e.target.value)} 
+                          error={errors.customerInfo?.email} 
+                          isRequired // <-- ADDED
+                          placeholder="For appointment confirmations" // <-- ADDED
+                        />
+                      </Col>
                     </Row>
                     <hr />
                     <Row className="g-3 mb-3">
@@ -295,6 +327,27 @@ function CreateAppointmentPage() {
         onHide={() => setShowPrivacyModal(false)}
         onProceed={handleProceedWithSubmit}
       />
+
+      <Modal show={showSummaryModal} onHide={() => setShowSummaryModal(false)} size="lg" centered backdrop="static">
+        <Modal.Header closeButton>
+          <Modal.Title>Appointment Request Summary</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {/* The summary is now the ONLY content in the modal body, and it's visible */}
+          <div style={{ maxHeight: '70vh', overflowY: 'auto', border: '1px solid #dee2e6', borderRadius: '0.375rem' }}>
+            <AppointmentSummary ref={summaryRef} appointment={submittedAppointment} shopSettings={shopSettings} />
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowSummaryModal(false)}>
+            Close
+          </Button>
+          <Button variant="success" onClick={handleDownloadPdf} disabled={isDownloading}>
+            {isDownloading ? <Spinner as="span" size="sm" className="me-1" /> : <Download className="me-1" />}
+            Download
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </>
   );
 }

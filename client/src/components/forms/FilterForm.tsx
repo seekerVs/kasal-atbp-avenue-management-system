@@ -4,6 +4,8 @@ import React from 'react';
 import { Form, InputGroup, Button, Row, Col } from 'react-bootstrap';
 import { Funnel, Search } from 'react-bootstrap-icons';
 import { sizeOrder } from '../../data/sizeChartData';
+import DatePicker from 'react-datepicker';
+import { CalendarEvent } from 'react-bootstrap-icons';
 
 export interface FilterFormProps {
   categories: string[];
@@ -23,24 +25,30 @@ export interface FilterFormProps {
   onAssignmentScopeChange: (scope: 'matching' | 'all') => void;
   selectedSize: string;
   setSelectedSize: (value: string) => void;
+  targetDate: Date | null;
+  setTargetDate: (date: Date | null) => void;
+  isDateDisabled?: boolean;
+  showDatePicker?: boolean;
 }
 
 export const FilterForm: React.FC<FilterFormProps> = ({
   categories, attireType, setAttireType, selectedAge, setSelectedAge,
   selectedGender, setSelectedGender, searchTerm, setSearchTerm, onReset,
   mode, filterByColorHex, assignmentScope, onAssignmentScopeChange,
-  selectedSize, setSelectedSize
+  selectedSize, setSelectedSize,
+  targetDate, setTargetDate, isDateDisabled,showDatePicker = false 
 }) => (
-  <>
+  <div className='small'>
     <InputGroup className="mb-4">
       <Form.Control 
         type="text" 
         placeholder="Search by name..." 
         value={searchTerm} 
         onChange={(e) => setSearchTerm(e.target.value)} 
+        size='sm'
       />
-      <Button variant="primary" className="search-button">
-        <Search size={20} />
+      <Button variant="primary" size='sm'>
+        <Search size={16} />
       </Button>
     </InputGroup>
 
@@ -53,6 +61,27 @@ export const FilterForm: React.FC<FilterFormProps> = ({
     <div className="d-grid mb-3">
       <Button variant="outline-secondary" size="sm" onClick={onReset}>Reset Filters</Button>
     </div>
+
+    {showDatePicker && (
+      <>
+        <Form.Group className="mb-3">
+          <Form.Label className="fw-bold"><CalendarEvent className="me-2"/>Target Reservation Date</Form.Label>
+          <DatePicker
+            selected={targetDate}
+            onChange={(date) => setTargetDate(date)}
+            minDate={new Date()}
+            className="form-control"
+            placeholderText="Select date..."
+            isClearable
+            dateFormat="MMMM d, yyyy"
+            wrapperClassName="w-100"
+            disabled={isDateDisabled}
+          />
+        </Form.Group>
+        <hr />
+      </>
+    )}
+    <hr />
 
     {mode === 'assignment' && filterByColorHex && (
       <>
@@ -127,5 +156,5 @@ export const FilterForm: React.FC<FilterFormProps> = ({
         <Form.Check key={i} type="radio" name="attireType" id={`attire-${i}`} label={item} value={item} checked={attireType === item} onChange={(e) => setAttireType(e.currentTarget.value)} />
       ))}
     </Form>
-  </>
+  </div>
 );

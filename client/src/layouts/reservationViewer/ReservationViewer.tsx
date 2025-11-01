@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Container, Row, Col, Spinner, Alert, Breadcrumb, Card, Badge, Button, ListGroup, Modal } from 'react-bootstrap';
-import { format, isFuture, startOfDay } from 'date-fns'; // <-- Import isFuture and startOfDay
+import { format, isFuture, isPast, startOfDay } from 'date-fns'; // <-- Import isFuture and startOfDay
 
 import { Appointment, CustomerInfo, PackageReservation, Reservation } from '../../types';
 import api from '../../services/api';
@@ -14,7 +14,7 @@ import { calculateItemDeposit, calculatePackageDeposit } from '../../utils/finan
 import { ReservedPackageDetailsModal } from '../../components/modals/reservedPackageDetailsModal/ReservedPackageDetailsModal';
 import { EditCustomerInfoModal } from '../../components/modals/editCustomerInfoModal/EditCustomerInfoModal';
 import { CancellationReasonModal } from '../../components/modals/cancellationReasonModal/CancellationReasonModal';
-import { RescheduleReservationModal } from '../../components/modals/rescheduleReservationModal/RescheduleReservationModal';
+import { RescheduleModal } from '../../components/modals/rescheduleModal/RescheduleModal';
 
 type BadgeVariant = 'primary' | 'secondary' | 'success' | 'danger' | 'warning' | 'info';
 
@@ -22,6 +22,15 @@ function ReservationViewer() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { addAlert } = useAlert();
+
+  const isReservationDatePast = (): boolean => {
+    if (!reservation?.reserveDate) {
+      return true; // Treat a missing date as invalid/past
+    }
+    // isPast compares if the first date is before the second one.
+    // We use startOfDay to ignore the time part of the day.
+    return isPast(startOfDay(new Date(reservation.reserveDate)));
+  };
 
   const [reservation, setReservation] = useState<Reservation | null>(null);
   const [linkedAppointments, setLinkedAppointments] = useState<Appointment[]>([]);
@@ -34,6 +43,7 @@ function ReservationViewer() {
   const [selectedPackageForModal, setSelectedPackageForModal] = useState<PackageReservation | null>(null);
   const [showEditCustomerModal, setShowEditCustomerModal] = useState(false);
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+  const [unavailableDates, setUnavailableDates] = useState<Date[]>([]);
 
   useEffect(() => {
     if (!id) return;
@@ -43,9 +53,15 @@ function ReservationViewer() {
       setLinkedAppointments([]);
 
       try {
-        const res = await api.get(`/reservations/${id}`);
+        // Fetch reservation and unavailability data in parallel
+        const [res, unavailableRes] = await Promise.all([
+          api.get(`/reservations/${id}`),
+          api.get('/unavailability')
+        ]);
+
         const fetchedReservation: Reservation = res.data;
         setReservation(fetchedReservation);
+        setUnavailableDates(unavailableRes.data.map((rec: { date: string }) => new Date(rec.date)));
 
         const appointmentIds = (fetchedReservation.packageReservations || [])
           .flatMap(pkg => pkg.fulfillmentPreview)
@@ -88,6 +104,12 @@ function ReservationViewer() {
 
   const handleConfirmReservation = async () => {
     if (!reservation) return;
+
+    if (isReservationDatePast()) {
+      addAlert("This reservation's date is in the past. Please reschedule to a future date or cancel the reservation.", 'warning');
+      return; // Stop execution
+    }
+  
     setIsSaving(true);
     try {
       const response = await api.put(`/reservations/${reservation._id}/confirm`);
@@ -162,6 +184,11 @@ function ReservationViewer() {
   // --- 3. CREATE THE NEW INTERMEDIARY FUNCTION ---
   const handleCreateRental = () => {
     if (!reservation) return;
+
+    if (isReservationDatePast()) {
+      addAlert("Cannot create a rental for a past date. Please reschedule to a future date or cancel the reservation.", 'warning');
+      return; // Stop execution
+    }
 
     // Use date-fns' `isFuture` which is cleaner than comparing dates manually.
     // `startOfDay` ensures we only compare the date part, not the time.
@@ -357,11 +384,14 @@ function ReservationViewer() {
         </Row>
       </Container>
 
-      <RescheduleReservationModal
+      <RescheduleModal
         show={showRescheduleModal}
         onHide={() => setShowRescheduleModal(false)}
         onConfirm={handleConfirmReschedule}
-        reservation={reservation}
+        entityId={reservation?._id || null}
+        entityType="reservation"
+        initialDate={reservation?.reserveDate ? new Date(reservation.reserveDate) : null}
+        unavailableDates={unavailableDates}
       />
 
       <EditCustomerInfoModal 

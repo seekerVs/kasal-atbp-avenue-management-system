@@ -33,12 +33,35 @@ router.get('/stats', asyncHandler(async (req, res) => {
             status: { $in: ['To Process', 'To Pickup', 'To Return', 'Returned', 'Completed'] }
         }).lean(),
         // Aggregation for Rentals (your existing code)
+        // NEW: Aggregation for Rentals (Corrected)
         RentalModel.aggregate([
-            { $project: { payments: { $concatArrays: [["$financials.downPayment"], ["$financials.finalPayment"]] } } },
-            { $unwind: "$payments" },
-            { $match: { "payments.amount": { $gt: 0 }, "payments.date": { $gte: queryStartDate, $lte: queryEndDate } } },
-            { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$payments.date" } }, totalSales: { $sum: "$payments.amount" } } },
-            { $sort: { _id: 1 } }
+            {
+                // Only consider rentals that could possibly have payments
+                $match: {
+                    status: { $in: ['Pending', 'To Pickup', 'To Return', 'Completed'] }
+                }
+            },
+            {
+                // Deconstruct the modern 'payments' array
+                $unwind: "$financials.payments"
+            },
+            {
+                // Filter the unwound payments to be within the selected date range
+                $match: {
+                    "financials.payments.date": { $gte: queryStartDate, $lte: queryEndDate }
+                }
+            },
+            {
+                // Group by date and sum the amounts
+                $group: {
+                    _id: { $dateToString: { format: "%Y-%m-%d", date: "$financials.payments.date" } },
+                    totalSales: { $sum: "$financials.payments.amount" }
+                }
+            },
+            {
+                // Sort the final results by date
+                $sort: { _id: 1 }
+            }
         ]),
         // NEW: Aggregation for Active Reservations
         ReservationModel.aggregate([

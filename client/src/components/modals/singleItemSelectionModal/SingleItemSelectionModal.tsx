@@ -8,6 +8,7 @@ import './singleItemSelectionModal.css'
 import api from '../../../services/api';
 import { GridView } from './GridView';
 import { DetailView } from './DetailView';
+import { format } from 'date-fns';
 
 export interface SelectedItemData {
   product: InventoryItem;
@@ -28,13 +29,17 @@ interface ItemSelectionModalProps {
   initialSelectedItem?: InventoryItem | null;
   confirmButtonText?: string;
   disableQuantity?: boolean;
+  initialDate?: Date | null;
+  isDateDisabled?: boolean;
+  showDatePicker?: boolean;
 }
 
 const ACCESSORY_CATEGORIES = ['Veils', 'Cords', 'Arrhae', 'Jewelry', 'Footwear'];
 
 export const SingleItemSelectionModal: React.FC<ItemSelectionModalProps> = ({ 
   show, onHide, onSelect, addAlert, mode, 
-  preselectedItemId, preselectedVariation, filterByColorHex, filterByCategoryType, initialSelectedItem = null, confirmButtonText, disableQuantity
+  preselectedItemId, preselectedVariation, filterByColorHex, filterByCategoryType, initialSelectedItem = null, confirmButtonText, disableQuantity,
+  initialDate, isDateDisabled, showDatePicker
 }) => {
   const [assignmentScope, setAssignmentScope] = useState<'matching' | 'all'>('matching');
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
@@ -50,9 +55,16 @@ export const SingleItemSelectionModal: React.FC<ItemSelectionModalProps> = ({
   const [attireType, setAttireType] = useState("");
   const [selectedAge, setSelectedAge] = useState("");
   const [selectedGender, setSelectedGender] = useState("");
+  const [targetDate, setTargetDate] = useState<Date | null>(null);
   const [showFilters, setShowFilters] = useState(true);
   const [selectedSize, setSelectedSize] = useState("");
   const ITEMS_PER_PAGE = 12;
+
+  useEffect(() => {
+      if (show) {
+          setTargetDate(initialDate || null);
+      }
+  }, [show, initialDate]);
 
   useEffect(() => {
     if (!show) return;
@@ -94,6 +106,10 @@ export const SingleItemSelectionModal: React.FC<ItemSelectionModalProps> = ({
             ageGroup: selectedAge, 
             gender: selectedGender 
         };
+
+        if (targetDate) {
+          params.availabilityDate = format(targetDate, 'yyyy-MM-dd');
+        }
         
         if (mode === 'assignment' && assignmentScope === 'matching' && filterByColorHex) {
           params.colorHex = filterByColorHex;
@@ -135,7 +151,7 @@ export const SingleItemSelectionModal: React.FC<ItemSelectionModalProps> = ({
       finally { setLoadingInventory(false); }
     };
     fetchProducts();
-  }, [show, currentPage, searchTerm, selectedSort, attireType, selectedAge, selectedGender, addAlert, preselectedItemId, filterByColorHex, assignmentScope, mode, filterByCategoryType, initialSelectedItem]);
+  }, [show, currentPage, searchTerm, selectedSort, attireType, selectedAge, selectedGender, addAlert, preselectedItemId, filterByColorHex, assignmentScope, mode, filterByCategoryType, initialSelectedItem, targetDate]);
   
   useEffect(() => { if (currentPage !== 1) setCurrentPage(1); }, [searchTerm, selectedSort, attireType, selectedAge, selectedGender, assignmentScope, selectedSize]);
 
@@ -216,7 +232,11 @@ export const SingleItemSelectionModal: React.FC<ItemSelectionModalProps> = ({
               assignmentScope={assignmentScope}
               onAssignmentScopeChange={setAssignmentScope}
               selectedSize={selectedSize}
-              onSizeChange={setSelectedSize}  
+              onSizeChange={setSelectedSize}
+              targetDate={targetDate}
+              onTargetDateChange={setTargetDate}
+              isDateDisabled={isDateDisabled}
+              showDatePicker={showDatePicker}
             />
         )}
       </Modal.Body>
@@ -228,7 +248,7 @@ export const SingleItemSelectionModal: React.FC<ItemSelectionModalProps> = ({
             </Button>
             
             <Button variant="primary" onClick={handleConfirmSelection} disabled={!selectedVariation}>
-              {confirmButtonText || (mode === 'rental' ? 'Confirm Selection' : 'Assign Item')}
+              {confirmButtonText || (mode === 'rental' ? 'Select' : 'Assign Item')}
             </Button>
           </>
         )}

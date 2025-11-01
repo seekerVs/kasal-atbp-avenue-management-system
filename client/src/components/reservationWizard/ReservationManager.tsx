@@ -17,9 +17,10 @@ interface ReservationManagerProps {
   setReservation: React.Dispatch<React.SetStateAction<ReservationState>>;
   addAlert: (message: string, type: 'success' | 'danger' | 'warning' | 'info') => void;
   onSavePackageConfig: (config: PackageConfigurationData, pkg: Package, motifId: string, editingId: string | null) => void;
+  reserveDate: string;
 }
 
-export const ReservationManager: React.FC<ReservationManagerProps> = ({ reservation, setReservation, addAlert, onSavePackageConfig }) => {
+export const ReservationManager: React.FC<ReservationManagerProps> = ({ reservation, setReservation, addAlert, onSavePackageConfig, reserveDate }) => {
   const [showPackageModal, setShowPackageModal] = useState(false);
   // We can add a state for the single item modal here as well for consistency
   const [showItemModal, setShowItemModal] = useState(false); 
@@ -241,6 +242,7 @@ export const ReservationManager: React.FC<ReservationManagerProps> = ({ reservat
         show={showPackageModal}
         onHide={() => setShowPackageModal(false)}
         onSelect={handleAddPackage}
+        targetDate={reserveDate ? new Date(reserveDate) : null}
       />
 
       <SingleItemSelectionModal 
@@ -255,6 +257,8 @@ export const ReservationManager: React.FC<ReservationManagerProps> = ({ reservat
         mode="rental"
         preselectedItemId={itemToEdit?.itemId}
         preselectedVariation={`${itemToEdit?.variation.color.name}, ${itemToEdit?.variation.size}`}
+        initialDate={reservation.reserveDate ? new Date(reservation.reserveDate) : null} // <-- ADD THIS
+        isDateDisabled={true}
       />
 
       <PackageConfigurationModal

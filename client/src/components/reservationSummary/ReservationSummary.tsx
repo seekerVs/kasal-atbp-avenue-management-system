@@ -82,7 +82,7 @@ export const ReservationSummary = React.forwardRef<HTMLDivElement, ReservationSu
           </p>
         </Col>
         <Col xs={6} className="text-end">
-          <h2 className="mb-1">Reservation Invoice</h2>
+          <h2 className="mb-1">Reservation Summary</h2>
           <p className="mb-0"><strong>Reservation ID:</strong> {reservation._id}</p>
           <p className="mb-0"><strong>Date Issued:</strong> {format(new Date(), 'MMM dd, yyyy')}</p>
         </Col>

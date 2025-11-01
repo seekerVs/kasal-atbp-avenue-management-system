@@ -1,14 +1,23 @@
 // client/src/layouts/packageViewer/PackageViewer.tsx
 
 import { useMemo, useState, useEffect, useRef } from "react";
-import { Col, Row, Image, Stack, Form, Button, Alert, Carousel, ListGroup, Accordion } from "react-bootstrap";
+import { Col, Row, Image, Stack, Form, Button, Alert, Carousel, ListGroup, Accordion, OverlayTrigger, Tooltip } from "react-bootstrap";
 import { X, Check2 } from "react-bootstrap-icons";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Package as PackageType, InventoryItem, AssignedItem } from "../../types";
+import { Package as PackageType, InventoryItem, AssignedItem, ColorMotif } from "../../types";
 import api from "../../services/api";
 import './packageViewer.css';
 import namer from 'color-namer';
 import { DataPrivacyModal } from "../../components/modals/dataPrivacyModal/DataPrivacyModal";
+import { format } from "date-fns";
+
+interface EnrichedColorMotif extends ColorMotif {
+  isAvailable?: boolean;
+}
+
+interface EnrichedPackage extends PackageType {
+  colorMotifs: EnrichedColorMotif[];
+}
 
 const normalizeHex = (hex: string): string => {
   if (!hex || typeof hex !== 'string') return '';
@@ -21,6 +30,8 @@ function PackageViewer() {
   const navigate = useNavigate();
   const location = useLocation();
   const selectedPackage = location.state?.packageData as PackageType | undefined;
+  const targetDate = location.state?.targetDate as Date | undefined;
+  const [packageDetails, setPackageDetails] = useState<EnrichedPackage | null>(null);
 
   const [selectedMotifHex, setSelectedMotifHex] = useState("");
   const [error, setError] = useState("");
@@ -32,14 +43,38 @@ function PackageViewer() {
 
 
   useEffect(() => {
-    if (selectedPackage) {
-      api.get('/inventory?limit=1000')
-        .then(inventoryRes => {
-          setInventory(inventoryRes.data.items || []);
-        })
-        .catch(() => console.error('Could not load inventory data for preview.'));
+    if (!selectedPackage || !targetDate) {
+      // If data is missing, navigate away or show an error
+      if (!selectedPackage) setError("No package data provided.");
+      if (!targetDate) setError("No reservation date was selected.");
+      return;
     }
-  }, [selectedPackage]);
+    
+    const fetchPackageAvailability = async () => {
+      try {
+        const dateStr = format(new Date(targetDate), 'yyyy-MM-dd');
+        const [packageRes, inventoryRes] = await Promise.all([
+          api.get(`/packages/${selectedPackage._id}/availability?date=${dateStr}`),
+          api.get('/inventory?limit=1000')
+        ]);
+
+        setPackageDetails(packageRes.data);
+        setInventory(inventoryRes.data.items || []);
+
+        // Automatically select the first AVAILABLE motif
+        const firstAvailableMotif = packageRes.data.colorMotifs.find((m: EnrichedColorMotif) => m.isAvailable);
+        if (firstAvailableMotif) {
+          setSelectedMotifHex(firstAvailableMotif.motifHex);
+        }
+
+      } catch (err) {
+        setError("Could not load package availability. Please try again.");
+        console.error(err);
+      }
+    };
+
+    fetchPackageAvailability();
+  }, [selectedPackage, targetDate]);
 
   // --- ADDED: Memoized maps and display logic from modal ---
   const inventoryMap = useMemo(() => new Map(inventory.map(item => [item._id, item])), [inventory]);
@@ -95,23 +130,37 @@ function PackageViewer() {
   }, [assignedItemsForDisplay]);
 
   const availableMotifs = useMemo(() => {
-    if (!selectedPackage) return [];
-    return selectedPackage.colorMotifs.map(motif => {
+    if (!packageDetails) return [];
+    
+    return packageDetails.colorMotifs.map(motif => {
       let generatedName = 'Custom Color';
       try {
         const names = namer(motif.motifHex);
         generatedName = names.ntc[0]?.name || names.basic[0]?.name || 'Custom Color';
         generatedName = generatedName.replace(/\b\w/g, char => char.toUpperCase());
-      } catch (e) { console.warn(`Could not name color for hex: ${motif.motifHex}`, e); }
-      return { name: generatedName, hex: motif.motifHex };
+      } catch (e) {
+        console.warn(`Could not name color for hex: ${motif.motifHex}`, e);
+      }
+      return {
+        name: generatedName,
+        hex: motif.motifHex,
+        isAvailable: motif.isAvailable // <-- Pass the availability flag through
+      };
     });
-  }, [selectedPackage]);
+  }, [packageDetails]);
 
-  const handleReservePackage = () => {
-    if (!selectedMotifHex.trim()) {
-      setError("Please specify a color motif for your event.");
+  const handleInitiateReservation = () => {
+    if (!packageDetails || !selectedMotifHex.trim()) {
+      setError("Please select a valid color motif for your event.");
       return;
     }
+    
+    const selectedMotif = packageDetails.colorMotifs.find(m => m.motifHex === selectedMotifHex);
+    if (!selectedMotif || !selectedMotif.isAvailable) {
+      setError("The selected motif is not available for the chosen date.");
+      return;
+    }
+
     setError("");
     setShowPrivacyModal(true);
   };
@@ -140,7 +189,7 @@ function PackageViewer() {
 
     sessionStorage.setItem('pendingReservationItem', JSON.stringify(reservationPayload));
     setShowPrivacyModal(false);
-    navigate('/reservations/new');
+    navigate('/reservations/new', { state: { targetDate: targetDate } });
   };
 
   if (!selectedPackage) {
@@ -152,8 +201,6 @@ function PackageViewer() {
       </div>
     );
   }
-  
-  const hasPredefinedMotifs = availableMotifs && availableMotifs.length > 0;
 
   return (
     <>
@@ -195,21 +242,26 @@ function PackageViewer() {
                 <div>
                   <Form.Group className="mb-3" controlId="colorMotif">
                     <Form.Label className="selector-label">Color Motif <span className="text-danger">*</span></Form.Label>
-                    {hasPredefinedMotifs ? (
                       <div className="motif-swatch-container mt-1">
                         {availableMotifs.map((m, index) => (
-                          <button
+                          <OverlayTrigger
                             key={index}
-                            className={`motif-swatch ${selectedMotifHex === m.hex ? 'active' : ''}`}
-                            style={{ backgroundColor: m.hex }}
-                            title={m.name}
-                            onClick={() => setSelectedMotifHex(m.hex)}
-                          />
+                            placement="top"
+                            overlay={
+                              <Tooltip id={`tooltip-motif-${index}`}>
+                                {!m.isAvailable ? 'Unavailable for selected date' : m.name}
+                              </Tooltip>
+                            }
+                          >
+                            <button
+                              className={`motif-swatch ${selectedMotifHex === m.hex ? 'active' : ''} ${!m.isAvailable ? 'disabled-swatch' : ''}`}
+                              style={{ backgroundColor: m.hex }}
+                              onClick={() => m.isAvailable && setSelectedMotifHex(m.hex)}
+                              disabled={!m.isAvailable}
+                            />
+                          </OverlayTrigger>
                         ))}
                       </div>
-                    ) : (
-                      <Form.Control type="text" placeholder="e.g., Champagne & Sage Green" value={selectedMotifHex} onChange={(e) => setSelectedMotifHex(e.target.value)} required />
-                    )}
                   </Form.Group>
                   {error && <Alert variant="warning" className="py-2 small">{error}</Alert>}
                 </div>
@@ -254,7 +306,12 @@ function PackageViewer() {
                 )}
                 
                 <div className="d-grid my-2">
-                  <Button className="reserve-package-btn" size="lg" onClick={handleReservePackage} disabled={!selectedMotifHex.trim()}>
+                  <Button 
+                    className="reserve-package-btn" 
+                    size="lg" 
+                    onClick={handleInitiateReservation} 
+                    disabled={!selectedMotifHex.trim() || !availableMotifs.some(m => m.isAvailable)}
+                  >
                     Reserve Now
                   </Button>
                 </div>

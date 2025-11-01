@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from "react";
-import { Container, Row, Col, Button, Card, Spinner, Modal } from 'react-bootstrap';
-import { ClipboardCheck, ExclamationTriangleFill } from 'react-bootstrap-icons';
+import React, { useState, useEffect, useRef, useMemo } from "react";
+import { Container, Row, Col, Button, Card, Spinner, Modal, Form } from 'react-bootstrap';
+import { CalendarEvent, ClipboardCheck, ExclamationTriangleFill } from 'react-bootstrap-icons';
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 
@@ -14,6 +14,7 @@ import { v4 as uuidv4 } from 'uuid';
 import ConfirmationModal from "../../components/modals/confirmationModal/ConfirmationModal";
 import { CustomItemForm } from "../../components/forms/customItemForm/CustomItemForm";
 import { useSensorData } from "../../hooks/useSensorData";
+import DatePicker from "react-datepicker";
 
 // --- INITIAL STATE & CONSTANTS ---
 const initialCustomerDetails: CustomerInfo = { 
@@ -62,13 +63,10 @@ function CustomRent() {
   const [tailoringData, setTailoringData] = useState(initialTailoringData);
   const [priceInput, setPriceInput] = useState('0');
 
-  const [isNewCustomerMode, setIsNewCustomerMode] = useState(true);
-  const [existingOpenRental, setExistingOpenRental] = useState<RentalOrder | null>(null);
   const [selectedRentalForDisplay, setSelectedRentalForDisplay] = useState<RentalOrder | null>(null);
   const [showZeroPriceModal, setShowZeroPriceModal] = useState(false);
   const [showWarningModal, setShowWarningModal] = useState(false);
   const [warnings, setWarnings] = useState<string[]>([]);
-  const [pendingAction, setPendingAction] = useState<'create' | 'add' | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -77,18 +75,28 @@ function CustomRent() {
   const [customerDetails, setCustomerDetails] = useState<CustomerInfo>(initialCustomerDetails);
   const [activeMeasurementField, setActiveMeasurementField] = useState<string | null>(null);
   const [lastInsertedTimestamp, setLastInsertedTimestamp] = useState<string | null>(null)
+  const [targetDate, setTargetDate] = useState<Date | null>(null);
+  const [showDateChangeWarning, setShowDateChangeWarning] = useState(false);
+  const [pendingDateChange, setPendingDateChange] = useState<Date | null>(null);
+  const [unavailableDates, setUnavailableDates] = useState<Date[]>([]);
+
+  const isCustomerInfoValid = useMemo(() => {
+    return customerDetails.name.trim() !== '' && /^09\d{9}$/.test(customerDetails.phoneNumber);
+  }, [customerDetails]);
   
   // --- Data Fetching Effect ---
   useEffect(() => {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [refsRes, rentalsRes] = await Promise.all([
+            const [refsRes, rentalsRes, unavailableRes] = await Promise.all([
                 api.get('/measurementrefs'),
                 api.get('/rentals'),
+                api.get('/unavailability') // <-- ADDED
             ]);
             setMeasurementRefs(refsRes.data || []);
             setAllRentals(rentalsRes.data || []);
+            setUnavailableDates(unavailableRes.data.map((rec: { date: string }) => new Date(rec.date))); // <-- ADDED
         } catch (err) { 
             addAlert("Failed to load initial data.", "danger");
         } finally { setLoading(false); }
@@ -175,6 +183,54 @@ function CustomRent() {
     setTailoringData(prev => ({ ...prev, measurements: { ...prev.measurements, [field]: value } }));
   };
 
+  const isSelectableDate = (date: Date): boolean => {
+    const day = date.getDay();
+    if (day === 0) { // Disable Sundays
+      return false;
+    }
+    const isUnavailable = unavailableDates.some(
+      (unavailableDate) => new Date(unavailableDate).toDateString() === date.toDateString()
+    );
+    return !isUnavailable;
+  };
+
+  const handleDateChangeRequest = (newDate: Date | null) => {
+    if (!newDate) {
+      // If the date is being cleared, just update the state.
+      setTargetDate(null);
+      return;
+    }
+
+    const hasItems = !!selectedRefId;
+    const currentDateString = targetDate ? format(targetDate, 'yyyy-MM-dd') : '';
+    const newDateString = format(newDate, 'yyyy-MM-dd');
+    
+    // Check if there are dates that would be cleared.
+    const hasDatesToClear = !!tailoringData.fittingDate || !!tailoringData.completionDate;
+
+    // Only show the modal if the date is changing, details are entered, AND there are dates to clear.
+    if (newDateString !== currentDateString && hasItems && hasDatesToClear) {
+      setPendingDateChange(newDate);
+      setShowDateChangeWarning(true);
+    } else {
+      // Otherwise, just update the date directly without showing the modal.
+      setTargetDate(newDate);
+    }
+  };
+
+  const handleConfirmDateChange = () => {
+    setTargetDate(pendingDateChange);
+
+    setTailoringData(prev => ({
+      ...prev,
+      fittingDate: '',
+      completionDate: '',
+    }));
+
+    setShowDateChangeWarning(false);
+    setPendingDateChange(null);
+  };
+
   const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => { 
     setSelectedCategory(e.target.value); 
     setSelectedRefId(''); 
@@ -197,9 +253,8 @@ function CustomRent() {
   };
 
   const handleSelectCustomer = (selectedRental: RentalOrder) => {
-    setCustomerDetails(selectedRental.customerInfo[0]); // This is the correct state to update
+    setCustomerDetails(selectedRental.customerInfo[0]);
     setSelectedRentalForDisplay(selectedRental);
-    setExistingOpenRental(selectedRental.status === 'Pending' ? selectedRental : null);
   };
   
   const handleDynamicListChange = (listType: 'materials', index: number, value: string) => {
@@ -223,41 +278,59 @@ function CustomRent() {
 
   const buildPayload = async () => {
     const uploadedUrls = await dropzoneRef.current?.uploadAll();
-    return {
+    
+    const payload: any = {
       customerInfo: [customerDetails],
       customTailoring: [{ 
-          ...tailoringData, // The state is now the complete object
+          ...tailoringData,
           _id: uuidv4(),
           referenceImages: uploadedUrls || [],
       }]
     };
+
+    // --- Conditionally add rental dates ---
+    if (tailoringData.tailoringType === 'Tailored for Rent-Back' && targetDate) {
+      const startDate = targetDate;
+      const endDate = new Date(startDate);
+      endDate.setDate(startDate.getDate() + 3);
+
+      payload.rentalStartDate = format(startDate, 'yyyy-MM-dd');
+      payload.rentalEndDate = format(endDate, 'yyyy-MM-dd');
+    }
+
+    return payload;
   };
 
-  const handleFormSubmission = (action: 'create' | 'add') => {
-    const { hasErrors, warnings: newWarnings } = checkForIssues();
+  const executeSubmission = async () => {
+      setIsSubmitting(true);
+      try {
+          const payload = await buildPayload();
+          const response = await api.post('/rentals', payload);
+          addAlert("Custom rental created successfully! Redirecting...", "success");
+          setTimeout(() => navigate(`/rentals/${response.data._id}`), 1500);
+      } catch (err: any) {
+          addAlert(err.response?.data?.message || "Failed to process request.", 'danger');
+      } finally {
+          setIsSubmitting(false);
+      }
+  }
 
-    if (hasErrors) {
-      return; // Stop on hard validation errors
-    }
+  const handleFormSubmission = () => {
+      const { hasErrors, warnings: newWarnings } = checkForIssues();
+      if (hasErrors) return;
 
-    // Store the action for later use by the modals
-    setPendingAction(action);
+      if (newWarnings.length > 0) {
+        setWarnings(newWarnings);
+        setShowWarningModal(true);
+        return;
+      }
 
-    // 1. Check for optional field warnings first.
-    if (newWarnings.length > 0) {
-      setWarnings(newWarnings);
-      setShowWarningModal(true);
-      return; // STOP execution. The warning modal will handle the next step.
-    }
+      if (tailoringData.price <= 0) {
+        setShowZeroPriceModal(true);
+        return;
+      }
 
-    // 2. If no warnings, check for zero price.
-    if (tailoringData.price <= 0) {
-      setShowZeroPriceModal(true);
-      return; // STOP execution. The price modal will handle the next step.
-    }
-
-    // 3. If there were NO warnings AND the price is > 0, execute immediately.
-    executeSubmission(action);
+      executeSubmission();
   };
 
   const validateCustomerDetails = (): boolean => {
@@ -328,85 +401,94 @@ function CustomRent() {
     return { hasErrors: errors.length > 0, warnings };
   };
 
-  // We create a new helper function for the actual API call logic
-  // to avoid duplicating it.
-  const executeSubmission = async (action: 'create' | 'add') => {
-      setIsSubmitting(true);
-      try {
-          const payload = await buildPayload();
-          if (action === 'add' && existingOpenRental?._id) {
-              await api.put(`/rentals/${existingOpenRental._id}/addItem`, payload);
-              addAlert("Custom item added successfully! Redirecting...", "success");
-              setTimeout(() => navigate(`/rentals/${existingOpenRental._id}`), 1500);
-          } else {
-              const response = await api.post('/rentals', payload);
-              addAlert("Custom rental created successfully! Redirecting...", "success");
-              setTimeout(() => navigate(`/rentals/${response.data._id}`), 1500);
-          }
-      } catch (err: any) {
-          addAlert(err.response?.data?.message || "Failed to pending request.", 'danger');
-      } finally {
-          setIsSubmitting(false);
-      }
-  }
-
   if (loading) return <div className="text-center py-5"><Spinner /></div>;
 
   return (
     <Container fluid>
       <h2 className="mb-4">New Custom Tailoring</h2>
       <Row className="g-4">
-        <Col lg={6} xl={7}>
-            <Card>
-                <Card.Header as="h5" className="d-flex align-items-center"><ClipboardCheck className="me-2"/>Outfit Details</Card.Header>
+      {/* --- LEFT COLUMN: DATE & ITEM DETAILS --- */}
+      <Col lg={6} xl={7}>
+        {/* Step 2: Select Rental Date (Conditionally Visible) */}
+        {tailoringData.tailoringType === 'Tailored for Rent-Back' && (
+            <Card className="mb-4">
+                <Card.Header as="h5">
+                    <CalendarEvent className="me-2" />Select Rental Start Date
+                </Card.Header>
                 <Card.Body>
-                    <CustomItemForm
-                        formData={tailoringData}
-                        measurementRefs={measurementRefs}
-                        selectedCategory={selectedCategory}
-                        priceInput={priceInput}
-                        onPriceBlur={handlePriceBlur} 
-                        selectedRefId={selectedRefId}
-                        errors={{errors}} // We will wire up a proper error state later if needed
-                        isCreateMode={true}
-                        onInputChange={handleInputChange}
-                        onDateChange={handleDateChange}
-                        isFittingDateDisabled={false}
-                        onCategoryChange={handleCategoryChange}
-                        onRefChange={handleRefChange}
-                        onMeasurementChange={handleMeasurementChange}
-                        onDynamicListChange={handleDynamicListChange}
-                        onAddDynamicListItem={addDynamicListItem}
-                        onRemoveDynamicListItem={removeDynamicListItem}
-                        dropzoneRef={dropzoneRef}
-                        onInsertMeasurement={handleInsertMeasurement}
-                        onMeasurementFocus={setActiveMeasurementField}
-                        activeMeasurementField={activeMeasurementField}
-                        sensorData={sensorData}
-                        isSensorLoading={isLoading}
-                        sensorError={sensorError}
-                    />
+                    <Form.Group>
+                        <Form.Label>The 4-day rental period will begin on this date.</Form.Label>
+                        <DatePicker
+                            selected={targetDate}
+                            onChange={handleDateChangeRequest}
+                            minDate={new Date()}
+                            className="form-control"
+                            placeholderText={!isCustomerInfoValid ? "Fill customer details first..." : "Click to select a date..."}
+                            isClearable
+                            dateFormat="MMMM d, yyyy"
+                            wrapperClassName="w-100"
+                            disabled={!isCustomerInfoValid}
+                            filterDate={isSelectableDate}
+                        />
+                    </Form.Group>
                 </Card.Body>
             </Card>
-        </Col>
-        
-        <Col lg={6} xl={5}>
-          <CustomerDetailsCard 
-            customerDetails={customerDetails}
-            setCustomerDetails={setCustomerDetails}
-            isNewCustomerMode={isNewCustomerMode}
-            onSetIsNewCustomerMode={setIsNewCustomerMode}
-            allRentals={allRentals}
-            onSelectExisting={handleSelectCustomer}
-            onSubmit={handleFormSubmission}
-            isSubmitting={isSubmitting}
-            canSubmit={!!selectedRefId}
-            existingOpenRental={existingOpenRental}
-            selectedRentalForDisplay={selectedRentalForDisplay}
-            errors={errors}
-          />
-        </Col>
-      </Row>
+        )}
+
+        {/* Step 3: Outfit Details */}
+        <Card>
+            <Card.Header as="h5" className="d-flex align-items-center"><ClipboardCheck className="me-2"/>Outfit Details</Card.Header>
+            <Card.Body>
+                <CustomItemForm
+                    formData={tailoringData}
+                    measurementRefs={measurementRefs}
+                    selectedCategory={selectedCategory}
+                    priceInput={priceInput}
+                    onPriceBlur={handlePriceBlur} 
+                    selectedRefId={selectedRefId}
+                    errors={{errors}}
+                    isCreateMode={true}
+                    onInputChange={handleInputChange}
+                    onDateChange={handleDateChange}
+                    isFittingDateDisabled={false}
+                    onCategoryChange={handleCategoryChange}
+                    onRefChange={handleRefChange}
+                    onMeasurementChange={handleMeasurementChange}
+                    onDynamicListChange={handleDynamicListChange}
+                    onAddDynamicListItem={addDynamicListItem}
+                    onRemoveDynamicListItem={removeDynamicListItem}
+                    dropzoneRef={dropzoneRef}
+                    onInsertMeasurement={handleInsertMeasurement}
+                    onMeasurementFocus={setActiveMeasurementField}
+                    activeMeasurementField={activeMeasurementField}
+                    sensorData={sensorData}
+                    isSensorLoading={isLoading}
+                    sensorError={sensorError}
+                />
+            </Card.Body>
+        </Card>
+      </Col>
+      
+      {/* --- RIGHT COLUMN: CUSTOMER DETAILS --- */}
+      <Col lg={6} xl={5}>
+        <CustomerDetailsCard 
+          customerDetails={customerDetails}
+          setCustomerDetails={setCustomerDetails}
+          allRentals={allRentals}
+          onSelectExisting={handleSelectCustomer}
+          onSubmit={handleFormSubmission}
+          isSubmitting={isSubmitting}
+          canSubmit={
+            isCustomerInfoValid &&
+            !!selectedRefId &&
+            (tailoringData.tailoringType === 'Tailored for Purchase' || 
+            (tailoringData.tailoringType === 'Tailored for Rent-Back' && !!targetDate))
+          }
+          selectedRentalForDisplay={selectedRentalForDisplay}
+          errors={errors}
+        />
+      </Col>
+    </Row>
 
       <Modal show={showZeroPriceModal} onHide={() => setShowZeroPriceModal(false)} centered>
         <Modal.Header closeButton><Modal.Title><ExclamationTriangleFill className="me-2 text-warning" />Confirm Price</Modal.Title></Modal.Header>
@@ -415,12 +497,9 @@ function CustomRent() {
           <Button variant="secondary" onClick={() => setShowZeroPriceModal(false)}>Cancel</Button>
           <Button variant="primary" onClick={() => { 
             setShowZeroPriceModal(false); 
-            if (pendingAction) {
-              // Call the new helper function with the stored action string
-              executeSubmission(pendingAction); 
-            }
+            executeSubmission(); // Call the simplified function directly
           }}>
-            Yes, Proceed
+            Proceed
           </Button>
         </Modal.Footer>
       </Modal>
@@ -429,18 +508,38 @@ function CustomRent() {
         show={showWarningModal}
         onHide={() => setShowWarningModal(false)}
         onConfirm={() => {
-            setShowWarningModal(false); // Hide the current modal.
-            if (!pendingAction) return;
+            setShowWarningModal(false);
             // The user has approved the warnings, now check for zero price.
             if (tailoringData.price <= 0) {
-                setShowZeroPriceModal(true); // Show the next modal in the sequence.
+                setShowZeroPriceModal(true);
             } else {
-                executeSubmission(pendingAction); // No more checks needed, execute.
+                executeSubmission(); // Call the simplified function directly
             }
         }}
         title="Missing Optional Details"
         warnings={warnings}
       />
+
+      <Modal show={showDateChangeWarning} onHide={() => setShowDateChangeWarning(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>
+            <ExclamationTriangleFill className="me-2 text-warning" />
+            Change Rental Date?
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p>Changing the rental start date will clear the existing Fitting Date and Target Completion Date fields.</p>
+          <p className="mb-0">Are you sure you want to proceed?</p>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowDateChangeWarning(false)}>
+            Cancel
+          </Button>
+          <Button variant="warning" onClick={handleConfirmDateChange}>
+            Yes
+          </Button>
+        </Modal.Footer>
+      </Modal>
 
     </Container>
   );

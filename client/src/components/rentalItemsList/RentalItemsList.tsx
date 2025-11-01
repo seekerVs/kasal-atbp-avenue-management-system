@@ -136,29 +136,29 @@ const RentalItemsList: React.FC<RentalItemsListProps> = ({
   };
 
   return (
-    <>
+    <div className='lh-1'>
       {singleRents?.length > 0 && (
         <>
-          <hr />
-          <h5 className="mb-3"><BoxSeam className="me-2" />Single Rented Items</h5>
+          <hr className='m-0'/>
+          <h5 className="mb-2"><BoxSeam className="me-2" />Single Rented Items</h5>
           {singleRents.map((item, index) => <SingleItem key={`single-${index}`} item={item} />)}
         </>
       )}
       {packageRents?.length > 0 && (
         <>
-          <hr />
-          <h5 className="mb-3"><BoxSeam className="me-2" />Package Rentals</h5>
+          <hr className='m-0'/>
+          <h5 className="mb-2"><BoxSeam className="me-2" />Package Rentals</h5>
           {packageRents.map((pkg, index) => <PackageItem key={`pkg-${index}`} pkg={pkg} />)}
         </>
       )}
       {customTailoring?.length > 0 && (
         <>
-          <hr />
-          <h5 className="mb-3"><PencilSquare className="me-2" />Custom Tailoring</h5>
+          <hr className='m-0'/>
+          <h5 className="mb-2"><PencilSquare className="me-2" />Custom Tailoring</h5>
           {customTailoring.map((item, index) => <CustomItem key={`custom-${index}`} item={item} />)}
         </>
       )}
-    </>
+    </div>
   );
 };
 

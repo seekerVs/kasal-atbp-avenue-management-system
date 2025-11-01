@@ -1,6 +1,6 @@
 const express = require('express');
 const mongoose = require('mongoose');
-const { nanoid } = require('nanoid');
+const { customAlphabet } = require('nanoid');
 const asyncHandler = require('../utils/asyncHandler');
 const RentalModel = require('../models/Rental.js');
 const ItemModel = require('../models/Item.js');
@@ -15,6 +15,9 @@ const DamagedItem = require('../models/DamagedItem');
 const namer = require('color-namer');
 const { sendReturnReminder } = require('../utils/emailService.js');
 const router = express.Router();
+const { checkAvailability } = require('../utils/availabilityChecker');
+
+const nanoid_rental = customAlphabet('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ', 8);
 
 // GET all rentals with filtering
 router.get('/', asyncHandler(async (req, res) => {
@@ -38,152 +41,94 @@ router.get('/:id', asyncHandler(async (req, res) => {
 
 // POST a new rental (single, package, or custom)
 router.post('/', protect, sanitizeRequestBody, asyncHandler(async (req, res) => {
-    const { customerInfo, singleRents, packageRents, customTailoring } = req.body;
+    const { customerInfo, singleRents, packageRents, customTailoring, rentalStartDate, rentalEndDate } = req.body;
 
-    // --- 1. Validate mandatory information ---
+    // --- 1. PRELIMINARY VALIDATION ---
+    // (This part is correct and remains the same)
     if (!customerInfo || !Array.isArray(customerInfo) || customerInfo.length === 0) {
-        return res.status(400).json({ message: "Valid customer information is required." });
+        res.status(400); throw new Error("Valid customer information is required.");
     }
-    const hasRentalData = (singleRents && singleRents.length > 0) || 
-                          (packageRents && packageRents.length > 0) || 
-                          (customTailoring && customTailoring.length > 0);
+    const hasRentalData = (singleRents?.length > 0) || (packageRents?.length > 0) || (customTailoring?.length > 0);
     if (!hasRentalData) {
-        return res.status(400).json({ message: "Request must include at least one rental item." });
+        res.status(400); throw new Error("Request must include at least one rental item.");
     }
-
+    if (customTailoring?.some(item => item.tailoringType === 'Tailored for Rent-Back') && !rentalStartDate) {
+        res.status(400); throw new Error("A rental start date is required for rent-back items.");
+    }
+    
     const session = await mongoose.startSession();
-    session.startTransaction();
+    // --- THIS IS THE REFACTORED LOGIC ---
+    await session.withTransaction(async () => {
+        // --- 2. BUILD REQUIRED ITEMS LIST & PERFORM FINAL AVAILABILITY CHECK ---
+        const itemsRequired = new Map();
+        if (singleRents) {
+            singleRents.forEach(item => {
+                const key = `${item.itemId}-${item.variation.color.name}-${item.variation.size}`;
+                itemsRequired.set(key, (itemsRequired.get(key) || 0) + item.quantity);
+            });
+        }
+        if (packageRents) {
+            packageRents.forEach(pkg => {
+                (pkg.packageFulfillment || []).forEach(f => {
+                    if (!f.isCustom && f.assignedItem?.itemId && f.assignedItem?.variation) {
+                        const [color, size] = f.assignedItem.variation.split(', ');
+                        const key = `${f.assignedItem.itemId}-${color}-${size}`;
+                        itemsRequired.set(key, (itemsRequired.get(key) || 0) + 1);
+                    }
+                });
+            });
+        }
 
-    try {
-        // --- 2. Prepare the base rental data object ---
-        const newRentalId = `KSL_${nanoid(8)}`;
-        const startDate = new Date();
-        const endDate = new Date(startDate);
-        endDate.setDate(startDate.getDate() + 3); // Default 4-day rental period
+        if (itemsRequired.size > 0) {
+            // IMPORTANT: The session is now automatically passed by withTransaction
+            const { isAvailable, conflictingItems } = await checkAvailability(itemsRequired, rentalStartDate, null, session);
+            if (!isAvailable) {
+                // Throwing an error inside withTransaction automatically aborts it.
+                const error = new Error(`One or more selected items have become unavailable: ${conflictingItems.map(i=>i.name).join(', ')}`);
+                error.statusCode = 409;
+                error.conflictingItems = conflictingItems;
+                throw error;
+            }
+        }
+        
+        // --- 3. IF VALIDATION PASSES, PROCEED WITH CREATION ---
+        const stockUpdates = [];
+        itemsRequired.forEach((quantity, key) => {
+            const [itemId, colorName, size] = key.split('-');
+            stockUpdates.push({
+                updateOne: {
+                    filter: { _id: itemId, "variations.color.name": colorName, "variations.size": size },
+                    update: { $inc: { "variations.$.quantity": -quantity } }
+                }
+            });
+        });
 
+        if (stockUpdates.length > 0) {
+            await ItemModel.bulkWrite(stockUpdates, { session });
+        }
+
+        const newRentalId = `KSL_${nanoid_rental()}`;
         const rentalData = {
             _id: newRentalId,
             customerInfo,
-            singleRents: [],
-            packageRents: [],
-            customTailoring: [],
+            singleRents: singleRents || [],
+            packageRents: packageRents || [],
+            customTailoring: customTailoring || [],
             financials: { shopDiscount: 0, depositAmount: 0 },
-            rentalStartDate: startDate.toISOString().split('T')[0],
-            rentalEndDate: endDate.toISOString().split('T')[0],
+            rentalStartDate: rentalStartDate || new Date().toISOString().split('T')[0],
+            rentalEndDate: rentalEndDate || new Date(new Date().setDate(new Date().getDate() + 3)).toISOString().split('T')[0],
             status: "Pending",
         };
 
-        // --- 3. Process each item type and update stock ---
-
-        // Process Single Rents (using the new structured format)
-        if (singleRents && Array.isArray(singleRents) && singleRents.length > 0) {
-            const stockUpdates = [];
-            for (const item of singleRents) {
-                if (!item.itemId || !item.variation?.color?.hex || !item.variation?.size) {
-                    throw new Error(`Invalid single rent item data received. Missing itemId or variation details.`);
-                }
-
-                const productInDb = await ItemModel.findById(item.itemId).session(session);
-                if (!productInDb) {
-                    throw new Error(`Product with ID "${item.itemId}" not found in inventory.`);
-                }
-
-                const variationInDb = productInDb.variations.find(v => v.color.hex === item.variation.color.hex && v.size === item.variation.size);
-                if (!variationInDb || variationInDb.quantity < item.quantity) {
-                    throw new Error(`Insufficient stock for ${item.name} (${item.variation.color.name}, ${item.variation.size}).`);
-                }
-
-                stockUpdates.push({
-                    updateOne: {
-                        filter: { _id: item.itemId, "variations.color.hex": item.variation.color.hex, "variations.size": item.variation.size },
-                        update: { $inc: { "variations.$.quantity": -item.quantity } }
-                    }
-                });
-            }
-            
-            if (stockUpdates.length > 0) {
-                await ItemModel.bulkWrite(stockUpdates, { session });
-            }
-            
-            rentalData.singleRents = singleRents; // The data is already in the correct format
-        }
-
-        // Process Package Rents (using the new motifHex format)
-        if (packageRents && Array.isArray(packageRents) && packageRents.length > 0) {
-            const stockUpdates = [];
-
-            const packageIds = packageRents.map(p => p.packageId);
-            const packagesFromDb = await PackageModel.find({ _id: { $in: packageIds } }).session(session).lean();
-            const packageMap = new Map(packagesFromDb.map(p => [p._id.toString(), p]));
-
-            const processedPackageRents = []; // Use a new array to build the final objects
-
-            for (const pkg of packageRents) {
-                const fullPackage = packageMap.get(pkg.packageId);
-                if (!fullPackage) {
-                    // This is the error you were seeing. Now it should have a valid ID.
-                    throw new Error(`Package with ID ${pkg.packageId} not found.`);
-                }
-
-                let motifName = 'Manual Assignment';
-                if (pkg.motifHex) { // Now we use motifHex from the payload
-                    try {
-                        const names = namer(pkg.motifHex);
-                        const bestName = names.ntc[0]?.name || "Custom Color";
-                        motifName = bestName.replace(/\b\w/g, char => char.toUpperCase());
-                    } catch (e) {
-                        console.error("Could not name color from hex:", pkg.motifHex, e);
-                    }
-                }
-                
-                if (pkg.packageFulfillment && Array.isArray(pkg.packageFulfillment)) {
-                    for (const fulfillment of pkg.packageFulfillment) {
-                        const item = fulfillment.assignedItem;
-                        if (item && item.itemId && item.variation) {
-                            const [colorName, itemSize] = item.variation.split(', ');
-                            stockUpdates.push({
-                                updateOne: {
-                                    filter: { _id: item.itemId, "variations.color.name": colorName, "variations.size": itemSize },
-                                    update: { $inc: { "variations.$.quantity": -1 } }
-                                }
-                            });
-                        }
-                    }
-                }
-
-                // Create the final object for the database
-                processedPackageRents.push({
-                    ...pkg, // Carry over fulfillment, price, etc.
-                    name: `${fullPackage.name},${motifName}`, // Construct the final name here
-                });
-            }
-
-            if (stockUpdates.length > 0) {
-                await ItemModel.bulkWrite(stockUpdates, { session });
-            }
-            rentalData.packageRents = processedPackageRents; // Assign the correctly processed array
-        }
-
-        // Process Custom Tailoring items
-        if (customTailoring && Array.isArray(customTailoring) && customTailoring.length > 0) {
-            rentalData.customTailoring = customTailoring;
-        }
-
-        // --- 4. Create and save the Mongoose document ---
-        const rental = new RentalModel(rentalData);
-        await rental.save({ session });
+        // Mongoose's create method can accept a session option
+        const createdRentals = await RentalModel.create([rentalData], { session });
+        const rental = createdRentals[0];
         
-        // --- 5. Commit transaction and send response ---
-        await session.commitTransaction();
         res.status(201).json(rental);
+    });
 
-    } catch (error) {
-        await session.abortTransaction();
-        console.error("Rental Creation Failed:", error);
-        throw error;
-    } finally {
-        session.endSession();
-    }
+    // The withTransaction method handles commit and abort automatically.
+    session.endSession();
 }));
 
 // POST /api/rentals/:id/send-reminder
@@ -225,12 +170,11 @@ router.put('/:id/process', protect, sanitizeRequestBody, asyncHandler(async (req
     const { id } = req.params;
     const {
         status,
-        rentalStartDate,
-        rentalEndDate,
         shopDiscount,
         depositAmount,
         depositReimbursed,
-        payment // This is the payment object from the frontend
+        payment,
+        financials: financialUpdates
     } = req.body;
 
     const session = await mongoose.startSession();
@@ -242,24 +186,42 @@ router.put('/:id/process', protect, sanitizeRequestBody, asyncHandler(async (req
             throw new Error("Rental not found.");
         }
 
-        // (Stock restoration logic remains the same)
         const originalStatus = rental.status;
-        if (status === 'To Return' && originalStatus !== 'To Return') {
-            const newStartDate = new Date();
-            const newEndDate = new Date(newStartDate);
-            newEndDate.setDate(newStartDate.getDate() + 3); // 4-day period
 
-            rental.rentalStartDate = newStartDate.toISOString().split('T')[0];
-            rental.rentalEndDate = newEndDate.toISOString().split('T')[0];
-        }
-        if (status === 'Returned' && originalStatus !== 'Returned') {
-            const stockUpdateOperations = [];
-            if (depositReimbursed !== undefined) {
-                if (parseFloat(depositReimbursed) > rental.financials.depositAmount) {
-                     throw new Error(`Reimbursement amount of ${depositReimbursed} exceeds the paid deposit of ${rental.financials.depositAmount}.`);
-                }
-                rental.financials.depositReimbursed = parseFloat(depositReimbursed);
+        // --- CONSOLIDATED & CORRECTED STATUS & DATE LOGIC ---
+
+        // 1. Handle "Mark as Picked Up" (Transition from 'To Pickup')
+        if (status === 'To Return' && originalStatus === 'To Pickup') {
+            const hasReturnableItems =
+                (rental.singleRents?.length > 0) ||
+                (rental.packageRents?.length > 0) ||
+                (rental.customTailoring?.some(item => item.tailoringType === 'Tailored for Rent-Back'));
+
+            if (hasReturnableItems) {
+                // Case A: Items need to be returned -> Set status to 'To Return'
+                const pickupDate = new Date();
+                const returnDate = new Date(pickupDate);
+                returnDate.setDate(pickupDate.getDate() + 3);
+
+                rental.status = 'To Return';
+                rental.rentalStartDate = pickupDate.toISOString().split('T')[0];
+                rental.rentalEndDate = returnDate.toISOString().split('T')[0];
+            } else {
+                // Case B: Purchase-only -> Jump status directly to 'Completed'
+                rental.status = 'Completed';
+                const today = new Date().toISOString().split('T')[0];
+                rental.rentalStartDate = today;
+                rental.rentalEndDate = today;
             }
+        }
+        // 2. Handle "Move to Pickup" (Transition from 'Pending')
+        else if (status === 'To Pickup' && originalStatus === 'Pending') {
+            rental.status = 'To Pickup';
+        }
+        // 3. Handle "Mark as Returned" (which now transitions to 'Completed')
+        else if (status === 'Returned' && originalStatus !== 'Returned') {
+            const stockUpdateOperations = [];
+            
             if (rental.singleRents?.length > 0) {
                 rental.singleRents.forEach(item => {
                     stockUpdateOperations.push({
@@ -275,10 +237,10 @@ router.put('/:id/process', protect, sanitizeRequestBody, asyncHandler(async (req
                     pkg.packageFulfillment?.forEach(fulfillment => {
                         const item = fulfillment.assignedItem;
                         if (!fulfillment.isCustom && item && item.itemId && item.variation) {
-                            const [color, size] = item.variation.split(',').map(s => s.trim());
+                            const [colorName, size] = item.variation.split(',').map(s => s.trim());
                             stockUpdateOperations.push({
                                 updateOne: {
-                                    filter: { _id: item.itemId, "variations.color": color, "variations.size": size },
+                                    filter: { _id: item.itemId, "variations.color.name": colorName, "variations.size": size },
                                     update: { $inc: { "variations.$.quantity": 1 } }
                                 }
                             });
@@ -289,19 +251,22 @@ router.put('/:id/process', protect, sanitizeRequestBody, asyncHandler(async (req
             if (stockUpdateOperations.length > 0) {
                 await ItemModel.bulkWrite(stockUpdateOperations, { session });
             }
+            
+            if (depositReimbursed !== undefined) {
+                 if (parseFloat(depositReimbursed) > rental.financials.depositAmount) {
+                     throw new Error(`Reimbursement amount of ${depositReimbursed} exceeds the paid deposit of ${rental.financials.depositAmount}.`);
+                 }
+                 rental.financials.depositReimbursed = parseFloat(depositReimbursed);
+            }
+
+            rental.status = 'Completed'; // Final status after a return is 'Completed'
+        }
+        // 4. Handle any other explicit status change that wasn't caught above
+        else if (status && status !== originalStatus) {
+            rental.status = status;
         }
         
-        // (General rental info update remains the same)
-        if (status) rental.status = status;
-        if (status === 'To Return' && originalStatus !== 'To Return') {
-            const pickupDate = new Date();
-            const returnDate = new Date(pickupDate);
-            returnDate.setDate(pickupDate.getDate() + 3); // Standard 4-day rental period
-
-            // Set the authoritative start and end dates, ignoring client input
-            rental.rentalStartDate = pickupDate.toISOString().split('T')[0];
-            rental.rentalEndDate = returnDate.toISOString().split('T')[0];
-        }   
+        // --- FINANCIAL & PAYMENT LOGIC (UNCHANGED) ---
         if (!rental.financials) rental.financials = {};
         if (shopDiscount !== undefined) rental.financials.shopDiscount = parseFloat(shopDiscount) || 0;
         if (depositAmount !== undefined) rental.financials.depositAmount = parseFloat(depositAmount) || 0;
@@ -314,15 +279,20 @@ router.put('/:id/process', protect, sanitizeRequestBody, asyncHandler(async (req
                 receiptImageUrl: payment.receiptImageUrl || undefined, 
             };
 
-            // Initialize the payments array if it doesn't exist.
             if (!rental.financials.payments) {
                 rental.financials.payments = [];
             }
             
-            // Simply push the new payment object into the array.
             rental.financials.payments.push(newPayment);
         }
-        // --- END OF NEW PAYMENT LOGIC ---
+
+        if (financialUpdates) {
+            // Object.assign merges the properties from the second object into the first one.
+            // If financialUpdates is { applyScPwdDiscount: true }, this line will
+            // add or update that specific property on rental.financials without
+            // affecting other properties like payments or depositAmount.
+            Object.assign(rental.financials, financialUpdates);
+        }
         
         const updatedRental = await rental.save({ session });
         await session.commitTransaction();
@@ -342,6 +312,95 @@ router.put('/:id/process', protect, sanitizeRequestBody, asyncHandler(async (req
     } finally {
         session.endSession();
     }
+}));
+
+router.put('/:id/reschedule', protect, asyncHandler(async (req, res) => {
+    const { id: rentalId } = req.params;
+    const { newStartDate } = req.body;
+    if (!newStartDate) {
+        res.status(400);
+        throw new Error('A new start date is required.');
+    }
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+        const rental = await RentalModel.findById(rentalId).session(session);
+        if (!rental) {
+            res.status(404);
+            throw new Error("Rental not found.");
+        }
+        if (!['Pending', 'To Pickup'].includes(rental.status)) {
+            res.status(400);
+            throw new Error(`Only rentals with 'Pending' or 'To Pickup' status can be rescheduled.`);
+        }
+
+        const itemsRequired = new Map();
+        rental.singleRents.forEach(i => {
+            const key = `${i.itemId}-${i.variation.color.name}-${i.variation.size}`;
+            itemsRequired.set(key, (itemsRequired.get(key) || 0) + i.quantity);
+        });
+        rental.packageRents.forEach(p => p.packageFulfillment?.forEach(f => {
+            if (!f.isCustom && f.assignedItem?.itemId && f.assignedItem?.variation) {
+                const [color, size] = f.assignedItem.variation.split(', ');
+                const key = `${f.assignedItem.itemId}-${color}-${size}`;
+                itemsRequired.set(key, (itemsRequired.get(key) || 0) + 1);
+            }
+        }));
+        
+        const { isAvailable, conflictingItems } = await checkAvailability(itemsRequired, newStartDate, rentalId, session);
+
+        if (!isAvailable) {
+            const conflictMessage = `Cannot reschedule: ${conflictingItems.map(i => `${i.name} (${i.variation})`).join(', ')} unavailable.`;
+            res.status(409); // 409 Conflict
+            throw new Error(conflictMessage);
+        }
+
+        const userStartDate = new Date(newStartDate);
+        const userEndDate = new Date(userStartDate);
+        userEndDate.setDate(userEndDate.getDate() + 3);
+        rental.rentalStartDate = userStartDate.toISOString().split('T')[0];
+        rental.rentalEndDate = userEndDate.toISOString().split('T')[0];
+
+        const updatedRental = await rental.save({ session });
+        await session.commitTransaction();
+
+        const calculatedFinancials = calculateFinancials(updatedRental.toObject());
+        res.status(200).json({ ...updatedRental.toObject(), financials: calculatedFinancials });
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
+    }
+}));
+
+// GET to check if a rental reschedule is possible
+router.get('/:id/check-reschedule', protect, asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { date } = req.query;
+
+    const rental = await RentalModel.findById(id).lean();
+    if (!rental) {
+        res.status(404);
+        throw new Error("Rental not found.");
+    }
+
+    const itemsRequired = new Map();
+    rental.singleRents.forEach(i => {
+        const key = `${i.itemId}-${i.variation.color.name}-${i.variation.size}`;
+        itemsRequired.set(key, (itemsRequired.get(key) || 0) + i.quantity);
+    });
+    rental.packageRents.forEach(p => p.packageFulfillment?.forEach(f => {
+        if (!f.isCustom && f.assignedItem?.itemId && f.assignedItem?.variation) {
+            const [color, size] = f.assignedItem.variation.split(', ');
+            const key = `${f.assignedItem.itemId}-${color}-${size}`;
+            itemsRequired.set(key, (itemsRequired.get(key) || 0) + 1);
+        }
+    }));
+
+    const result = await checkAvailability(itemsRequired, date, id);
+    res.status(200).json(result);
 }));
 
 // PUT to add a new item to an existing rental
@@ -639,6 +698,37 @@ router.delete('/:rentalId/packages/:packageId', asyncHandler(async (req, res) =>
     } finally {
         session.endSession();
     }
+}));
+
+router.put('/:id/customer', protect, sanitizeRequestBody, asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const newCustomerInfo = req.body;
+
+    // Backend validation
+    if (!newCustomerInfo || !newCustomerInfo.name || !newCustomerInfo.phoneNumber || !newCustomerInfo.address) {
+        res.status(400);
+        throw new Error('Incomplete customer information provided.');
+    }
+
+    const rental = await RentalModel.findById(id);
+    if (!rental) {
+        res.status(404);
+        throw new Error('Rental not found.');
+    }
+
+    // The customerInfo is an array, so we update the first (and only) element.
+    rental.customerInfo[0] = newCustomerInfo;
+
+    const updatedRental = await rental.save();
+
+    // Recalculate financials and send the final, updated object back
+    const calculatedFinancials = calculateFinancials(updatedRental.toObject());
+    const finalResponse = {
+        ...updatedRental.toObject(),
+        financials: calculatedFinancials,
+    };
+    
+    res.status(200).json(finalResponse);
 }));
 
 
@@ -964,10 +1054,10 @@ router.put('/:rentalId/packages/:packageId/consolidated-update', asyncHandler(as
             );
             const urlsFromDeletedItems = itemsBeingDeleted.flatMap(item => item.referenceImages || []);
             
-            const allUrlsToDelete = new Set([...urlsFromDeletedItems, ...(imageUrlsToDelete || [])]);
-            
-            if (allUrlsToDelete.size > 0) {
-                await del(Array.from(allUrlsToDelete));
+            const allUrlsToDelete = [...urlsFromDeletedItems, ...(imageUrlsToDelete || [])].filter(Boolean);
+
+            if (allUrlsToDelete.length > 0) {
+                await del(allUrlsToDelete);
             }
             
             await RentalModel.updateOne(
@@ -977,7 +1067,10 @@ router.put('/:rentalId/packages/:packageId/consolidated-update', asyncHandler(as
             );
         } 
         else if (imageUrlsToDelete && imageUrlsToDelete.length > 0) {
-            await del(imageUrlsToDelete);
+            const filteredUrls = imageUrlsToDelete.filter(Boolean);
+            if (filteredUrls.length > 0) {
+                await del(filteredUrls);
+            }
         }
 
         if (customItems && customItems.length > 0) {
@@ -1029,7 +1122,7 @@ router.post('/from-booking', asyncHandler(async (req, res) => {
             throw new Error('Source booking for the appointment could not be found.');
         }
 
-        const newRentalId = `KSL_${nanoid(8)}`;
+        const newRentalId = `KSL_${nanoid_rental()}`;
 
         const rentalData = {
             _id: newRentalId,
@@ -1195,7 +1288,6 @@ router.post('/from-reservation', protect, asyncHandler(async (req, res) => {
         }
       }
     }
-    // --- END OF NEW LOGIC ---
 
     // Execute all stock decrements
     if (stockUpdates.length > 0) {
@@ -1397,6 +1489,112 @@ router.put('/:id/process-return', protect, asyncHandler(async (req, res) => {
     } catch (error) {
         await session.abortTransaction();
         throw error;
+    } finally {
+        session.endSession();
+    }
+}));
+
+// PUT to add new items to an existing rental
+router.put('/:id/add-items', protect, sanitizeRequestBody, asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { singleRents, packageRents, customTailoring } = req.body;
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        const rental = await RentalModel.findById(id).session(session);
+        if (!rental) {
+            res.status(404);
+            throw new Error("Rental not found.");
+        }
+        
+        if (!['Pending', 'To Pickup'].includes(rental.status)) {
+            res.status(400);
+            throw new Error(`Cannot add items to a rental with status "${rental.status}".`);
+        }
+
+        const stockUpdates = [];
+
+        // --- Process and VALIDATE Single Rents ---
+        if (singleRents && singleRents.length > 0) {
+            for (const newItem of singleRents) {
+                const productInDb = await ItemModel.findById(newItem.itemId).session(session);
+                if (!productInDb) {
+                    throw new Error(`Product ID "${newItem.itemId}" not found.`);
+                }
+                const variationInDb = productInDb.variations.find(v => v.color.hex === newItem.variation.color.hex && v.size === newItem.variation.size);
+                if (!variationInDb || variationInDb.quantity < newItem.quantity) {
+                    throw new Error(`Insufficient stock for ${newItem.name} (${newItem.variation.color.name}, ${newItem.variation.size}). Available: ${variationInDb?.quantity || 0}, Requested: ${newItem.quantity}.`);
+                }
+                
+                // If validation passes, add the update operation and the item to the rental
+                stockUpdates.push({
+                    updateOne: {
+                        filter: { _id: newItem.itemId, "variations.color.hex": newItem.variation.color.hex, "variations.size": newItem.variation.size },
+                        update: { $inc: { "variations.$.quantity": -newItem.quantity } }
+                    }
+                });
+                rental.singleRents.push(newItem);
+            }
+        }
+
+        // --- Process and VALIDATE Package Rents ---
+        if (packageRents && packageRents.length > 0) {
+            for (const newPkg of packageRents) {
+                if (newPkg.packageFulfillment) {
+                    for (const fulfillment of newPkg.packageFulfillment) {
+                        const item = fulfillment.assignedItem;
+                        if (item && item.itemId && item.variation) {
+                            const [colorName, itemSize] = item.variation.split(', ');
+                            
+                            const productInDb = await ItemModel.findById(item.itemId).session(session);
+                            if (!productInDb) throw new Error(`Package item ID "${item.itemId}" not found.`);
+                            
+                            const variationInDb = productInDb.variations.find(v => v.color.name === colorName && v.size === itemSize);
+                            if (!variationInDb || variationInDb.quantity < 1) { // Package items are always quantity 1
+                                throw new Error(`Insufficient stock for package item: ${productInDb.name} (${item.variation}).`);
+                            }
+
+                            stockUpdates.push({
+                                updateOne: {
+                                    filter: { _id: item.itemId, "variations.color.name": colorName, "variations.size": itemSize },
+                                    update: { $inc: { "variations.$.quantity": -1 } }
+                                }
+                            });
+                        }
+                    }
+                }
+                rental.packageRents.push(newPkg);
+            }
+        }
+
+        // --- Process Custom Tailoring (no stock validation needed) ---
+        if (customTailoring && customTailoring.length > 0) {
+            rental.customTailoring.push(...customTailoring);
+        }
+
+        // --- Execute stock updates (now guaranteed to be valid) ---
+        if (stockUpdates.length > 0) {
+            await ItemModel.bulkWrite(stockUpdates, { session });
+        }
+
+        const updatedRental = await rental.save({ session });
+        await session.commitTransaction();
+        
+        // The frontend will recalculate financials, but we send a consistent object back.
+        const calculatedFinancials = calculateFinancials(updatedRental.toObject());
+        const finalResponse = {
+            ...updatedRental.toObject(),
+            financials: calculatedFinancials,
+        };
+
+        res.status(200).json(finalResponse);
+
+    } catch (error) {
+        await session.abortTransaction();
+        console.error("Error adding items to rental:", error);
+        throw error; 
     } finally {
         session.endSession();
     }

@@ -1,18 +1,22 @@
 // client/src/layouts/package/Package.tsx
 
 import { useEffect, useState } from "react";
-import { Alert, Col, Row, Spinner } from "react-bootstrap";
-import PackageCard from "../../components/packageCard/PackageCard";
-import { useNavigate } from "react-router-dom";
+import { Alert, Col, Row, Spinner, Form } from "react-bootstrap";
+import { CalendarEvent } from "react-bootstrap-icons";
+import DatePicker from "react-datepicker";
 
 import api from '../../services/api';
 import { Package as PackageType } from '../../types';
 
 import './package.css';
+import { useAlert } from "../../contexts/AlertContext";
+import { useNavigate } from "react-router-dom";
+import PackageCard from "../../components/packageCard/PackageCard";
 
 function Package() {
   const navigate = useNavigate();
-
+  const { addAlert } = useAlert();
+  const [targetDate, setTargetDate] = useState<Date | null>(null);
   const [packages, setPackages] = useState<PackageType[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +46,27 @@ function Package() {
           <p className="text-muted">Choose one of our curated packages for a complete and hassle-free experience.</p>
         </div>
 
+        <Row className="justify-content-center mb-4">
+          <Col md={6} lg={4}>
+            <Form.Group>
+              <Form.Label className="fw-bold d-flex align-items-center justify-content-center">
+                <CalendarEvent className="me-2"/>
+                Select Your Target Event Date
+              </Form.Label>
+              <DatePicker
+                selected={targetDate}
+                onChange={(date) => setTargetDate(date)}
+                minDate={new Date()}
+                className="form-control text-center"
+                placeholderText="Click to select a date..."
+                isClearable
+                dateFormat="MMMM d, yyyy"
+                wrapperClassName="w-100"
+              />
+            </Form.Group>
+          </Col>
+        </Row>
+
         {loading ? (
           <div className="text-center py-5"><Spinner animation="border" /><p className="mt-2">Loading Packages...</p></div>
         ) : error ? (
@@ -52,7 +77,13 @@ function Package() {
               <Col key={pkg._id}>
                 <div
                   className="package-card-wrapper"
-                  onClick={() => navigate(`/packageViewer`, { state: { packageData: pkg } })}
+                  onClick={() => {
+                    if (!targetDate) {
+                      addAlert('Please select your target event date first.', 'info');
+                      return;
+                    }
+                    navigate('/packageViewer', { state: { packageData: pkg, targetDate: targetDate } });
+                  }}
                 >
                   <PackageCard
                     title={pkg.name}

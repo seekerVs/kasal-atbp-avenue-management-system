@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Container,
@@ -11,8 +11,10 @@ import {
   Breadcrumb,
   Modal,
   ListGroup,
+  Dropdown,
+  ButtonGroup,
 } from 'react-bootstrap';
-import { Download, ExclamationTriangleFill, PencilSquare, PersonFill, BoxArrowInRight } from 'react-bootstrap-icons';
+import { Download, ExclamationTriangleFill, PencilSquare, PersonFill, BoxArrowInRight, EyeFill, PlusLg } from 'react-bootstrap-icons';
 
 // Import Child Components
 import RentalItemsList from '../../components/rentalItemsList/RentalItemsList';
@@ -31,6 +33,7 @@ import {
   RentalStatus,
   MeasurementRef,
   ShopSettings,
+  Package,
 } from '../../types';
 import api, { uploadFile } from '../../services/api';
 import CreateEditCustomItemModal from '../../components/modals/createEditCustomItemModal/CreateEditCustomItemModal';
@@ -40,8 +43,13 @@ import { ProcessReturnModal, ReturnPayload  } from '../../components/modals/proc
 import { CancellationReasonModal } from '../../components/modals/cancellationReasonModal/CancellationReasonModal';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
-import { RentalSummary } from '../../components/rentalSummary/RentalSummary';
+import { v4 as uuidv4 } from 'uuid';
 import AddItemFromCustomModal from '../../components/modals/addItemFromCustomModal/AddItemFromCustomModal';
+import { PackageConfigurationData, PackageConfigurationModal } from '../../components/modals/packageConfigurationModal/PackageConfigurationModal';
+import { PackageSelectionData, PackageSelectionModal } from '../../components/modals/packageSelectionModal/PackageSelectionModal';
+import { RescheduleModal } from '../../components/modals/rescheduleModal/RescheduleModal';
+import { format, isPast, startOfDay } from 'date-fns';
+import { InvoiceDisplay } from '../../components/invoiceDisplay/InvoiceDisplay';
 
 // ===================================================================================
 // --- MAIN COMPONENT ---
@@ -50,6 +58,14 @@ function RentalViewer() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { addAlert } = useAlert();
+  const isRentalDatePast = (): boolean => {
+    if (!rental?.rentalStartDate) {
+      return true; // Treat a missing date as invalid/past for safety
+    }
+    // isPast returns true if the given date is in the past.
+    // We use startOfDay to ignore the time component, comparing only the date itself.
+    return isPast(startOfDay(new Date(rental.rentalStartDate)));
+  };
   const [isDownloading, setIsDownloading] = useState(false);
   const summaryRef = useRef<HTMLDivElement>(null);
   
@@ -62,6 +78,7 @@ function RentalViewer() {
   // State for editing customer and order details
   const [editableDiscount, setEditableDiscount] = useState('0');
   const [editableEndDate, setEditableEndDate] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   
   // State for payment section
   const [paymentUiMode, setPaymentUiMode] = useState<'Cash' | 'Gcash'>('Cash');
@@ -71,6 +88,7 @@ function RentalViewer() {
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
 
   // State for modals
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [showDeleteItemModal, setShowDeleteItemModal] = useState(false);
   const [showEditItemModal, setShowEditItemModal] = useState(false);
   const [itemToModify, setItemToModify] = useState<SingleRentItem | null>(null);
@@ -81,6 +99,10 @@ function RentalViewer() {
   const [showEditCustomItemModal, setShowEditCustomItemModal] = useState(false);
   const [customItemToModify, setCustomItemToModify] = useState<CustomTailoringItem | null>(null);
   const [showEditCustomerModal, setShowEditCustomerModal] = useState(false);
+  const [showAddItemModal, setShowAddItemModal] = useState(false);
+  const [showAddPackageModal, setShowAddPackageModal] = useState(false);
+  const [showAddCustomModal, setShowAddCustomModal] = useState(false);
+  const [unavailableDates, setUnavailableDates] = useState<Date[]>([]);
 
   const [showValidationModal, setShowValidationModal] = useState(false);
   const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
@@ -92,8 +114,19 @@ function RentalViewer() {
   const [showReturnModal, setShowReturnModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [itemsToConvertToInventory, setItemsToConvertToInventory] = useState<CustomTailoringItem[]>([]);
-  const [showAddItemModal, setShowAddItemModal] = useState(false);
   const [isSendingReminder, setIsSendingReminder] = useState(false); 
+  const [packageToAdd, setPackageToAdd] = useState<{pkg: Package, motifId: string} | null>(null);
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+  const [pendingDate, setPendingDate] = useState<Date | null>(null);
+
+  const hasReturnableItems = useMemo(() => {
+    if (!rental) return false;
+    
+    const hasStandardRentals = (rental.singleRents?.length ?? 0) > 0 || (rental.packageRents?.length ?? 0) > 0;
+    const hasCustomRentBacks = rental.customTailoring?.some(item => item.tailoringType === 'Tailored for Rent-Back');
+    
+    return hasStandardRentals || hasCustomRentBacks;
+  }, [rental]);
 
   // --- DATA FETCHING & SYNCING ---
   useEffect(() => {
@@ -101,14 +134,16 @@ function RentalViewer() {
     const fetchRentalData = async () => {
       setLoading(true);
       try {
-        const [rentalRes, refsRes, settingsRes] = await Promise.all([
+        const [rentalRes, refsRes, settingsRes, unavailableRes] = await Promise.all([
           api.get(`/rentals/${id}`),
           api.get('/measurementrefs'),
-          api.get('/settings') // Fetch the protected, full settings
+          api.get('/settings'),
+          api.get('/unavailability')
         ]);
         setRental(rentalRes.data);
         setMeasurementRefs(refsRes.data);
         setShopSettings(settingsRes.data);
+        setUnavailableDates(unavailableRes.data.map((rec: { date: string }) => new Date(rec.date)));
       } catch (err) { 
         console.error("Error fetching data:", err); 
         addAlert("Failed to load rental details.", 'danger');
@@ -142,6 +177,8 @@ function RentalViewer() {
       setShowAddItemModal(false);
     }
   }, [itemsToConvertToInventory]);
+
+
 
   // --- EVENT HANDLERS ---
   const handleInitiateConversion = () => {
@@ -201,6 +238,103 @@ function RentalViewer() {
     }
   };
 
+  const handleAddNewItemsToRental = async (payload: any) => {
+    if (!rental) return;
+    setIsSaving(true);
+    try {
+      const response = await api.put(`/rentals/${rental._id}/add-items`, payload);
+      setRental(response.data); // This single line updates the entire UI
+      addAlert('Item(s) added to rental successfully!', 'success');
+      
+      // Close all "add" modals
+      setShowAddItemModal(false);
+      setShowAddPackageModal(false);
+      setShowAddCustomModal(false);
+      setPackageToAdd(null);
+
+    } catch (err: any) {
+      addAlert(err.response?.data?.message || 'Failed to add items to rental.', 'danger');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSaveNewItem = (selection: SelectedItemData) => {
+    const { product, variation, quantity } = selection;
+    const payload = {
+      singleRents: [{
+        itemId: product._id,
+        name: product.name,
+        variation: {
+          color: variation.color,
+          size: variation.size
+        },
+        price: product.price,
+        quantity: quantity,
+        imageUrl: variation.imageUrls[0] || ''
+      }]
+    };
+    handleAddNewItemsToRental(payload);
+  };
+
+  // Handler for the PackageSelectionModal (Step 1 of 2)
+  const handleSelectNewPackage = (selection: PackageSelectionData) => {
+      setPackageToAdd({ pkg: selection.pkg, motifId: selection.motifId });
+      setShowAddPackageModal(false); // Close selection modal
+      setShowEditPackageModal(true); // Open configuration modal
+  };
+
+  const handleReschedule = async () => {
+    if (!rental || !pendingDate) {
+      addAlert("No new date was selected.", "warning");
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const response = await api.put(`/rentals/${rental._id}/reschedule`, {
+        newStartDate: format(pendingDate, 'yyyy-MM-dd')
+      });
+      setRental(response.data);
+      addAlert('Rental has been successfully rescheduled!', 'success');
+      setShowRescheduleModal(false);
+      setPendingDate(null);
+    } catch (err: any) {
+      // The backend provides a specific error message if there's a conflict
+      addAlert(err.response?.data?.message || 'Failed to reschedule rental.', 'danger');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Handler for the PackageConfigurationModal (Step 2 of 2)
+  const handleSaveNewPackage = (configData: PackageConfigurationData) => {
+      if (!packageToAdd) return;
+      const payload = {
+          packageRents: [{
+              _id: `pkg_${uuidv4()}`,
+              packageId: packageToAdd.pkg._id,
+              price: packageToAdd.pkg.price,
+              quantity: 1,
+              imageUrl: packageToAdd.pkg.imageUrls[0] || '',
+              packageFulfillment: configData.packageReservation,
+              // You can add motifHex/name here if needed
+          }]
+          // You would also handle custom items created during package config here
+      };
+      handleAddNewItemsToRental(payload);
+  };
+
+  // Handler for the CreateEditCustomItemModal
+  const handleSaveNewCustomItem = (itemData: CustomTailoringItem) => {
+      const payload = {
+          customTailoring: [{
+              ...itemData,
+              _id: uuidv4(), // Ensure it has a unique ID
+          }]
+      };
+      handleAddNewItemsToRental(payload);
+  };
+
   const handleDownloadPdf = () => {
     const input = summaryRef.current;
     if (!input || !rental) {
@@ -228,7 +362,7 @@ function RentalViewer() {
         }
 
         pdf.addImage(imgData, 'PNG', 10, 10, contentWidth, contentHeight);
-        pdf.save(`rental-summary-${rental._id}.pdf`);
+        pdf.save(`sales-invoice-${rental._id}.pdf`);
       })
       .catch((err) => {
         console.error("PDF generation failed:", err);
@@ -240,12 +374,20 @@ function RentalViewer() {
   };
   
   const handleInitiatePickup = () => {
-    // You can perform any pre-modal checks here if needed in the future
+    if (isRentalDatePast() && hasReturnableItems) {
+      addAlert("This rental's start date has passed. Please reschedule to a future date or cancel the rental.", 'warning');
+      return; // Stop execution
+    }
+
     setShowPickupConfirmModal(true);
   };
 
   const handleInitiateMarkAsPickedUp = () => {
-    // This will trigger the confirmation before calling the main logic
+    if (isRentalDatePast() && hasReturnableItems) {
+      addAlert("This rental's start date has passed. Please reschedule to a future date or cancel the rental.", 'warning');
+      return; // Stop execution
+    }
+
     setShowMarkAsPickedUpConfirmModal(true);
   };
 
@@ -325,7 +467,7 @@ function RentalViewer() {
     
       const response = await api.put(`/rentals/${rental._id}/process`, payload);
       setRental(response.data);
-      addAlert('Rental updated successfully!', 'success');
+      setShowSummaryModal(true);
 
       setPaymentUiMode('Cash');
       setPaymentAmount('0');
@@ -668,6 +810,14 @@ function RentalViewer() {
     setEditableDeposit(value);
   };
 
+  const handleInitiateReschedule = () => {
+    if (rental?.rentalStartDate) {
+      // Pre-fill the date picker with the current date
+      setPendingDate(new Date(rental.rentalStartDate));
+    }
+    setShowRescheduleModal(true);
+  };
+
   const handleDepositBlur = () => {
     if (editableDeposit.trim() === '') {
       setEditableDeposit('0');
@@ -723,9 +873,12 @@ function RentalViewer() {
     }
   };
 
-  const handlePaymentUiModeChange = (mode: 'Cash' | 'Gcash') => {
-    setPaymentUiMode(mode);
-
+  const handlePaymentUiModeChange = (newMode: 'Cash' | 'Gcash') => {
+    // The component now directly gives us the new value.
+    if (newMode) {
+      setPaymentUiMode(newMode);
+    }
+    // Reset Gcash fields when switching
     setReceiptFile(null);
     setGcashRef('');
   };
@@ -740,7 +893,7 @@ function RentalViewer() {
   return (
     <>
       <div style={{ position: 'fixed', left: '-2000px', top: 0 }}>
-        <RentalSummary ref={summaryRef} rental={rental} shopSettings={shopSettings} />
+        <InvoiceDisplay ref={summaryRef} rental={rental} shopSettings={shopSettings} />
       </div>
 
       <Container fluid>
@@ -748,6 +901,7 @@ function RentalViewer() {
           <Breadcrumb.Item onClick={() => navigate('/manageRentals')}>Manage Orders</Breadcrumb.Item>
           <Breadcrumb.Item active>View Order</Breadcrumb.Item>
         </Breadcrumb>
+
         <Row>
           <Col md={7}>
             <Card className="mb-4">
@@ -755,15 +909,12 @@ function RentalViewer() {
                 <span>ID: {rental._id}</span>
                 <div className="d-flex align-items-center gap-2">
                   <small className="text-muted">Created: {new Date(rental.createdAt).toLocaleDateString()}</small>
-                  {/* --- (6) ADD THE DOWNLOAD BUTTON --- */}
-                  <Button variant="outline-primary" size="sm" onClick={handleDownloadPdf} disabled={isDownloading}>
-                    {isDownloading ? (
-                      <Spinner as="span" size="sm" className="me-1" />
-                    ) : (
-                      <Download className="me-1" />
-                    )}
-                    Summary
-                  </Button>
+                  {rental.financials.payments && rental.financials.payments.length > 0 && (
+                  <Button variant="outline-primary" size="sm" onClick={() => setShowSummaryModal(true)}>
+                      <EyeFill className="me-1" />
+                      View Invoice
+                    </Button>
+                  )}
                 </div>
               </Card.Header>
               <Card.Body>
@@ -802,6 +953,25 @@ function RentalViewer() {
                       {rental.customerInfo[0].address.province}
                   </p>
                 </div>
+                {canEditDetails && (
+                  <>
+                    <hr className='m-0'/>
+                    <div className="d-flex justify-content-end my-1">
+                      <Dropdown as={ButtonGroup}>
+                        <Button variant="outline-primary" size='sm' onClick={() => setShowAddItemModal(true)} disabled={isSaving}>
+                          {isSaving ? <Spinner as="span" size="sm" className="me-2" /> : <PlusLg className="me-2"/>}
+                          {isSaving ? 'Saving...' : 'Add Item'}
+                        </Button>
+                        <Dropdown.Toggle split variant="outline-primary" id="dropdown-split-basic" disabled={isSaving} size='sm'/>
+                        <Dropdown.Menu align="end">
+                          <Dropdown.Item onClick={() => setShowAddPackageModal(true)}>Add Package</Dropdown.Item>
+                          <Dropdown.Item onClick={() => setShowAddCustomModal(true)}>Add Custom Item</Dropdown.Item>
+                        </Dropdown.Menu>
+                      </Dropdown>
+                    </div>
+                    
+                  </>
+                )}
                 <RentalItemsList
                   singleRents={rental.singleRents}
                   packageRents={rental.packageRents}
@@ -845,6 +1015,7 @@ function RentalViewer() {
               onInitiatePickup={handleInitiatePickup}
               onInitiateMarkAsPickedUp={handleInitiateMarkAsPickedUp}
               onInitiateCancel={() => setShowCancelModal(true)}
+              onInitiateReschedule={handleInitiateReschedule}
               onInitiateSendReminder={handleSendReminder}
               isSendingReminder={isSendingReminder}
               returnReminderSent={rental.returnReminderSent || false}
@@ -1034,6 +1205,76 @@ function RentalViewer() {
           itemToProcess={itemsToConvertToInventory[0]}
         />
       )}
+
+      <Modal show={showSummaryModal} onHide={() => setShowSummaryModal(false)} size="lg" centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Sales Invoice</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {/* The wrapper is now for the invoice component */}
+          <div className="summary-modal-content-wrapper" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+            <InvoiceDisplay ref={summaryRef} rental={rental} shopSettings={shopSettings} />
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowSummaryModal(false)}>
+            Close
+          </Button>
+          <Button variant="primary" onClick={handleDownloadPdf} disabled={isDownloading}>
+            {isDownloading ? <Spinner as="span" size="sm" /> : <Download />}
+            Download PDF
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      <SingleItemSelectionModal
+        show={showAddItemModal}
+        onHide={() => setShowAddItemModal(false)}
+        onSelect={handleSaveNewItem}
+        addAlert={addAlert}
+        mode="rental"
+      />
+
+      <PackageSelectionModal
+        show={showAddPackageModal}
+        onHide={() => setShowAddPackageModal(false)}
+        onSelect={handleSelectNewPackage}
+      />
+
+      {packageToAdd && (
+        <PackageConfigurationModal
+          show={showEditPackageModal}
+          onHide={() => {
+            setShowEditPackageModal(false);
+            setPackageToAdd(null); // Clear context on close
+          }}
+          onSave={handleSaveNewPackage}
+          pkg={packageToAdd.pkg}
+          motifId={packageToAdd.motifId}
+        />
+      )}
+
+      <CreateEditCustomItemModal
+        show={showAddCustomModal}
+        onHide={() => setShowAddCustomModal(false)}
+        item={null} // Always in create mode
+        itemName="New Custom Item for Rental"
+        measurementRefs={measurementRefs}
+        onSave={handleSaveNewCustomItem}
+        isForPackage={false}
+        uploadMode="immediate" // Upload images immediately since we are adding to an existing rental
+      />
+
+      <RescheduleModal
+        show={showRescheduleModal}
+        onHide={() => setShowRescheduleModal(false)}
+        onConfirm={handleReschedule}
+        entityId={rental?._id || null}
+        entityType="rental"
+        initialDate={rental?.rentalStartDate ? new Date(rental.rentalStartDate) : null}
+        unavailableDates={unavailableDates}
+      />
+      
     </>
   );
 }

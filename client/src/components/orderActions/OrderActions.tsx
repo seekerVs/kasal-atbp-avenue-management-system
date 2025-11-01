@@ -1,7 +1,7 @@
 // client/src/components/rentalViewer/OrderActions.tsx
 
 import React, { useMemo } from 'react';
-import { Row, Col, Card, Badge, Button, Form, InputGroup, Alert, Accordion, ListGroup, Spinner } from 'react-bootstrap';
+import { Row, Col, Card, Badge, Button, Form, InputGroup, Alert, Accordion, ListGroup, Spinner, ToggleButtonGroup, ToggleButton } from 'react-bootstrap';
 import {
   CalendarCheck,
   BoxSeam,
@@ -12,7 +12,8 @@ import {
   CashCoin,
   Image as ImageIcon,
   ArrowRightCircleFill,
-  Envelope
+  Envelope,
+  PencilSquare
 } from 'react-bootstrap-icons';
 import { RentalStatus, Financials, RentalOrder, CustomTailoringItem, PaymentDetail } from '../../types'; // Import from centralized types
 import { formatCurrency } from '../../utils/formatters';
@@ -63,6 +64,7 @@ interface OrderActionsProps {
   onInitiateSendReminder: () => void;
   isSendingReminder: boolean;
   returnReminderSent: boolean;
+  onInitiateReschedule: () => void;
 }
 
 // ===================================================================================
@@ -97,25 +99,28 @@ const OrderActions: React.FC<OrderActionsProps> = ({
   onInitiateSendReminder,
   isSendingReminder,
   returnReminderSent,
+  onInitiateReschedule,
 }) => {
   const { addAlert } = useAlert();
-  const { hasRentalItems, hasPurchaseItems, isPurchaseOnly } = useMemo(() => {
+  const { hasReturnableItems, isPurchaseOnly } = useMemo(() => {
     if (!rental) {
-      return { hasRentalItems: false, hasPurchaseItems: false, isPurchaseOnly: false };
+      return { hasReturnableItems: false,isPurchaseOnly: false };
     }
     
-    // Check if there are any items that are for rent
+    // Check if there are any items that are for rent (physically returnable)
     const hasStandardRentals = (rental.singleRents?.length ?? 0) > 0 || (rental.packageRents?.length ?? 0) > 0;
     const hasCustomRentBacks = rental.customTailoring?.some(item => item.tailoringType === 'Tailored for Rent-Back');
-    const hasRentalItems = hasStandardRentals || hasCustomRentBacks;
+    const hasReturnableItems = hasStandardRentals || hasCustomRentBacks;
 
     // Check if there are any items that are for purchase
     const hasPurchaseItems = rental.customTailoring?.some(item => item.tailoringType === 'Tailored for Purchase');
 
     // Determine if the order is exclusively for purchase
-    const isPurchaseOnly = hasPurchaseItems && !hasRentalItems;
+    const isPurchaseOnly = hasPurchaseItems && !hasReturnableItems;
 
-    return { hasRentalItems, hasPurchaseItems, isPurchaseOnly };
+    // The 'hasRentalItems' variable from your original file is exactly what we need.
+    // I've renamed it to 'hasReturnableItems' for maximum clarity in this context.
+    return { hasReturnableItems, hasPurchaseItems, isPurchaseOnly };
   }, [rental]);
   
   const discountAmount = parseFloat(editableDiscount) || 0;
@@ -144,8 +149,7 @@ const OrderActions: React.FC<OrderActionsProps> = ({
   };
 
   const showPaymentForm = 
-    (status === 'Pending' && !isPaid) || 
-    (status === 'To Pickup' && !isFullyPaid);
+  (status === 'Pending' || status === 'To Pickup') && !isFullyPaid;
 
   const shouldDisableButton = useMemo(() => {
     if (isPaid) {
@@ -216,34 +220,36 @@ const OrderActions: React.FC<OrderActionsProps> = ({
         </div>
         {!isPurchaseOnly && (
           <div className="mb-3">
-            <p className="mb-2 fw-medium"><CalendarCheck className="me-2" />Rental Period</p>
+            <div className="d-flex justify-content-between align-items-center mb-2">
+              <p className="mb-0 fw-medium"><CalendarCheck className="me-2" />Rental Period</p>
+              {status === 'Pending' && (
+                <Button variant="outline-secondary" size="sm" onClick={onInitiateReschedule}>
+                  <PencilSquare className="me-1"/> Edit Date
+                </Button>
+              )}
+            </div>
             
-            {hasRentalItems && hasPurchaseItems && (
+            {hasReturnableItems && !isPurchaseOnly && (
               <Alert variant="light" className="small py-2 text-center border">
                 Note: The rental period only applies to rent-back and standard rental items.
               </Alert>
             )}
 
-            {['Pending', 'To Pickup'].includes(status) ? (
-              <Alert variant="info" className="small py-2 text-center">
-                The 4-day rental period will be set automatically upon pickup.
-              </Alert>
-            ) : (
-              <div className="px-1">
-                <div className="d-flex justify-content-between">
-                  <span className="text-muted">Start Date:</span>
-                  <span >
-                    {editableStartDate ? format(new Date(editableStartDate), 'MMMM dd, yyyy') : 'Not Set'}
-                  </span>
-                </div>
-                <div className="d-flex justify-content-between">
-                  <span className="text-muted">End Date:</span>
-                  <span>
-                    {editableEndDate ? format(new Date(editableEndDate), 'MMMM dd, yyyy') : 'Not Set'}
-                  </span>
-                </div>
+            {/* --- NEW DISPLAY LOGIC --- */}
+            <div className="px-1">
+              <div className="d-flex justify-content-between">
+                <span className="text-muted">Start Date:</span>
+                <span>
+                  {editableStartDate ? format(new Date(editableStartDate), 'MMMM dd, yyyy') : 'Not Set'}
+                </span>
               </div>
-            )}
+              <div className="d-flex justify-content-between">
+                <span className="text-muted">End Date:</span>
+                <span>
+                  {editableEndDate ? format(new Date(editableEndDate), 'MMMM dd, yyyy') : 'Not Set'}
+                </span>
+              </div>
+            </div>
           </div>
         )}
         <hr />
@@ -389,10 +395,30 @@ const OrderActions: React.FC<OrderActionsProps> = ({
             )}
             <Form.Group className="mb-3">
               <Form.Label className="fw-medium">Payment Method</Form.Label>
-              <div className="d-flex">
-                <Button variant={paymentUiMode === 'Cash' ? 'success' : 'outline-success'} className="flex-fill me-1" onClick={() => onPaymentUiModeChange('Cash')}>Cash</Button>
-                <Button variant={paymentUiMode === 'Gcash' ? 'success' : 'outline-success'} className="flex-fill ms-1" onClick={() => onPaymentUiModeChange('Gcash')}>Gcash</Button>
-              </div>
+              <ToggleButtonGroup
+                type="radio"
+                name="paymentOptions"
+                value={paymentUiMode}
+                onChange={onPaymentUiModeChange} // The handler is passed directly
+                className="d-flex" // Use flexbox to make buttons fill the width
+              >
+                <ToggleButton
+                  id="tbg-radio-1"
+                  value="Cash"
+                  variant={paymentUiMode === 'Cash' ? 'success' : 'outline-success'}
+                  className="flex-fill payment-toggle-btn" // <-- ADDED CLASS
+                >
+                  Cash
+                </ToggleButton>
+                <ToggleButton
+                  id="tbg-radio-2"
+                  value="Gcash"
+                  variant={paymentUiMode === 'Gcash' ? 'success' : 'outline-success'}
+                  className="flex-fill payment-toggle-btn" // <-- ADDED CLASS
+                >
+                  Gcash
+                </ToggleButton>
+              </ToggleButtonGroup>
             </Form.Group>
             <Form.Group className="mb-2">
               <Form.Label className="small text-muted">Payment Amount</Form.Label>
@@ -451,14 +477,14 @@ const OrderActions: React.FC<OrderActionsProps> = ({
             </Button>
           )}
 
-          {status === 'To Return' && (
+          {status === 'To Return' && hasReturnableItems && (
             <Button variant="success" onClick={() => onInitiateReturn(rental.customTailoring)}>
                 <ArrowCounterclockwise className="me-2" />
                 Mark as Returned
             </Button>
           )}
 
-          {status === 'To Return' && (
+          {status === 'To Return' && hasReturnableItems && (
             returnReminderSent ? (
               <Alert variant="light" className="text-center small py-2 mt-2 border text-success">
                 <CheckCircleFill className="me-2" />
@@ -479,20 +505,24 @@ const OrderActions: React.FC<OrderActionsProps> = ({
           {status === 'Completed' && (
               <Alert variant="success" className="text-center">
                   <CheckCircleFill className="me-2"/>
-                  This rental has been completed.
-                  <p className="small mb-0 mt-1">Reimbursed Amount: ₱{formatCurrency(financials.depositReimbursed)}</p>
+                  This order has been completed.
+                  {!isPurchaseOnly && (
+                      <p className="small mb-0 mt-1">
+                          Reimbursed Amount: ₱{formatCurrency(financials.depositReimbursed)}
+                      </p>
+                  )}
               </Alert>
           )}
 
           {status === 'Cancelled' && ( 
-            <Alert variant="danger" className="text-center">This rental was cancelled.</Alert> 
+            <Alert variant="danger" className="text-center">This order was cancelled.</Alert> 
           )}
 
           {/* Secondary Action: Cancel Button */}
           {canBeCancelled && (
             <Button variant="outline-danger" onClick={onInitiateCancel}>
               <XCircleFill className="me-2" />
-              Cancel Rental
+              Cancel Order
             </Button>
           )}
         </div>

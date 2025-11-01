@@ -6,6 +6,7 @@ import api from '../../services/api';
 import { useAlert } from '../../contexts/AlertContext';
 import ShopScheduleEditor from './shopScheduleEditor/ShopScheduleEditor';
 import ProfileSettings from './ProfileSettings';
+import DatePicker from 'react-datepicker';
 
 function Settings() {
   const { addAlert } = useAlert();
@@ -30,32 +31,15 @@ function Settings() {
     fetchSettings();
   }, [addAlert]);
 
-  const handleSettingsChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
+  const handleSettingsChange = (name: string, value: any) => {
+      if (!settings) return;
 
-    if (!settings) return;
-
-    // Clear any existing validation error for this field
-    if (formErrors[name]) {
-      setFormErrors(prev => ({ ...prev, [name]: undefined }));
-    }
-
-    // Create a new state object based on the current one
-    const newSettings = { ...settings };
-
-    // Handle the numeric input for slots per day
-    if (name === 'appointmentSlotsPerDay') {
-      // Allow empty string for typing, but parse to number for state
-      if (value === '' || /^\d+$/.test(value)) {
-        newSettings.appointmentSlotsPerDay = parseInt(value, 10) || 0;
+      if (formErrors[name]) {
+          setFormErrors(prev => ({ ...prev, [name]: undefined }));
       }
-    } else {
-      // Handle all other string-based inputs
-      (newSettings as any)[name] = value;
-    }
 
-    // Update the single state object
-    setSettings(newSettings);
+      const newSettings = { ...settings, [name]: value };
+      setSettings(newSettings);
   };
 
   const validateSettings = (): boolean => {
@@ -84,14 +68,7 @@ function Settings() {
     if (!settings) return;
     setIsSaving(true);
     try {
-      const response = await api.put('/settings', { 
-        appointmentSlotsPerDay: settings.appointmentSlotsPerDay,
-        gcashName: settings.gcashName,
-        gcashNumber: settings.gcashNumber,
-        shopAddress: settings.shopAddress,
-        shopContactNumber: settings.shopContactNumber,
-        shopEmail: settings.shopEmail
-      });
+      const response = await api.put('/settings', settings);
       setSettings(response.data);
       addAlert('General settings saved successfully!', 'success');
     } catch (error) {
@@ -144,78 +121,34 @@ function Settings() {
                           <Col md={10} lg={8}>
                             <Form.Group className="mb-3">
                               <Form.Label className="fw-bold">Default Appointment Slots per Day</Form.Label>
-                              <Form.Control 
-                                type="text"
-                                inputMode="numeric"
-                                name="appointmentSlotsPerDay"
-                                value={settings.appointmentSlotsPerDay} 
-                                onChange={handleSettingsChange}
-                                isInvalid={!!formErrors.appointmentSlotsPerDay}
-                                min="0"
-                              />
-                              <Form.Control.Feedback type="invalid">
-                                {formErrors.appointmentSlotsPerDay}
-                              </Form.Control.Feedback>
-                              <Form.Text>Total number of appointments available per day. This will be split between Morning and Afternoon.</Form.Text>
+                              <Form.Control type="number" name="appointmentSlotsPerDay" value={settings.appointmentSlotsPerDay} onChange={(e) => handleSettingsChange(e.target.name, parseInt(e.target.value, 10) || 0)} isInvalid={!!formErrors.appointmentSlotsPerDay} min="0" />
+                              <Form.Control.Feedback type="invalid">{formErrors.appointmentSlotsPerDay}</Form.Control.Feedback>
                             </Form.Group>
                             <Form.Group className="mb-3">
                               <Form.Label className="fw-bold">GCash Account Name</Form.Label>
-                              <Form.Control 
-                                type="text" 
-                                name="gcashName"
-                                placeholder="e.g., Juan Dela Cruz"
-                                value={settings.gcashName || ''}
-                                onChange={handleSettingsChange}
-                              />
+                              <Form.Control type="text" name="gcashName" placeholder="e.g., Juan Dela Cruz" value={settings.gcashName || ''} onChange={(e) => handleSettingsChange(e.target.name, e.target.value)} />
                             </Form.Group>
                             <Form.Group className="mb-3">
                               <Form.Label className="fw-bold">GCash Account Number</Form.Label>
-                              <Form.Control 
-                                type="text" 
-                                name="gcashNumber"
-                                placeholder="e.g., 09171234567"
-                                value={settings.gcashNumber || ''}
-                                onChange={handleSettingsChange}
-                                isInvalid={!!formErrors.gcashNumber}
-                              />
-                              <Form.Control.Feedback type="invalid">
-                                {formErrors.gcashNumber}
-                              </Form.Control.Feedback>
+                              <Form.Control type="text" name="gcashNumber" placeholder="e.g., 09171234567" value={settings.gcashNumber || ''} onChange={(e) => handleSettingsChange(e.target.name, e.target.value)} isInvalid={!!formErrors.gcashNumber} />
+                              <Form.Control.Feedback type="invalid">{formErrors.gcashNumber}</Form.Control.Feedback>
                             </Form.Group>
-
+                            
                             <hr />
-                            <h6 className="text-muted">Receipt & Invoice Details</h6>
-                            <Form.Group className="mb-3">
-                              <Form.Label className="fw-bold">Shop Address</Form.Label>
-                              <Form.Control 
-                                as="textarea"
-                                rows={2}
-                                name="shopAddress"
-                                placeholder="e.g., 123 Rizal Avenue, Daet, Camarines Norte"
-                                value={settings.shopAddress || ''}
-                                onChange={handleSettingsChange}
-                              />
+                            <h6 className="text-muted">Invoice & Receipt Details</h6>
+
+                            <Form.Group className="mb-3"><Form.Label className="fw-bold">Owner's Full Name (for Invoice)</Form.Label><Form.Control type="text" name="ownerName" value={settings.ownerName || ''} onChange={(e) => handleSettingsChange(e.target.name, e.target.value)} /></Form.Group>
+                            <Form.Group className="mb-3"><Form.Label className="fw-bold">Owner's TIN (for Invoice)</Form.Label><Form.Control type="text" name="ownerTIN" value={settings.ownerTIN || ''} onChange={(e) => handleSettingsChange(e.target.name, e.target.value)} /></Form.Group>
+                            <Form.Group className="mb-3"><Form.Label className="fw-bold">Shop Address</Form.Label><Form.Control as="textarea" rows={2} name="shopAddress" value={settings.shopAddress || ''} onChange={(e) => handleSettingsChange(e.target.name, e.target.value)} /></Form.Group>
+                            <Form.Group className="mb-3"><Form.Label className="fw-bold">Shop Contact Number</Form.Label><Form.Control type="text" name="shopContactNumber" value={settings.shopContactNumber || ''} onChange={(e) => handleSettingsChange(e.target.name, e.target.value)} /></Form.Group>
+                            <Form.Group className="mb-3"><Form.Label className="fw-bold">Shop Email Address</Form.Label><Form.Control type="email" name="shopEmail" value={settings.shopEmail || ''} onChange={(e) => handleSettingsChange(e.target.name, e.target.value)} /></Form.Group>
+                            <Form.Group className="mb-3"><Form.Label className="fw-bold">BIR Accreditation Number</Form.Label><Form.Control type="text" name="accreditationNumber" value={settings.accreditationNumber || ''} onChange={(e) => handleSettingsChange(e.target.name, e.target.value)} /></Form.Group>
+                            <Form.Group className="mb-3"><Form.Label className="fw-bold">Accreditation Date</Form.Label>
+                              <DatePicker selected={settings.accreditationDate ? new Date(settings.accreditationDate) : null} onChange={(date: Date | null) => handleSettingsChange('accreditationDate', date)} className="form-control" dateFormat="MMMM d, yyyy" />
                             </Form.Group>
-                            <Form.Group className="mb-3">
-                              <Form.Label className="fw-bold">Shop Contact Number</Form.Label>
-                              <Form.Control 
-                                type="text" 
-                                name="shopContactNumber"
-                                placeholder="e.g., 0917-123-4567"
-                                value={settings.shopContactNumber || ''}
-                                onChange={handleSettingsChange}
-                              />
-                            </Form.Group>
-                            <Form.Group className="mb-3">
-                              <Form.Label className="fw-bold">Shop Email Address</Form.Label>
-                              <Form.Control 
-                                type="email" 
-                                name="shopEmail"
-                                placeholder="e.g., contact@kasalavenue.com"
-                                value={settings.shopEmail || ''}
-                                onChange={handleSettingsChange}
-                              />
-                            </Form.Group>
+                            <Form.Group className="mb-3"><Form.Label className="fw-bold">Default Payment Terms</Form.Label><Form.Control type="text" name="paymentTerms" value={settings.paymentTerms || ''} onChange={(e) => handleSettingsChange(e.target.name, e.target.value)} /></Form.Group>
+                            <Form.Group className="mb-3"><Form.Label className="fw-bold">Business Style</Form.Label><Form.Control type="text" name="businessStyle" value={settings.businessStyle || ''} onChange={(e) => handleSettingsChange(e.target.name, e.target.value)} /></Form.Group>
+
                           </Col>
                         </Row>
                       </Form>

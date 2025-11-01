@@ -4,75 +4,112 @@ const express = require('express');
 const ItemModel = require('../models/Item');
 const asyncHandler = require('../utils/asyncHandler');
 const { del } = require('@vercel/blob');
+const mongoose = require('mongoose');
+const Rental = require('../models/Rental');
+const Reservation = require('../models/Reservation');
+const { checkAvailability } = require('../utils/availabilityChecker');
 
 const router = express.Router();
 
 // --- GET all inventory items (Existing) ---
 router.get('/', asyncHandler(async (req, res) => {
-  // 1. Get pagination and filter parameters from the query string
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 18;
-  const { category, categories, ageGroup, gender, search, sort, colorHex, excludeCategory, size } = req.query;
+  const { category, ageGroup, gender, search, sort, colorHex, excludeCategory, size, availabilityDate } = req.query;
 
-  // 2. Build the filter object dynamically (same as before)
-  const filter = {};
-  if (category) filter.category = category;
-  if (ageGroup) filter.ageGroup = ageGroup;
-  if (gender) filter.gender = gender;
-  if (search) filter.name = { $regex: search, $options: 'i' };
-  if (colorHex) {
-    filter['variations'] = { $elemMatch: { 'color.hex': colorHex } };
+  if (availabilityDate) {
+    // --- NEW LOGIC USING THE REUSABLE UTILITY ---
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 18;
+    const skip = (page - 1) * limit;
+    
+    // Step 1: Build the initial filter for items, just like in the 'else' block
+    const initialFilter = {};
+    if (category) initialFilter.category = category;
+    if (ageGroup) initialFilter.ageGroup = ageGroup;
+    if (gender) initialFilter.gender = gender;
+    if (search) initialFilter.name = { $regex: search, $options: 'i' };
+    if (excludeCategory) initialFilter.category = { $ne: excludeCategory };
+    if (size) initialFilter['variations.size'] = size;
+    
+    // Always ensure we only start with items that have some stock in general
+    initialFilter['variations.quantity'] = { $gt: 0 };
+    
+    // Find all candidate items that match the basic filters
+    const candidateItems = await ItemModel.find(initialFilter).lean();
+
+    // Step 2: For each candidate, check its real-time availability
+    const availableItems = [];
+    for (const item of candidateItems) {
+        const availableVariations = [];
+        for (const variation of item.variations) {
+            // We only need to check variations that have stock and match the size filter (if any)
+            if (variation.quantity > 0 && (!size || variation.size === size)) {
+                const itemsRequired = new Map([
+                    [`${item._id}-${variation.color.name}-${variation.size}`, 1] // Check availability for just one piece
+                ]);
+                
+                const { isAvailable } = await checkAvailability(itemsRequired, availabilityDate);
+                
+                if (isAvailable) {
+                    availableVariations.push(variation);
+                }
+            }
+        }
+        
+        // If any of the item's variations were available, add the item to our final list
+        if (availableVariations.length > 0) {
+            availableItems.push({ ...item, variations: availableVariations });
+        }
+    }
+
+    // Step 3: Apply sorting and pagination in JavaScript
+    if (sort === 'price_asc') availableItems.sort((a, b) => a.price - b.price);
+    if (sort === 'price_desc') availableItems.sort((a, b) => b.price - a.price);
+    // Note: 'latest' and 'relevance' sorting are harder here; this is a simplified sort
+
+    const totalItems = availableItems.length;
+    const paginatedItems = availableItems.slice(skip, skip + limit);
+
+    res.status(200).json({
+      items: paginatedItems,
+      currentPage: page,
+      totalPages: Math.ceil(totalItems / limit),
+      totalItems: totalItems,
+    });
+
+  } else {
+    // --- EXISTING LOGIC FOR WHEN NO DATE IS PROVIDED ---
+    const filter = {};
+    if (category) filter.category = category;
+    if (ageGroup) filter.ageGroup = ageGroup;
+    if (gender) filter.gender = gender;
+    if (search) filter.name = { $regex: search, $options: 'i' };
+    if (excludeCategory) filter.category = { $ne: excludeCategory };
+    const variationMatch = { quantity: { $gt: 0 } };
+    if (size) filter['variations.size'] = size;
+    filter.variations = { $elemMatch: variationMatch };
+
+    const sortOptions = {};
+    if (sort === 'price_asc') sortOptions.price = 1;
+    if (sort === 'price_desc') sortOptions.price = -1;
+    if (sort === 'latest') sortOptions.createdAt = -1;
+    if (Object.keys(sortOptions).length === 0) sortOptions.name = 1;
+
+    const skip = (page - 1) * limit;
+
+    const [items, totalItems] = await Promise.all([
+      ItemModel.find(filter).sort(sortOptions).limit(limit).skip(skip).lean(),
+      ItemModel.countDocuments(filter)
+    ]);
+
+    res.status(200).json({
+      items,
+      currentPage: page,
+      totalPages: Math.ceil(totalItems / limit),
+      totalItems: totalItems,
+    });
   }
-  if (excludeCategory) {
-    filter.category = { ...filter.category, $ne: excludeCategory };
-  }
-
-  if (categories) {
-    // If 'categories' query param exists (e.g., "Veils,Jewelry"), split it into an array.
-    const categoryArray = categories.split(',');
-    // Use MongoDB's $in operator to find items where the category is in the provided array.
-    filter.category = { $in: categoryArray };
-  } else if (category) {
-    // Fallback to the original single category filter if 'categories' is not provided.
-    filter.category = category;
-  }
-
-  if (size) {
-    filter['variations'] = { 
-      ...(filter['variations'] || {}), // Preserve existing variation filters (like colorHex)
-      $elemMatch: { size: size } 
-    };
-  }
-  
-  const sortOptions = {};
-  if (sort === 'price_asc') sortOptions.price = 1;
-  if (sort === 'price_desc') sortOptions.price = -1;
-  if (sort === 'latest') sortOptions.createdAt = -1;
-  // Default sort (can be relevance score later, or just name)
-  if (Object.keys(sortOptions).length === 0) sortOptions.name = 1;
-
-  // 3. Calculate the number of documents to skip
-  const skip = (page - 1) * limit;
-
-  // 4. Execute two queries in parallel for efficiency:
-  //    - One to get the total count of documents matching the filter
-  //    - One to get the actual documents for the current page
-  const [items, totalItems] = await Promise.all([
-    ItemModel.find(filter)
-      .sort(sortOptions) // You can adjust sorting here if needed
-      .limit(limit)
-      .skip(skip)
-      .lean(),
-    ItemModel.countDocuments(filter)
-  ]);
-
-  // 5. Send the paginated response
-  res.status(200).json({
-    items, // The array of items for the current page
-    currentPage: page,
-    totalPages: Math.ceil(totalItems / limit),
-    totalItems: totalItems,
-  });
 }));
 
 router.get('/check-name', asyncHandler(async (req, res) => {
@@ -111,9 +148,106 @@ router.get('/byFullName/:fullName', asyncHandler(async (req, res) => {
 }));
 
 
-// ==========================================================
-// --- ADD THE MISSING ENDPOINTS BELOW ---
-// ==========================================================
+// --- GET availability for a single item on a specific date ---
+router.get('/:id/availability', asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { date } = req.query;
+
+    if (!date) {
+        res.status(400);
+        throw new Error('A date query parameter is required for availability check.');
+    }
+
+    const item = await ItemModel.findById(id).lean();
+    if (!item) {
+        res.status(404);
+        throw new Error('Item not found');
+    }
+
+    const userStartDate = new Date(date);
+    userStartDate.setUTCHours(0, 0, 0, 0);
+
+    const userEndDate = new Date(userStartDate);
+    userEndDate.setDate(userEndDate.getDate() + 3);
+    userEndDate.setUTCHours(23, 59, 59, 999);
+
+    // --- Find all conflicting bookings for THIS item's variations ---
+    const [conflictingRentals, conflictingReservations] = await Promise.all([
+        Rental.find({
+            status: { $in: ['To Pickup', 'To Return'] },
+            rentalStartDate: { $lte: userEndDate },
+            rentalEndDate: { $gte: userStartDate },
+            $or: [
+                { "singleRents.itemId": id },
+                { "packageRents.packageFulfillment.assignedItem.itemId": id.toString() }
+            ]
+        }).lean(),
+        Reservation.find({
+            status: { $in: ['Pending', 'Confirmed'] },
+            reserveDate: {
+                $lte: userEndDate,
+                $gte: new Date(new Date(userStartDate).setDate(userStartDate.getDate() - 3)) // Reservation start date could be up to 3 days prior
+            },
+            $or: [
+                { "itemReservations.itemId": id },
+                { "packageReservations.fulfillmentPreview.assignedItemId": id }
+            ]
+        }).lean()
+    ]);
+
+    // --- Tally the booked quantities for each variation ---
+    const bookedQuantities = new Map();
+    const tally = (variationKey, quantity = 1) => {
+        bookedQuantities.set(variationKey, (bookedQuantities.get(variationKey) || 0) + quantity);
+    };
+
+    const itemObjectId = new mongoose.Types.ObjectId(id);
+
+    conflictingRentals.forEach(rental => {
+        rental.singleRents?.forEach(sr => {
+            if (sr.itemId.equals(itemObjectId)) {
+                tally(`${sr.variation.color.name}-${sr.variation.size}`, sr.quantity);
+            }
+        });
+        rental.packageRents?.forEach(pr => {
+            pr.packageFulfillment?.forEach(pf => {
+                if (pf.assignedItem?.itemId === id) {
+                    const [color, size] = pf.assignedItem.variation.split(', ');
+                    tally(`${color}-${size}`);
+                }
+            });
+        });
+    });
+
+    conflictingReservations.forEach(res => {
+        res.itemReservations?.forEach(ir => {
+            if (ir.itemId.equals(itemObjectId)) {
+                tally(`${ir.variation.color.name}-${ir.variation.size}`, ir.quantity);
+            }
+        });
+        res.packageReservations?.forEach(pr => {
+            pr.fulfillmentPreview?.forEach(fp => {
+                if (fp.assignedItemId?.equals(itemObjectId)) {
+                    const [color, size] = fp.variation.split(', ');
+                    tally(`${color}-${size}`);
+                }
+            });
+        });
+    });
+
+    // --- Enrich the item's variations with availableStock ---
+    const enrichedVariations = item.variations.map(variation => {
+        const variationKey = `${variation.color.name}-${variation.size}`;
+        const bookedCount = bookedQuantities.get(variationKey) || 0;
+        const availableStock = variation.quantity - bookedCount;
+        return {
+            ...variation,
+            availableStock: availableStock > 0 ? availableStock : 0 // Ensure it doesn't go below 0
+        };
+    });
+
+    res.status(200).json({ ...item, variations: enrichedVariations });
+}));
 
 // --- POST a new inventory item ---
 // Handles requests from the "Add New Product" modal

@@ -8,13 +8,13 @@ import {
   Button,
   Card,
   Spinner,
-  Alert,
   Image as BsImage,
   Modal,
   Form,
 } from 'react-bootstrap';
 import {
   BoxSeam,
+  CalendarEvent,
   ExclamationTriangleFill,
   Palette,
 } from 'react-bootstrap-icons';
@@ -40,6 +40,9 @@ import { useAlert } from '../../contexts/AlertContext';
 import namer from 'color-namer';
 import { PackageFulfillmentForm } from '../../components/forms/packageFulfillmentForm/PackageFulfillmentForm';
 import { PackageSelectionData, PackageSelectionModal } from '../../components/modals/packageSelectionModal/PackageSelectionModal';
+import DatePicker from 'react-datepicker';
+import { format } from 'date-fns';
+import { AvailabilityConflictModal } from '../../components/modals/availabilityConflictModal/AvailabilityConflictModal';
 
 const initialCustomerDetails: CustomerInfo = { 
   name: '', 
@@ -58,6 +61,7 @@ function PackageRent() {
   const { addAlert } = useAlert();
 
   // State Management
+  const [unavailableDates, setUnavailableDates] = useState<Date[]>([]);
   const [selectedPackage, setSelectedPackage] = useState<Package | null>(null);
   const [selectedMotifId, setSelectedMotifId] = useState<string>('');
   const [showPackageSelectionModal, setShowPackageSelectionModal] = useState(false);
@@ -73,36 +77,35 @@ function PackageRent() {
   } | null>(null);
 
   const [customerDetails, setCustomerDetails] = useState<CustomerInfo>(initialCustomerDetails);
-  const [isNewCustomerMode, setIsNewCustomerMode] = useState(true);
-  
-  const [existingOpenRental, setExistingOpenRental] = useState<RentalOrder | null>(null);
   const [selectedRentalForDisplay, setSelectedRentalForDisplay] = useState<RentalOrder | null>(null);
   
   // UI & Modal State
-  const [showReminderModal, setShowReminderModal] = useState(false);
-  const [showSuccessModal, setShowSuccessModal] = useState(false); // <-- RESTORED
-  const [modalData, setModalData] = useState({ rentalId: '', itemName: '' }); // <-- RESTORED
   const [assignmentContext, setAssignmentContext] = useState<{ 
     fulfillmentIndex: number;
     itemToEdit?: InventoryItem;
   } | null>(null);
   const [showAssignmentModal, setShowAssignmentModal] = useState(false);
   const [showIncompleteFulfillmentModal, setShowIncompleteFulfillmentModal] = useState(false);
-  const [incompleteAction, setIncompleteAction] = useState<'create' | 'add' | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
+
+  const [targetDate, setTargetDate] = useState<Date | null>(null);
+  const [showDateChangeWarning, setShowDateChangeWarning] = useState(false);
+  const [pendingDateChange, setPendingDateChange] = useState<Date | null>(null);
   
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [stagedFiles, setStagedFiles] = useState<Map<string, File[]>>(new Map());
+  const [showConflictModal, setShowConflictModal] = useState(false);
+  const [conflictingItems, setConflictingItems] = useState([]);
 
   const selectedMotif = useMemo(() => {
     if (!selectedPackage || !selectedMotifId) return null;
     return selectedPackage.colorMotifs.find(m => m._id === selectedMotifId);
   }, [selectedPackage, selectedMotifId]);
 
-  const isReadyToSubmit = useMemo(() => {
-    return !!selectedPackage;
-  }, [selectedPackage]);
+  const isCustomerInfoValid = useMemo(() => {
+    return customerDetails.name.trim() !== '' && /^09\d{9}$/.test(customerDetails.phoneNumber);
+  }, [customerDetails]);
   
   useEffect(() => {
     const pendingItemJSON = sessionStorage.getItem('pendingCustomItem');
@@ -133,16 +136,17 @@ function PackageRent() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [inventoryRes, rentalsRes, refsRes] = await Promise.all([
+        const [inventoryRes, rentalsRes, refsRes, unavailableRes] = await Promise.all([
           api.get('/inventory?limit=1000'),
           api.get('/rentals'),
           api.get('/measurementrefs'),
+          api.get('/unavailability')
         ]);
         setAllInventory(inventoryRes.data.items || []);
         setAllRentals(rentalsRes.data || []);
         setMeasurementRefs(refsRes.data || []);
+        setUnavailableDates(unavailableRes.data.map((rec: { date: string }) => new Date(rec.date)));
       } catch (err) {
-        console
         addAlert("Failed to load initial data.","danger")
       } finally {
         setLoading(false);
@@ -243,6 +247,47 @@ function PackageRent() {
     setShowPackageSelectionModal(false);
   };
 
+  const isSelectableDate = (date: Date): boolean => {
+    const day = date.getDay();
+    if (day === 0) { // Disable Sundays
+      return false;
+    }
+    const isUnavailable = unavailableDates.some(
+      (unavailableDate) => new Date(unavailableDate).toDateString() === date.toDateString()
+    );
+    return !isUnavailable;
+  };
+
+  const handleDateChangeRequest = (newDate: Date | null) => {
+    if (!newDate) {
+      setPendingDateChange(null);
+      setShowDateChangeWarning(true);
+      return;
+    }
+    
+    const hasItems = !!selectedPackage; // Check if a package is selected
+    const currentDateString = targetDate ? format(targetDate, 'yyyy-MM-dd') : '';
+    const newDateString = format(newDate, 'yyyy-MM-dd');
+
+    if (newDateString !== currentDateString && hasItems) {
+      setPendingDateChange(newDate);
+      setShowDateChangeWarning(true);
+    } else {
+      setTargetDate(newDate);
+    }
+  };
+
+  const handleConfirmDateChange = () => {
+    setTargetDate(pendingDateChange);
+    // Reset the package and fulfillment data
+    setSelectedPackage(null);
+    setSelectedMotifId('');
+    setFulfillmentData([]);
+    
+    setShowDateChangeWarning(false);
+    setPendingDateChange(null);
+  };
+
   const getMotifName = (motifHex: string) => {
     if (!motifHex) return 'N/A';
     try {
@@ -315,32 +360,17 @@ function PackageRent() {
   };
 
   const handleSelectCustomer = (selectedRental: RentalOrder) => {
-    const customer = selectedRental.customerInfo[0];
-    setCustomerDetails(customer);
+    setCustomerDetails(selectedRental.customerInfo[0]);
     setSelectedRentalForDisplay(selectedRental);
-    if (selectedRental.status === 'Pending') {
-      setExistingOpenRental(selectedRental);
-    } else {
-      setExistingOpenRental(null);
-    }
   };
 
-  const proceedWithAction = (action: 'create' | 'add') => {
+  const proceedWithAction = () => {
     setIsSubmitting(true);
-    if (action === 'create') {
-      if (!isNewCustomerMode && existingOpenRental) {
-        setShowReminderModal(true);
-        setIsSubmitting(false); // Stop submission until user confirms
-      } else {
-        createNewRental();
-      }
-    } else if (action === 'add') {
-      handleAddItemToExistingRental();
-    }
+    createNewRental();
   };
 
   
-  const validateAndProceed = (action: 'create' | 'add') => {
+  const validateAndProceed = () => {
     if (!selectedPackage) {
         addAlert("Please select a package.", 'danger');
         return;
@@ -370,37 +400,41 @@ function PackageRent() {
     });
 
     if (isFulfillmentIncomplete) {
-        setIncompleteAction(action);
         setShowIncompleteFulfillmentModal(true);
     } else {
-        proceedWithAction(action);
+        proceedWithAction();
     }
   };
 
   const buildRentalPayload = async () => {
-    if (!selectedPackage) return null;
+    if (!selectedPackage || !targetDate) return null; // Add date check
 
-    // Add 'await' here to resolve the Promise
     const { finalPackageFulfillment, customItemsForRental } = await buildFinalPayload(); 
     const selectedMotifObject = selectedPackage.colorMotifs.find(m => m._id === selectedMotifId);
+    
+    const startDate = targetDate;
+    const endDate = new Date(startDate);
+    endDate.setDate(startDate.getDate() + 3);
 
     return {
       customerInfo: [customerDetails],
       packageRents: [{
           _id: `pkg_${uuidv4()}`,
-        packageId: selectedPackage._id,
-        motifHex: selectedMotifObject?.motifHex,
-        price: selectedPackage.price,
-        quantity: 1,
-        imageUrl: selectedPackage.imageUrls[0] || '',
-        packageFulfillment: finalPackageFulfillment
+          packageId: selectedPackage._id,
+          motifHex: selectedMotifObject?.motifHex,
+          price: selectedPackage.price,
+          quantity: 1,
+          imageUrl: selectedPackage.imageUrls[0] || '',
+          packageFulfillment: finalPackageFulfillment
       }],
-      customTailoring: customItemsForRental
+      customTailoring: customItemsForRental,
+      // --- ADD THESE NEW DATE FIELDS ---
+      rentalStartDate: format(startDate, 'yyyy-MM-dd'),
+      rentalEndDate: format(endDate, 'yyyy-MM-dd'),
     };
   };
 
   const createNewRental = async () => {
-    setShowReminderModal(false);
     if (!selectedPackage) return;
     setIsSubmitting(true);
 
@@ -416,9 +450,14 @@ function PackageRent() {
       const response = await api.post('/rentals', rentalPayload);
       addAlert("New rental created successfully! Redirecting...", 'success');
       setTimeout(() => navigate(`/rentals/${response.data._id}`), 1500);
-    } catch (apiError: any) {
-      addAlert(apiError.response?.data?.message || "Failed to create package rental.", 'danger');
-      console.error("API Error:", apiError);
+    } catch (err: any) {
+      if (err.response && err.response.status === 409) {
+        setConflictingItems(err.response.data.conflictingItems || []);
+        setShowConflictModal(true);
+        addAlert('Some package items are no longer available. Please review fulfillment.', 'danger');
+      } else {
+        addAlert(err.response?.data?.message || "Failed to create package rental.", 'danger');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -492,38 +531,6 @@ function PackageRent() {
       finalPackageFulfillment,
       customItemsForRental,
     };
-  };
-
-  const handleAddItemToExistingRental = async () => {
-    if (!existingOpenRental) { 
-        addAlert("No existing rental found.", 'danger'); 
-        return; 
-    }
-    setIsSubmitting(true);
-
-    try {
-      // Add 'await' here
-      const payload = await buildRentalPayload();
-      if (!payload) {
-          addAlert("No package selected.", "danger");
-          setIsSubmitting(false);
-          return;
-      }
-
-      await api.put(`/rentals/${existingOpenRental._id}/addItem`, payload);
-      
-      setModalData({ rentalId: existingOpenRental._id, itemName: selectedPackage!.name });
-      setShowSuccessModal(true);
-      setSelectedMotifId('');
-      setFulfillmentData([]);
-      // Clear staged files after successful submission
-      setStagedFiles(new Map()); 
-    } catch (apiError: any) {
-      addAlert(apiError.response?.data?.message || "Failed to add item to rental.", 'danger');
-      console.error("API Error:", apiError);
-    } finally {
-      setIsSubmitting(false);
-    }
   };
 
   const handleOpenAssignmentModal = (fulfillmentIndex: number) => {
@@ -603,100 +610,104 @@ function PackageRent() {
       <h2 className="mb-4">Create Package Rental</h2>
       {loading ? ( <div className="text-center py-5"><Spinner /></div> ) : (
       <Row className="g-4">
-        {/* --- LEFT COLUMN --- */}
+        {/* --- LEFT COLUMN: DATE, PACKAGE, & FULFILLMENT --- */}
         <Col lg={6} xl={7}>
+          {/* Step 2: Select Rental Date */}
           <Card className="mb-4">
-            <Card.Header as="h5"><BoxSeam className="me-2" />Select Package</Card.Header>
+            <Card.Header as="h5">
+              <CalendarEvent className="me-2" />Select Rental Start Date
+            </Card.Header>
             <Card.Body>
-              {selectedPackage ? (
-                <div>
-                  <Row className="g-3 align-items-center">
-                    <Col xs="auto">
-                      <BsImage 
-                        src={selectedPackage.imageUrls[0] || 'https://placehold.co/120x150'} 
-                        style={{ width: '120px', height: '150px', objectFit: 'cover', borderRadius: '0.375rem' }} 
-                      />
-                    </Col>
-                    <Col>
-                      <h5 className="mb-1">{selectedPackage.name}</h5>
-                      <p className="text-danger fw-bold fs-5 mb-2">₱{selectedPackage.price.toLocaleString()}</p>
-                      
-                      {/* --- NEW MOTIF SWITCHER DROPDOWN --- */}
-                      <Form.Group>
-                        <Form.Label className="small fw-bold"><Palette className="me-2"/>Motif</Form.Label>
-                        <Form.Select 
-                          size="sm" 
-                          value={selectedMotifId}
-                          onChange={e => setSelectedMotifId(e.target.value)}
-                        >
-                          {selectedPackage.colorMotifs.map(motif => (
-                            <option key={motif._id} value={motif._id}>
-                              {getMotifName(motif.motifHex)}
-                            </option>
-                          ))}
-                        </Form.Select>
-                      </Form.Group>
-                      {/* --- END OF NEW DROPDOWN --- */}
-                    </Col>
-                  </Row>
-                  <div className="d-grid mt-3">
-                    <Button variant="outline-secondary" onClick={() => setShowPackageSelectionModal(true)}>
-                      Change Package...
+              <Form.Group>
+                <Form.Label>The 4-day rental period will begin on this date.</Form.Label>
+                <DatePicker
+                  selected={targetDate}
+                  onChange={handleDateChangeRequest}
+                  minDate={new Date()}
+                  className="form-control"
+                  placeholderText={!isCustomerInfoValid ? "Select customer details first..." : "Click to select a date..."}
+                  isClearable
+                  dateFormat="MMMM d, yyyy"
+                  wrapperClassName="w-100"
+                  disabled={!isCustomerInfoValid}
+                  filterDate={isSelectableDate}
+                />
+              </Form.Group>
+            </Card.Body>
+          </Card>
+
+          {/* Step 3 & 4: Select Package and Fulfillment */}
+          <Card>
+              <Card.Header as="h5"><BoxSeam className="me-2" />Select Package &amp; Fulfillment</Card.Header>
+              <Card.Body>
+                {selectedPackage ? (
+                  <div>
+                    <Row className="g-3 align-items-center">
+                      <Col xs="auto">
+                        <BsImage 
+                          src={selectedPackage.imageUrls[0] || 'https://placehold.co/120x150'} 
+                          style={{ width: '120px', height: '150px', objectFit: 'cover', borderRadius: '0.375rem' }} 
+                        />
+                      </Col>
+                      <Col>
+                        <h5 className="mb-1">{selectedPackage.name}</h5>
+                        <p className="text-danger fw-bold fs-5 mb-2">₱{selectedPackage.price.toLocaleString()}</p>
+                        <Form.Group>
+                          <Form.Label className="small fw-bold"><Palette className="me-2"/>Motif</Form.Label>
+                          <Form.Select size="sm" value={selectedMotifId} onChange={e => setSelectedMotifId(e.target.value)}>
+                            {selectedPackage.colorMotifs.map(motif => (
+                              <option key={motif._id} value={motif._id}>
+                                {getMotifName(motif.motifHex)}
+                              </option>
+                            ))}
+                          </Form.Select>
+                        </Form.Group>
+                      </Col>
+                    </Row>
+                    <div className="d-grid mt-3">
+                      <Button variant="outline-secondary" onClick={() => setShowPackageSelectionModal(true)}>
+                        Change Package...
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center p-4">
+                    <p className="text-muted fs-5">No package has been selected.</p>
+                    <Button variant="primary" onClick={() => setShowPackageSelectionModal(true)} disabled={!targetDate}>
+                      Select a Package
                     </Button>
                   </div>
-                </div>
-              ) : (
-                // --- PROMPT VIEW (when no package is selected) ---
-                <div className="text-center p-4">
-                  <p className="text-muted fs-5">No package has been selected.</p>
-                  <Button variant="primary" onClick={() => setShowPackageSelectionModal(true)}>
-                    Select a Package
-                  </Button>
-                </div>
+                )}
+              </Card.Body>
+              {fulfillmentData.length > 0 && (
+                  <div style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+                      <PackageFulfillmentForm
+                        mode="rental"
+                        fulfillmentData={normalizedDataForForm}
+                        onWearerNameChange={handleWearerNameChange}
+                        onOpenAssignmentModal={handleOpenAssignmentModal}
+                        onOpenCustomItemModal={handleOpenCustomItemModal}
+                        onClearAssignment={handleClearAssignment}
+                        errors={[]}
+                      />
+                  </div>
               )}
-            </Card.Body>
-          </Card>
-          <Card>
-            <Card.Header as="h5">Fulfillment Details</Card.Header>
-            <Card.Body className="p-0">
-              {fulfillmentData.length > 0 ? (
-                <div style={{ maxHeight: '70vh', overflowY: 'auto' }}>
-                    <PackageFulfillmentForm
-                      mode="rental"
-                      fulfillmentData={normalizedDataForForm}
-                      onWearerNameChange={handleWearerNameChange}
-                      onOpenAssignmentModal={handleOpenAssignmentModal}
-                      onOpenCustomItemModal={handleOpenCustomItemModal}
-                      onClearAssignment={handleClearAssignment}
-                      errors={[]} // Pass errors if you add validation here later
-                    />
-                </div>
-              ) : (
-                <div className="text-center p-5 text-muted">
-                  <p>Select a package and motif to see fulfillment details here.</p>
-                </div>
-              )}
-              {/* --- MODIFICATION END --- */}
-            </Card.Body>
-          </Card>
+            </Card>
         </Col>
 
-        {/* --- RIGHT COLUMN --- */}
+        {/* --- RIGHT COLUMN: CUSTOMER DETAILS --- */}
         <Col lg={6} xl={5}>
-            <CustomerDetailsCard
-                customerDetails={customerDetails}
-                setCustomerDetails={setCustomerDetails}
-                isNewCustomerMode={isNewCustomerMode}
-                onSetIsNewCustomerMode={setIsNewCustomerMode}
-                allRentals={allRentals}
-                onSelectExisting={handleSelectCustomer}
-                onSubmit={validateAndProceed}
-                isSubmitting={isSubmitting}
-                canSubmit={isReadyToSubmit}
-                existingOpenRental={existingOpenRental}
-                selectedRentalForDisplay={selectedRentalForDisplay}
-                errors={errors} 
-            />
+          <CustomerDetailsCard
+              customerDetails={customerDetails}
+              setCustomerDetails={setCustomerDetails}
+              allRentals={allRentals}
+              onSelectExisting={handleSelectCustomer}
+              onSubmit={validateAndProceed}
+              isSubmitting={isSubmitting}
+              canSubmit={isCustomerInfoValid && !!targetDate && !!selectedPackage}
+              selectedRentalForDisplay={selectedRentalForDisplay}
+              errors={errors} 
+          />
         </Col>
       </Row>
       )}
@@ -705,6 +716,7 @@ function PackageRent() {
         show={showPackageSelectionModal}
         onHide={() => setShowPackageSelectionModal(false)}
         onSelect={handlePackageSelect}
+        targetDate={targetDate}
       />
 
       {showCustomItemModal && customItemContext && (
@@ -733,24 +745,11 @@ function PackageRent() {
         />
       }
 
-      <Modal show={showReminderModal} onHide={() => setShowReminderModal(false)} centered>
-        <Modal.Header closeButton><Modal.Title><ExclamationTriangleFill className="me-2 text-warning" />Customer Has Open Rental</Modal.Title></Modal.Header>
-        <Modal.Body>This customer has a rental "Pending". Are you sure you want to create a separate new rental transaction?</Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowReminderModal(false)}>Cancel</Button>
-          <Button variant="primary" onClick={createNewRental}>Yes, Create New Rental</Button>
-        </Modal.Footer>
-      </Modal>
-
-      {/* --- RESTORED SUCCESS MODAL --- */}
-      <Modal show={showSuccessModal} onHide={() => setShowSuccessModal(false)} centered>
-        <Modal.Header closeButton><Modal.Title>Package Added Successfully</Modal.Title></Modal.Header>
-        <Modal.Body><Alert variant="success" className="mb-0">Successfully added <strong>{modalData.itemName}</strong> to rental ID: <strong>{modalData.rentalId}</strong>.</Alert></Modal.Body>
-        <Modal.Footer>
-            <Button variant="secondary" onClick={() => setShowSuccessModal(false)}>OK</Button>
-            <Button variant="primary" onClick={() => navigate(`/rentals/${modalData.rentalId}`)}>View Rental</Button>
-        </Modal.Footer>
-      </Modal>
+      <AvailabilityConflictModal
+        show={showConflictModal}
+        onHide={() => setShowConflictModal(false)}
+        conflictingItems={conflictingItems}
+      />
 
       <Modal show={showIncompleteFulfillmentModal} onHide={() => setShowIncompleteFulfillmentModal(false)} centered>
         <Modal.Header closeButton>
@@ -761,10 +760,31 @@ function PackageRent() {
             <Button variant="secondary" onClick={() => setShowIncompleteFulfillmentModal(false)}>Cancel</Button>
             <Button variant="primary" onClick={() => {
                 setShowIncompleteFulfillmentModal(false);
-                if (incompleteAction) proceedWithAction(incompleteAction);
+                proceedWithAction(); // Call the simplified function directly
             }}>
                 Proceed Anyway
             </Button>
+        </Modal.Footer>
+      </Modal>
+
+      <Modal show={showDateChangeWarning} onHide={() => setShowDateChangeWarning(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>
+            <ExclamationTriangleFill className="me-2 text-warning" />
+            Change Rental Date?
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p>Changing the rental date will clear your currently selected package and all fulfillment details. This is to ensure package availability can be re-verified for the new date.</p>
+          <p className="mb-0">Are you sure you want to proceed?</p>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowDateChangeWarning(false)}>
+            Cancel
+          </Button>
+          <Button variant="warning" onClick={handleConfirmDateChange}>
+            Yes
+          </Button>
         </Modal.Footer>
       </Modal>
     </Container>

@@ -52,25 +52,36 @@ router.put('/', protect, asyncHandler(async (req, res) => {
         gcashNumber,
         shopAddress,
         shopContactNumber,
-        shopEmail
+        shopEmail,
+        // --- NEW FIELDS ---
+        ownerName,
+        ownerTIN,
+        accreditationNumber,
+        accreditationDate,
+        paymentTerms,
+        businessStyle
     } = req.body;
 
     const updateData = {};
-    if (appointmentSlotsPerDay !== undefined) {
-        // ... (validation for slots is unchanged)
-        updateData.appointmentSlotsPerDay = appointmentSlotsPerDay;
-    }
-    // Add the new fields to the dynamic update object
+    
+    if (appointmentSlotsPerDay !== undefined) updateData.appointmentSlotsPerDay = appointmentSlotsPerDay;
     if (gcashName !== undefined) updateData.gcashName = gcashName;
     if (gcashNumber !== undefined) updateData.gcashNumber = gcashNumber;
     if (shopAddress !== undefined) updateData.shopAddress = shopAddress;
     if (shopContactNumber !== undefined) updateData.shopContactNumber = shopContactNumber;
     if (shopEmail !== undefined) updateData.shopEmail = shopEmail;
 
+    if (ownerName !== undefined) updateData.ownerName = ownerName;
+    if (ownerTIN !== undefined) updateData.ownerTIN = ownerTIN;
+    if (accreditationNumber !== undefined) updateData.accreditationNumber = accreditationNumber;
+    if (accreditationDate !== undefined) updateData.accreditationDate = accreditationDate;
+    if (paymentTerms !== undefined) updateData.paymentTerms = paymentTerms;
+    if (businessStyle !== undefined) updateData.businessStyle = businessStyle;
+
     const updatedSettings = await Settings.findByIdAndUpdate(
         'shopSettings',
         { $set: updateData },
-        { new: true, upsert: true }
+        { new: true, upsert: true, runValidators: true }
     );
     res.status(200).json(updatedSettings);
 }));

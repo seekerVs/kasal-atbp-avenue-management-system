@@ -33,8 +33,8 @@ const PackageCard: React.FC<PackageCardProps> = ({ title, price, note, items, im
         </div>
         
         <ListGroup variant="flush" className="flex-grow-1">
-          {items.slice(0, 7).map((inclusion) => (
-            <ListGroup.Item key={inclusion._id} className="d-flex border-0 px-0">
+          {items.slice(0, 9).map((inclusion) => (
+            <ListGroup.Item key={inclusion._id} className="d-flex border-0 p-1 lh-sm">
               <Check2 className="text-success me-2 flex-shrink-0 mt-1" />
               <span>{`${inclusion.wearerNum} ${inclusion.name}`}</span>
             </ListGroup.Item>

@@ -394,6 +394,12 @@ export interface ShopSettings {
   shopAddress?: string;
   shopContactNumber?: string;
   shopEmail?: string;
+  ownerName?: string;
+  ownerTIN?: string;
+  accreditationNumber?: string;
+  accreditationDate?: Date | null;
+  paymentTerms?: string;
+  businessStyle?: string;
 }
 
 // And modify the UnavailabilityRecord to remove 'slots'

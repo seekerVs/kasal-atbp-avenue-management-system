@@ -141,3 +141,29 @@
   background-color: var(--bs-gray-100);
   box-shadow: none;
 }
+
+.motif-swatch:disabled, .motif-swatch.disabled-swatch {
+  cursor: not-allowed;
+  transform: none; /* Prevent the hover scale effect */
+  box-shadow: none; /* Remove any active box-shadow */
+  position: relative; /* Needed for the pseudo-element overlay */
+  filter: grayscale(80%); /* Make the color look muted */
+}
+
+/* Create a line-through overlay using a pseudo-element */
+.motif-swatch:disabled::after, .motif-swatch.disabled-swatch::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 15%; /* Start the line slightly inset */
+  right: 15%; /* End the line slightly inset */
+  height: 2px;
+  background-color: rgba(174, 12, 0, 0.7); /* A semi-transparent red or dark color */
+  transform: translateY(-50%) rotate(-20deg); /* Diagonal line */
+  border-radius: 2px;
+}
+
+/* Prevent hover effects on the disabled button */
+.motif-swatch:disabled:hover {
+  transform: none;
+}

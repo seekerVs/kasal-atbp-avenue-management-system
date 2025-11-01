@@ -5,3 +5,9 @@
 .accordion-button.collapsed {
     padding: 0 !important;
 } */
+
+
+.payment-toggle-btn.btn-outline-success:hover {
+  background-color: #d1e7dd; /* Bootstrap's 'success-subtle' color */
+  color: #0a3622; /* Bootstrap's 'success-emphasis' color for text */
+}

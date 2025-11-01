@@ -435,7 +435,7 @@ function Dashboard() {
                     </div>
                 </div>
             </Card.Header>
-            <Card.Body className="d-flex justify-content-center align-items-center" style={{ minHeight: '320px' }}>
+            <Card.Body className="d-flex justify-content-center fs-6 align-items-center" style={{ minHeight: '320px' }}>
               {chartLoading ? <Spinner animation="border" /> : (
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }} barGap={4}>

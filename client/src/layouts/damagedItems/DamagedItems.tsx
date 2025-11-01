@@ -151,10 +151,10 @@ function DamagedItems() {
                           {item.status !== 'Repaired' && item.status !== 'Disposed' && (
                               <>
                                   <Button variant="outline-success" size="sm" className="me-2" title="Mark as Repaired" onClick={() => handleStatusUpdate(item._id, 'Repaired')}>
-                                    <CheckLg/>
+                                    <CheckLg/>Repair
                                   </Button>
                                   <Button variant="outline-secondary" size="sm" title="Mark as Disposed" onClick={() => handleStatusUpdate(item._id, 'Disposed')}>
-                                    <Trash/>
+                                    <Trash/>Dispose
                                   </Button>
                               </>
                           )}

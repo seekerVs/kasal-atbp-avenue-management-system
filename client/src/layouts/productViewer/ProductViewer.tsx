@@ -5,7 +5,8 @@ import {
   Row, Col, Button, Image, Spinner, Carousel, Alert, Accordion,
 } from "react-bootstrap"; 
 import { X } from "react-bootstrap-icons";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { format } from "date-fns";
 import { InventoryItem, ItemVariation } from "../../types";
 import api from "../../services/api";
 
@@ -13,37 +14,71 @@ import './productViewer.css'; // Import the new CSS file
 import { DataPrivacyModal } from "../../components/modals/dataPrivacyModal/DataPrivacyModal";
 import { SizeGuideModal } from '../../components/modals/sizeGuideModal/SizeGuideModal';
 
+interface ExtendedItemVariation extends ItemVariation {
+  availableStock?: number;
+}
+
 const ProductViewer: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const location = useLocation();
+  const [targetDate, setTargetDate] = useState<Date | null>(null);
 
   const [product, setProduct] = useState<InventoryItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedVariation, setSelectedVariation] = useState<ItemVariation | null>(null);
+  const [selectedVariation, setSelectedVariation] = useState<ExtendedItemVariation | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showSizeGuide, setShowSizeGuide] = useState(false);
 
   useEffect(() => {
-    if (!id) {
-      setError("No product ID provided."); setLoading(false); return;
-    }
-    const fetchProduct = async () => {
-      setLoading(true); setError(null);
+  // Initialize targetDate from navigation state when component loads
+  if (location.state?.targetDate) {
+    setTargetDate(new Date(location.state.targetDate));
+  }
+
+  if (!id) {
+    setError("No product ID provided.");
+    setLoading(false);
+    return;
+  }
+
+  const fetchProduct = async () => {
+      setLoading(true);
+      setError(null);
       try {
-        const response = await api.get(`/inventory/${id}`);
+        let response;
+        // Conditional API call
+        if (location.state?.targetDate) {
+          const dateStr = format(new Date(location.state.targetDate), 'yyyy-MM-dd');
+          response = await api.get(`/inventory/${id}/availability?date=${dateStr}`);
+        } else {
+          response = await api.get(`/inventory/${id}`);
+        }
+        
         const fetchedProduct: InventoryItem = response.data;
         setProduct(fetchedProduct);
-        const firstAvailable = fetchedProduct.variations.find(v => v.quantity > 0);
+
+        // Find the first variation that is available for the given date, or just in stock
+        const firstAvailable = fetchedProduct.variations.find(v => {
+          const extendedV = v as ExtendedItemVariation;
+          if (extendedV.availableStock !== undefined) {
+            return extendedV.availableStock > 0;
+          }
+          return v.quantity > 0;
+        });
         setSelectedVariation(firstAvailable || fetchedProduct.variations[0] || null);
+
       } catch (err) {
         setError("Product not found or an error occurred.");
-      } finally { setLoading(false); }
+      } finally {
+        setLoading(false);
+      }
     };
     fetchProduct();
-  }, [id]);
+  }, [id, location.state]);
 
   const availableColors = useMemo(() => {
     if (!product) return [];
@@ -127,7 +162,7 @@ const ProductViewer: React.FC = () => {
     
     // Close the modal and navigate
     setShowPrivacyModal(false);
-    navigate('/reservations/new');
+    navigate('/reservations/new', { state: { targetDate: targetDate } }); // <-- This is the updated line
   };
 
   if (loading) return <div className="text-center py-5"><Spinner /></div>;
@@ -198,7 +233,7 @@ const ProductViewer: React.FC = () => {
               <span className="selector-label">Size:</span>
               <div className="d-flex gap-2 flex-wrap">
                 {sizesForSelectedColor.map((v) => (
-                  <Button key={v.size} className="size-btn" variant={selectedVariation?.size === v.size ? "dark" : "outline-dark"} onClick={() => handleSizeSelect(v.size)} disabled={v.quantity <= 0} size="sm">
+                  <Button key={v.size} className="size-btn" variant={selectedVariation?.size === v.size ? "dark" : "outline-dark"} onClick={() => handleSizeSelect(v.size)} disabled={(targetDate && (v as ExtendedItemVariation).availableStock !== undefined) ? (v as ExtendedItemVariation).availableStock! <= 0 : v.quantity <= 0} size="sm">
                     {v.size}
                   </Button>
                 ))}
@@ -211,15 +246,28 @@ const ProductViewer: React.FC = () => {
             <div className="mb-3">
               <span className="selector-label">Quantity:</span>
               <div className="d-flex align-items-center gap-2 quantity-selector">
-                <Button variant="outline-dark" size="sm" onClick={() => setQuantity((q) => Math.max(1, q - 1))} disabled={!selectedVariation}>-</Button>
+                <Button variant="outline-dark" size="sm" onClick={() => setQuantity((q) => Math.max(1, q - 1))} disabled={!selectedVariation || !targetDate}>-</Button>
                 <span className="fw-bold fs-5">{quantity}</span>
-                <Button variant="outline-dark" size="sm" onClick={() => setQuantity((q) => Math.min(selectedVariation?.quantity || 1, q + 1))} disabled={!selectedVariation}>+</Button>
-                <small className="ms-2 text-muted">{selectedVariation?.quantity || 0} pieces available</small>
+                <Button variant="outline-dark" size="sm" onClick={() => setQuantity((q) => Math.min((selectedVariation as ExtendedItemVariation)?.availableStock || 1, q + 1))} disabled={!selectedVariation || !targetDate}>+</Button>
+                <small className="ms-2 text-muted">
+                  {targetDate && selectedVariation?.availableStock !== undefined && (
+                    `${selectedVariation.availableStock} total pieces in stock`
+                  )}
+                </small>
               </div>
             </div>
 
             <div className="d-grid gap-2 my-4">
-              <Button className="add-to-booking-btn" size="lg" onClick={handleInitiateReservation} disabled={!selectedVariation || selectedVariation.quantity < 1}>
+              {!targetDate && (
+                <Alert variant="warning" className="text-center small py-2">
+                  Please select a Target Reservation Date on the Outfits page to check availability and enable reservation.
+                </Alert>
+              )}
+              <Button 
+                className="add-to-booking-btn" 
+                onClick={handleInitiateReservation} 
+                disabled={!targetDate || !selectedVariation || (selectedVariation.availableStock !== undefined && selectedVariation.availableStock < quantity)}
+              >
                 Reserve Now
               </Button>
             </div>

@@ -10,13 +10,14 @@ export * from './custompage';
 
 // --- Represents a single variation of an inventory item ---
 export interface ItemVariation {
+  _id?: string; 
   color: {
     name: string;
     hex: string;
   };
   size: string;
   quantity: number;
-  imageUrl: string;
+  imageUrls: string[];
 }
 
 // --- Represents a single item in your inventory (e.g., a specific gown model) ---
@@ -169,6 +170,9 @@ export interface Financials {
   depositAmount: number;
   depositReimbursed?: number; 
   payments?: PaymentDetail[];
+  applyScPwdDiscount?: boolean;
+  scPwdDiscount?: number;
+  withholdingTax?: number;
   subtotal?: number;
   itemsTotal?: number;
   requiredDeposit?: number;
@@ -191,6 +195,7 @@ export interface RentalOrder {
   createdAt: string;
   updatedAt: string;
   pendingInventoryConversion?: CustomTailoringItem[];
+  returnReminderSent?: boolean;
 }
 
 export interface NormalizedFulfillmentItem {
@@ -218,12 +223,18 @@ export interface NormalizedFulfillmentItem {
 export type InitialCustomTailoringData = Omit<CustomTailoringItem, 'measurements' | 'outfitCategory' | 'outfitType'>;
 export type MeasurementValues = CustomTailoringItem['measurements'];
 
-// --- For measurement templates ---
+export interface MeasurementDetail {
+  label: string;
+  guide: string;
+}
+
+// Interface for measurement templates ---
 export interface MeasurementRef {
   _id: string;
   outfitName: string;
   category: string;
-  measurements: string[];
+  description?: string; // <-- ADDED description property
+  measurements: MeasurementDetail[]; // <-- THIS IS THE KEY CHANGE
 }
 
 // --- For sensor data ---
@@ -276,6 +287,8 @@ export interface CustomerInfo {
   email?: string;
   phoneNumber: string;
   address: Address;
+  tinScTin?: string;
+  oscaPwdIdNo?: string;
 }
 
 export interface Payment {
@@ -386,6 +399,14 @@ export interface ShopSettings {
   shopAddress?: string;
   shopContactNumber?: string;
   shopEmail?: string;
+  ownerName?: string;
+  ownerTIN?: string;
+  accreditationNumber?: string;
+  accreditationDate?: Date | null;
+  scPwdDiscountRate?: number;
+  withholdingTaxRate?: number;
+  paymentTerms?: string;
+  businessStyle?: string;
 }
 
 // And modify the UnavailabilityRecord to remove 'slots'

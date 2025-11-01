@@ -11,9 +11,11 @@ const AddressSchema = new mongoose.Schema({
 
 const CustomerInfoSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
-  email: { type: String, trim: true },
+  email: { type: String, required: true, trim: true },
   phoneNumber: { type: String, required: true, trim: true },
   address: { type: AddressSchema, required: true },
+  tinScTin: { type: String, trim: true },      // <-- ADD THIS
+  oscaPwdIdNo: { type: String, trim: true },
 }, { _id: false });
 
 // --- Financials Sub-Schema ---

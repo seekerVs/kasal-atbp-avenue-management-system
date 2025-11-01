@@ -1,13 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-
-// Define the shape of the sensor data we expect from the backend
-interface SensorData {
-  sensorType: 'LengthMeasurement' | 'Control' | 'Heartbeat' | string;
-  centimeters?: number;
-  command?: 'focusNext' | string;
-  updatedAt: string;
-}
+import { SensorData } from '../types';
 
 // Define the shape of the object our hook will return
 interface UseSensorDataReturn {
@@ -18,8 +11,9 @@ interface UseSensorDataReturn {
 
 const SENSOR_API_URL = `${import.meta.env.VITE_SENSOR_URL}/sensorData`;
 
-// (Optional but Recommended) Add a check to ensure the variable is set
+// 2. (Highly Recommended) Add a check to ensure the variable is set during development.
 if (!import.meta.env.VITE_SENSOR_URL) {
+  // This will throw a clear error if you forget to add the variable to your .env file.
   throw new Error("VITE_SENSOR_URL is not defined. Please check your .env file.");
 }
 

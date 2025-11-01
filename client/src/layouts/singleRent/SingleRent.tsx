@@ -1,8 +1,8 @@
 // client/src/layouts/singleRent/SingleRent.tsx
 
 import  { useState, useEffect, useMemo } from 'react';
-import { Container, Row, Col, Button, Card, Image as BsImage, Spinner, Alert, Modal, ListGroup } from 'react-bootstrap';
-import { BoxSeam, ExclamationTriangleFill, PencilSquare, Trash } from 'react-bootstrap-icons';
+import { Container, Row, Col, Button, Card, Image as BsImage, Spinner, Modal, ListGroup, Form } from 'react-bootstrap';
+import { BoxSeam, CalendarEvent, ExclamationTriangleFill, PencilSquare, Trash } from 'react-bootstrap-icons';
 import { useNavigate } from 'react-router-dom';
 
 import CustomerDetailsCard from '../../components/CustomerDetailsCard';
@@ -10,6 +10,9 @@ import { CustomerInfo, RentalOrder, FormErrors } from '../../types';
 import api from '../../services/api';
 import { useAlert } from '../../contexts/AlertContext';
 import { SelectedItemData, SingleItemSelectionModal } from '../../components/modals/singleItemSelectionModal/SingleItemSelectionModal';
+import DatePicker from 'react-datepicker';
+import { format } from 'date-fns';
+import { AvailabilityConflictModal } from '../../components/modals/availabilityConflictModal/AvailabilityConflictModal';
 
 const initialCustomerDetails: CustomerInfo = { 
   name: '', phoneNumber: '', email: '', 
@@ -32,36 +35,45 @@ function SingleRent() {
   const [selections, setSelections] = useState<SelectedItemData[]>([]);
   
   const [customerDetails, setCustomerDetails] = useState<CustomerInfo>(initialCustomerDetails);
-  const [isNewCustomerMode, setIsNewCustomerMode] = useState(true);
-  const [existingOpenRental, setExistingOpenRental] = useState<RentalOrder | null>(null);
   const [selectedRentalForDisplay, setSelectedRentalForDisplay] = useState<RentalOrder | null>(null);
   
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showItemModal, setShowItemModal] = useState(false);
-  const [showReminderModal, setShowReminderModal] = useState(false);
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [modalData, setModalData] = useState({ rentalId: '', itemName: '', quantity: 0 });
   const [errors, setErrors] = useState<FormErrors>({}); 
   const [itemToEdit, setItemToEdit] = useState<SelectedItemData | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<ItemToDelete>(null);
+  const [targetDate, setTargetDate] = useState<Date | null>(null);
+  const [showDateChangeWarning, setShowDateChangeWarning] = useState(false);
+  const [pendingDateChange, setPendingDateChange] = useState<Date | null>(null);
+  const [unavailableDates, setUnavailableDates] = useState<Date[]>([]);
+  const [showConflictModal, setShowConflictModal] = useState(false);
+  const [conflictingItems, setConflictingItems] = useState([]);
+
+  const isCustomerInfoValid = useMemo(() => {
+    // Check for a non-empty name and a valid phone number format.
+    return customerDetails.name.trim() !== '' && /^09\d{9}$/.test(customerDetails.phoneNumber);
+  }, [customerDetails]);
 
 
   useEffect(() => {
-    // This effect now only fetches data not related to the inventory, like all rentals for the customer search.
-    const fetchRentalData = async () => {
-      setLoading(true); // Keep the main page loader for this initial fetch
+    const fetchInitialData = async () => {
+      setLoading(true);
       try {
-        const rentalsResponse = await api.get('/rentals');
+        const [rentalsResponse, unavailableResponse] = await Promise.all([
+          api.get('/rentals'),
+          api.get('/unavailability')
+        ]);
         setAllRentals(rentalsResponse.data || []);
+        setUnavailableDates(unavailableResponse.data.map((rec: { date: string }) => new Date(rec.date)));
       } catch (err) { 
-        addAlert('Failed to load initial rental data.', 'danger');
+        addAlert('Failed to load initial page data.', 'danger');
       } finally { 
         setLoading(false);
       }
     };
-    fetchRentalData();
+    fetchInitialData();
   }, [addAlert]);
 
   const subtotal = useMemo(() => {
@@ -69,6 +81,18 @@ function SingleRent() {
       return total + (item.product.price * item.quantity);
     }, 0);
   }, [selections]);
+
+  const isSelectableDate = (date: Date): boolean => {
+    const day = date.getDay();
+    if (day === 0) { // Disable Sundays
+      return false;
+    }
+    // Check if the date is in the unavailableDates array
+    const isUnavailable = unavailableDates.some(
+      (unavailableDate) => new Date(unavailableDate).toDateString() === date.toDateString()
+    );
+    return !isUnavailable;
+  };
 
   const handleAddItem = (selection: SelectedItemData) => {
     const newItem = selection;  
@@ -140,6 +164,37 @@ function SingleRent() {
     setShowDeleteModal(true);
   };
 
+  const handleDateChangeRequest = (newDate: Date | null) => {
+    if (!newDate) {
+      // Handle the case where the date is cleared, which might also clear items
+      setPendingDateChange(null);
+      setShowDateChangeWarning(true);
+      return;
+    }
+    
+    const hasItems = selections.length > 0;
+    const currentDateString = targetDate ? format(targetDate, 'yyyy-MM-dd') : '';
+    const newDateString = format(newDate, 'yyyy-MM-dd');
+
+    // Check if the date is actually different AND there are items in the cart
+    if (newDateString !== currentDateString && hasItems) {
+      setPendingDateChange(newDate);
+      setShowDateChangeWarning(true);
+    } else {
+      // If no items in cart or date is the same, update directly
+      setTargetDate(newDate);
+    }
+  };
+
+  const handleConfirmDateChange = () => {
+    setTargetDate(pendingDateChange); // Set the new date
+    setSelections([]); // Clear the items
+    
+    // Clean up state
+    setShowDateChangeWarning(false);
+    setPendingDateChange(null);
+  };
+
   const confirmRemoveItem = () => {
     if (!itemToDelete) return;
     
@@ -154,7 +209,6 @@ function SingleRent() {
   const handleSelectCustomer = (selectedRental: RentalOrder) => {
     setCustomerDetails(selectedRental.customerInfo[0]);
     setSelectedRentalForDisplay(selectedRental);
-    setExistingOpenRental(selectedRental.status === 'Pending' ? selectedRental : null);
   };
   
   const validateForm = () => {
@@ -175,15 +229,19 @@ function SingleRent() {
   };
 
   const createRentalPayload = () => {
-    if (selections.length === 0) return null;
+    if (selections.length === 0 || !targetDate) return null; // Add a check for targetDate
 
-    // Map over the 'selections' state, which already holds the structured data we need.
+    // Calculate the end date based on the targetDate
+    const startDate = targetDate;
+    const endDate = new Date(startDate);
+    endDate.setDate(startDate.getDate() + 3); // Default 4-day rental period
+
     const singleRentsData = selections.map(selection => {
       const { product, variation, quantity } = selection;
       return {
         itemId: product._id,
         name: product.name,
-        variation: variation, // Pass the whole variation object
+        variation: variation,
         price: product.price,
         quantity: quantity,
         imageUrl: variation.imageUrls[0] || '',
@@ -193,52 +251,36 @@ function SingleRent() {
     return {
       customerInfo: [customerDetails],
       singleRents: singleRentsData,
+      // --- ADD THESE NEW DATE FIELDS ---
+      rentalStartDate: format(startDate, 'yyyy-MM-dd'),
+      rentalEndDate: format(endDate, 'yyyy-MM-dd'),
     };
   };
 
-  const handleFormSubmission = (action: 'create' | 'add') => {
+  const handleFormSubmission = () => {
     if (!validateForm()) return;
-
-    if (action === 'create' && !isNewCustomerMode && !existingOpenRental) {
-      setShowReminderModal(true);
-    } else if (action === 'add' && existingOpenRental) {
-      addItemToExistingRental();
-    } else {
-      createNewRental();
-    }
+    createNewRental();
   };
   
   const createNewRental = async () => {
-    setShowReminderModal(false);
-    const rentalPayload = createRentalPayload();
-    if (!rentalPayload) return;
+    const rentalPayload = createRentalPayload(); // This now includes the dates
+    if (!rentalPayload) {
+      addAlert("Missing rental data. Please select items and a date.", "warning");
+      return;
+    }
     setIsSubmitting(true);
     try {
       const response = await api.post('/rentals', rentalPayload);
       addAlert('New rental created successfully! Redirecting...', 'success');
       setTimeout(() => navigate(`/rentals/${response.data._id}`), 1500);
     } catch (err: any) {
-      addAlert(err.response?.data?.message || "Failed to create rental.", 'danger');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const addItemToExistingRental = async () => {
-    const payload = createRentalPayload();
-    if (!existingOpenRental || !payload) return;
-    setIsSubmitting(true);
-    try {
-      await api.put(`/rentals/${existingOpenRental._id}/addItem`, { singleRents: payload.singleRents });
-      setModalData({ 
-          rentalId: existingOpenRental._id, 
-          itemName: "New items", // Generic name
-          quantity: selections.length // Can show how many new items were added
-      });
-      setShowSuccessModal(true);
-      setSelections([]); // Reset the form
-    } catch (err: any) {
-      addAlert(err.response?.data?.message || "Failed to add item.", 'danger');
+      if (err.response && err.response.status === 409) {
+        setConflictingItems(err.response.data.conflictingItems || []);
+        setShowConflictModal(true);
+        addAlert('Some items are no longer available. Please review your list.', 'danger');
+      } else {
+        addAlert(err.response?.data?.message || "Failed to create rental.", 'danger');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -248,102 +290,115 @@ function SingleRent() {
     <Container fluid>
       <h2 className="mb-4">Outfit Rent</h2>
       {loading ? ( <div className="text-center py-5"><Spinner /></div> ) : (
-      <Row className="g-4">
-        <Col lg={6} xl={7}>
-          <Card>
-            <Card.Header as="h5" className="d-flex align-items-center"><BoxSeam className="me-2" /> Selected Item</Card.Header>
-            <Card.Body className="d-flex flex-column">
-              {selections.length > 0 ? (
-                <>
-                  <ListGroup variant="flush" className="flex-grow-1" style={{ overflowY: 'auto', maxHeight: '400px' }}>
-                  {selections.map((item) => {
-                    const variationKey = `${item.variation.color.hex}-${item.variation.size}`;
-                    return (
-                      <ListGroup.Item key={`${item.product._id}-${variationKey}`} className="px-2 py-3 border-bottom">
-                        <Row className="align-items-center gx-0">
-                          <Col xs="auto">
-                            <BsImage src={item.variation.imageUrls[0] || 'https://placehold.co/80x80'} thumbnail style={{ width: '80px', height: '80px', objectFit: 'cover', marginRight:'1rem' }} />
-                          </Col>
-                          <Col>
-                            <p className="fw-bold mb-1">{item.product.name}</p>
-                            <p className="text-muted small mb-0">Variation: {item.variation.color.name} - {item.variation.size}</p>
-                            <p className="text-muted small mb-0">Qty: {item.quantity}</p>
-                          </Col>
-                          <Col xs="auto" className="text-end">
-                            <p className="fw-bold h5 text-success mb-2">₱{(item.product.price * item.quantity).toLocaleString()}</p>
-                            <>
-                              <Button
-                                variant="outline-secondary"
-                                size="sm"
-                                className="me-2"
-                                onClick={() => handleOpenEditor(item)}
-                              >
-                                <PencilSquare />
-                              </Button>
-                              <Button
-                                variant="outline-danger"
-                                size="sm"
-                                onClick={() => handleRemoveItem(item.product._id, variationKey, item.product.name)}
-                              >
-                                <Trash />
-                              </Button>
-                            </>
-                          </Col>
-                        </Row>
-                      </ListGroup.Item>
-                    );
-                  })}
-                </ListGroup>
-                  <hr />
-                  
-                  <div className="d-flex justify-content-between align-items-center mb-3">
-                    <h5 className="mb-0">Subtotal:</h5>
-                    <h5 className="mb-0 text-danger fw-bold">₱{subtotal.toLocaleString()}</h5>
-                  </div>
-                  <Button variant="outline-primary" onClick={() => setShowItemModal(true)}>
-                    Add More Items...
-                  </Button>
-                </>
-              ) : (
-                // --- Prompt to select the first item ---
-                <div className="text-center my-auto">
-                  <p className="text-muted fs-5">Your rental list is empty.</p>
-                  <Button onClick={() => setShowItemModal(true)}>
-                    Select an outfit to rent
-                  </Button>
-                </div>
-              )}
-            </Card.Body>
-          </Card>
-        </Col>
 
-        <Col lg={6} xl={5}>
-           <CustomerDetailsCard
-            customerDetails={customerDetails}
-            setCustomerDetails={setCustomerDetails}
-            isNewCustomerMode={isNewCustomerMode}
-            onSetIsNewCustomerMode={setIsNewCustomerMode}
-            allRentals={allRentals}
-            onSelectExisting={handleSelectCustomer}
-            onSubmit={handleFormSubmission}
-            isSubmitting={isSubmitting}
-            canSubmit={selections.length > 0}
-            existingOpenRental={existingOpenRental}
-            selectedRentalForDisplay={selectedRentalForDisplay}
-            errors={errors} 
-          />
-        </Col>
-      </Row>
+        <Row className="g-4">
+          {/* --- LEFT COLUMN: DATE & ITEMS --- */}
+          <Col lg={6} xl={7}>
+            {/* Step 2: Select Rental Date */}
+            <Card className="mb-4">
+              <Card.Header as="h5">
+                <CalendarEvent className="me-2" />Select Rental Start Date
+              </Card.Header>
+              <Card.Body>
+                <Form.Group>
+                  <Form.Label>The 4-day rental period will begin on this date.</Form.Label>
+                  <DatePicker
+                    selected={targetDate}
+                    onChange={handleDateChangeRequest}
+                    minDate={new Date()}
+                    className="form-control"
+                    placeholderText="Select date..." 
+                    isClearable
+                    dateFormat="MMMM d, yyyy"
+                    wrapperClassName="w-100"
+                    disabled={!isCustomerInfoValid}
+                    filterDate={isSelectableDate}
+                  />
+                </Form.Group>
+              </Card.Body>
+            </Card>
+
+            {/* Step 3: Selected Items */}
+            <Card>
+              <Card.Header as="h5" className="d-flex align-items-center"><BoxSeam className="me-2" /> Selected Items</Card.Header>
+              <Card.Body className="d-flex flex-column">
+                {selections.length > 0 ? (
+                  <>
+                    <ListGroup variant="flush" className="flex-grow-1" style={{ overflowY: 'auto', maxHeight: '400px' }}>
+                      {selections.map((item) => {
+                        const variationKey = `${item.variation.color.hex}-${item.variation.size}`;
+                        return (
+                          <ListGroup.Item key={`${item.product._id}-${variationKey}`} className="px-2 py-3 border-bottom">
+                            <Row className="align-items-center gx-0">
+                              <Col xs="auto">
+                                <BsImage src={item.variation.imageUrls[0] || 'https://placehold.co/80x80'} thumbnail style={{ width: '80px', height: '80px', objectFit: 'cover', marginRight:'1rem' }} />
+                              </Col>
+                              <Col>
+                                <p className="fw-bold mb-1">{item.product.name}</p>
+                                <p className="text-muted small mb-0">Variation: {item.variation.color.name} - {item.variation.size}</p>
+                                <p className="text-muted small mb-0">Qty: {item.quantity}</p>
+                              </Col>
+                              <Col xs="auto" className="text-end">
+                                <p className="fw-bold h5 text-success mb-2">₱{(item.product.price * item.quantity).toLocaleString()}</p>
+                                <>
+                                  <Button variant="outline-secondary" size="sm" className="me-2" onClick={() => handleOpenEditor(item)}><PencilSquare /></Button>
+                                  <Button variant="outline-danger" size="sm" onClick={() => handleRemoveItem(item.product._id, variationKey, item.product.name)}><Trash /></Button>
+                                </>
+                              </Col>
+                            </Row>
+                          </ListGroup.Item>
+                        );
+                      })}
+                    </ListGroup>
+                    <hr />
+                    <div className="d-flex justify-content-between align-items-center mb-3">
+                      <h5 className="mb-0">Subtotal:</h5>
+                      <h5 className="mb-0 text-danger fw-bold">₱{subtotal.toLocaleString()}</h5>
+                    </div>
+                    <Button variant="outline-primary" onClick={() => setShowItemModal(true)} disabled={!targetDate}>
+                      Add More Items...
+                    </Button>
+                  </>
+                ) : (
+                  <div className="text-center my-auto p-5">
+                    <p className="text-muted fs-5">Your rental list is empty.</p>
+                    <Button onClick={() => setShowItemModal(true)} disabled={!targetDate}>
+                      Select an outfit to rent
+                    </Button>
+                  </div>
+                )}
+              </Card.Body>
+            </Card>
+          </Col>
+
+          {/* --- RIGHT COLUMN: CUSTOMER DETAILS --- */}
+          <Col lg={6} xl={5}>
+            <CustomerDetailsCard
+              customerDetails={customerDetails}
+              setCustomerDetails={setCustomerDetails}
+              allRentals={allRentals}
+              onSelectExisting={handleSelectCustomer}
+              onSubmit={handleFormSubmission}
+              isSubmitting={isSubmitting}
+              canSubmit={isCustomerInfoValid && !!targetDate && selections.length > 0}
+              selectedRentalForDisplay={selectedRentalForDisplay}
+              errors={errors} 
+            />
+          </Col>
+        </Row>
+
       )}
 
       <SingleItemSelectionModal
         show={showItemModal}
         onHide={() => { setShowItemModal(false); setItemToEdit(null); }}
-        onSelect={itemToEdit ? handleItemUpdate : handleAddItem} // Conditional onSelect
+        onSelect={itemToEdit ? handleItemUpdate : handleAddItem}
         addAlert={addAlert}
         mode="rental"
         preselectedItemId={itemToEdit?.product._id}
         preselectedVariation={itemToEdit ? `${itemToEdit.variation.color.name}, ${itemToEdit.variation.size}` : undefined}
+        initialDate={targetDate}
+        isDateDisabled={true}
       />
 
       <Modal show={showDeleteModal} onHide={() => setShowDeleteModal(false)} centered>
@@ -363,20 +418,32 @@ function SingleRent() {
         </Modal.Footer>
       </Modal>
 
-      <Modal show={showReminderModal} onHide={() => setShowReminderModal(false)} centered>
-        <Modal.Header closeButton><Modal.Title><ExclamationTriangleFill className="me-2 text-warning" />Create New Rental?</Modal.Title></Modal.Header>
-        <Modal.Body>This customer does not have a "Pending" rental. Do you want to create a completely new rental transaction for them?</Modal.Body>
+      <Modal show={showDateChangeWarning} onHide={() => setShowDateChangeWarning(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>
+            <ExclamationTriangleFill className="me-2 text-warning" />
+            Change Rental Date?
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p>Changing the rental date will clear all items from your current selection. This is to ensure item availability can be re-verified for the new date.</p>
+          <p className="mb-0">Are you sure you want to proceed?</p>
+        </Modal.Body>
         <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowReminderModal(false)}>Cancel</Button>
-          <Button variant="primary" onClick={createNewRental}>Yes, Create New Rental</Button>
+          <Button variant="secondary" onClick={() => setShowDateChangeWarning(false)}>
+            Cancel
+          </Button>
+          <Button variant="warning" onClick={handleConfirmDateChange}>
+            Yes
+          </Button>
         </Modal.Footer>
       </Modal>
 
-      <Modal show={showSuccessModal} onHide={() => setShowSuccessModal(false)} centered>
-        <Modal.Header closeButton><Modal.Title>Item Added Successfully</Modal.Title></Modal.Header>
-        <Modal.Body><Alert variant="success" className="mb-0">Successfully added <strong>{modalData.quantity} x {modalData.itemName}</strong> to rental ID: <strong>{modalData.rentalId}</strong>.</Alert></Modal.Body>
-        <Modal.Footer><Button variant="secondary" onClick={() => setShowSuccessModal(false)}>OK</Button><Button variant="primary" onClick={() => navigate(`/rentals/${modalData.rentalId}`)}>View Rental</Button></Modal.Footer>
-      </Modal>
+      <AvailabilityConflictModal
+        show={showConflictModal}
+        onHide={() => setShowConflictModal(false)}
+        conflictingItems={conflictingItems}
+      />
     </Container>
   );
 }

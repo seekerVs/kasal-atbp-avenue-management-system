@@ -28,7 +28,7 @@ export const StepReminders: React.FC<StepRemindersProps> = ({ onNext }) => {
           </li>
           {/* --- THIS IS THE NEW POLICY POINT --- */}
           <li>
-            Once a reservation is confirmed, it is considered final. We operate on a strict <strong>no-cancellation and no-refund</strong> policy. However, we do allow for the <strong>replacement</strong> of items, subject to availability.
+            Once a reservation is confirmed, it is considered final. We operate on a strict <strong>no-refund</strong> policy. However, we do allow for the <strong>replacement</strong> of items, subject to availability.
           </li>
           <li>
             Please ensure all contact information provided is accurate so our team can reach you.

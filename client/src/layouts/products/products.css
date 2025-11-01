@@ -4,8 +4,7 @@
   width: 100%;
   margin-left: auto;
   margin-right: auto;
-  padding-left: 5rem;
-  padding-right: 5rem;
+  padding: 2rem;
 }
 
 /* Ensure the search button text is white */

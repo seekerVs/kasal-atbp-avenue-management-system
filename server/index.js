@@ -73,10 +73,15 @@ app.get("/", (req, res) => {
 app.use((err, req, res, next) => {
   console.error("GLOBAL ERROR HANDLER:", err.stack);
   const statusCode = err.statusCode || 500;
-  res.status(statusCode).json({
+  const responseBody = {
     success: false,
     message: err.message || 'An unexpected server error occurred.',
-  });
+  };
+  // If we have conflicting items, add them to the response
+  if (err.conflictingItems) {
+    responseBody.conflictingItems = err.conflictingItems;
+  }
+  res.status(statusCode).json(responseBody);
 });
 
 

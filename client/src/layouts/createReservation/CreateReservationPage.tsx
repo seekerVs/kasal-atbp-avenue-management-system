@@ -1,8 +1,10 @@
 // client/src/layouts/createReservation/CreateReservationPage.tsx
 
 import { useState, useEffect, useRef } from 'react';
-import { Container, Card, Row, Col } from 'react-bootstrap';
+import { Container, Card, Row, Col, Modal, Button, Spinner } from 'react-bootstrap';
 import { format, addDays } from 'date-fns';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 import { Reservation, FormErrors, Package, PackageReservation, UnavailabilityRecord, ShopSettings } from '../../types';
 import api, { uploadFile } from '../../services/api';
@@ -14,12 +16,15 @@ import { StepReminders } from '../../components/reservationWizard/steps/StepRemi
 import { StepPayment } from '../../components/reservationWizard/steps/StepPayment';
 import { WizardControls } from '../../components/reservationWizard/WizardControls';
 import { BookingProgressBar } from '../../components/reservationWizard/progressBar/BookingProgressBar';
-import { ReservationSuccessModal } from '../../components/reservationWizard/reservationSuccessModal/ReservationSuccessModal';
 import { StepFinish } from '../../components/reservationWizard/steps/StepFinish';
 import { calculateItemDeposit, calculatePackageDeposit } from '../../utils/financials';
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
 import { NavigationBlocker } from '../../components/NavigationBlocker';
 import { PackageConfigurationData } from '../../components/modals/packageConfigurationModal/PackageConfigurationModal';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Download, ExclamationTriangleFill } from 'react-bootstrap-icons';
+import { ReservationSummary } from '../../components/reservationSummary/ReservationSummary';
+import { AvailabilityConflictModal } from '../../components/modals/availabilityConflictModal/AvailabilityConflictModal';
 
 // The initial state for reserveDate is now a FORMATTED STRING ("YYYY-MM-DD").
 // This is the definitive fix to prevent the RangeError.
@@ -39,6 +44,8 @@ const getInitialReservationState = (): Omit<Reservation, '_id' | 'createdAt' | '
 const WIZARD_STEPS = ['Reminders', 'Information', 'Reserve', 'Payment', 'Finish'];
 
 function CreateReservationPage() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const { addAlert } = useAlert();
 
   const [currentStep, setCurrentStep] = useState(1);
@@ -56,6 +63,12 @@ function CreateReservationPage() {
   const [grandTotal, setGrandTotal] = useState(0);
   const initialReservationStateRef = useRef<string | null>(null);
   const initialDataLoaded = useRef(false);
+  const [showDateChangeWarning, setShowDateChangeWarning] = useState(false);
+  const [pendingDateChange, setPendingDateChange] = useState<Date | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const summaryRef = useRef<HTMLDivElement>(null);
+  const [showConflictModal, setShowConflictModal] = useState(false);
+  const [conflictingItems, setConflictingItems] = useState([]);
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -93,7 +106,7 @@ function CreateReservationPage() {
         } else if (payload.type === 'package') {
           initialState.packageReservations = [payload.data];
         }
-        startStep = 2; // Set the starting step
+        startStep = 2;
         sessionStorage.removeItem('pendingReservationItem');
       } catch (error) {
         console.error("Failed to parse pre-selected item:", error);
@@ -101,12 +114,19 @@ function CreateReservationPage() {
       }
     }
 
-    // --- 3. STORE THE FINAL INITIAL STATE IN THE REF ---
+    if (location.state?.targetDate) {
+      // Override the default date with the one from the ProductViewer
+      const passedDate = new Date(location.state.targetDate);
+      initialState.reserveDate = format(passedDate, 'yyyy-MM-dd');
+    }
+
     setReservation(initialState);
     setCurrentStep(startStep);
     initialReservationStateRef.current = JSON.stringify(initialState);
     initialDataLoaded.current = true;
-
+    
+  // The dependency array still needs to be empty to run only once.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -154,6 +174,22 @@ function CreateReservationPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reservation.itemReservations, reservation.packageReservations]);
 
+  useEffect(() => {
+    // Check if the modal has just become visible AND we have the data needed for the PDF
+    if (showSuccessModal && submittedReservation) {
+      // We use a small timeout to ensure the modal and its content (the summary)
+      // have fully rendered in the DOM before we try to capture it.
+      const timer = setTimeout(() => {
+        handleDownloadPdf();
+      }, 500); // 500ms delay
+
+      // Cleanup function to clear the timer if the component unmounts
+      return () => clearTimeout(timer);
+    }
+  // We want this effect to run ONLY when showSuccessModal changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showSuccessModal]);
+
   const isDirty = initialReservationStateRef.current !== null && 
                   JSON.stringify(reservation) !== initialReservationStateRef.current;
   
@@ -199,15 +235,40 @@ function CreateReservationPage() {
       }
     }
   };
-  
+
+  const handleBookAnother = () => {
+    const resetState = getInitialReservationState();
+    setReservation(resetState);
+    setErrors({});
+    setSubmittedReservation(null);
+    setCurrentStep(1); // Go back to the first step
+    initialReservationStateRef.current = JSON.stringify(resetState);
+  };
+
+  const handleViewInvoice = () => {
+    if (submittedReservation) {
+      setShowSuccessModal(true);
+    } else {
+      addAlert("No submission details available to show.", "warning");
+    }
+  };
+    
   const validateStep = (step: number): boolean => {
     const newErrors: FormErrors = { customerInfo: { address: {} } };
     let isValid = true;
 
     if (step === 2) {
       const { customerInfo, reserveDate } = reservation;
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
       if (!customerInfo.name.trim()) newErrors.customerInfo.name = 'Full name is required.';
       if (!/^09\d{9}$/.test(customerInfo.phoneNumber)) newErrors.customerInfo.phoneNumber = 'Phone number must be a valid 11-digit number starting with 09.';
+
+      if (!customerInfo.email || !customerInfo.email.trim()) {
+        newErrors.customerInfo.email = 'Email address is required.';
+      } else if (!emailRegex.test(customerInfo.email)) {
+        newErrors.customerInfo.email = 'Please enter a valid email format.';
+      }
       if (!customerInfo.address.province) newErrors.customerInfo.address.province = 'Province is required.';
       if (!customerInfo.address.city) newErrors.customerInfo.address.city = 'City/Municipality is required.';
       if (!customerInfo.address.barangay) newErrors.customerInfo.address.barangay = 'Barangay is required.';
@@ -221,8 +282,9 @@ function CreateReservationPage() {
       isValid = 
         Object.keys(newErrors.customerInfo).length <= 1 && 
         Object.keys(newErrors.customerInfo.address).length === 0 && 
+        !newErrors.customerInfo.email && // <-- ADD THIS CHECK
         !(newErrors as any).reserveDate;
-    }
+      }
     
     if (step === 3) {
       if (reservation.itemReservations.length === 0 && reservation.packageReservations.length === 0) {
@@ -247,6 +309,8 @@ function CreateReservationPage() {
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
+    setErrors({}); // Clear old errors before submitting
+
     try {
       let receiptImageUrl = '';
       if (receiptFile) {
@@ -254,28 +318,72 @@ function CreateReservationPage() {
         receiptImageUrl = await uploadFile(receiptFile);
       }
       
-      // 3. Create a final payload, adding the new URL to the payment details
       const finalReservationPayload = {
-        ...reservation,
+        customerInfo: reservation.customerInfo,
+        reserveDate: reservation.reserveDate,
+        itemReservations: reservation.itemReservations,
+        packageReservations: reservation.packageReservations,
+        packageAppointmentDate: reservation.packageAppointmentDate,
+        packageAppointmentBlock: reservation.packageAppointmentBlock,
         financials: {
-          ...reservation.financials,
+          // Only send the payments array. The backend will calculate everything else.
           payments: reservation.financials.payments?.map(p => ({
             ...p,
-            receiptImageUrl: receiptImageUrl || undefined // Add URL, or undefined if empty
+            receiptImageUrl: receiptImageUrl || undefined
           }))
         }
       };
 
-      // 4. Send the final, complete payload to the server
       const response = await api.post('/reservations', finalReservationPayload);
       setSubmittedReservation(response.data); 
-      setCurrentStep(prev => prev + 1);
+      setCurrentStep(5);
+      setShowSuccessModal(true);
 
     } catch (err: any) {
-      addAlert(err.response?.data?.message || 'Failed to submit reservation.', 'danger');
+      // --- THIS IS THE NEW ERROR HANDLING LOGIC ---
+      if (err.response && err.response.status === 409) {
+        // This is our specific availability conflict error
+        setConflictingItems(err.response.data.conflictingItems || []);
+        setShowConflictModal(true);
+        setCurrentStep(3); // Navigate back to Step 3 (the ReservationManager)
+        addAlert('Some items are no longer available.', 'danger');
+      } else {
+        // This is for all other generic errors (e.g., 400, 500)
+        addAlert(err.response?.data?.message || 'Failed to submit reservation.', 'danger');
+      }
+      // --- END OF NEW LOGIC ---
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleDownloadPdf = () => {
+    const input = summaryRef.current;
+    if (!input) {
+      addAlert('Could not generate PDF, content not found.', 'danger');
+      return;
+    }
+
+    setIsDownloading(true);
+
+    html2canvas(input, { scale: 2 })
+      .then((canvas) => {
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const contentWidth = pdfWidth - 20;
+        const canvasAspectRatio = canvas.width / canvas.height;
+        const contentHeight = contentWidth / canvasAspectRatio;
+
+        pdf.addImage(imgData, 'PNG', 10, 10, contentWidth, contentHeight);
+        pdf.save(`reservation-invoice-${submittedReservation?._id}.pdf`);
+      })
+      .catch(() => {
+        addAlert('Could not generate PDF. Please try again.', 'danger');
+      })
+      .finally(() => {
+        setIsDownloading(false);
+      });
   };
 
   const handleSaveConfiguration = (config: PackageConfigurationData, pkg: Package, motifId: string, editingPackageId: string | null) => {
@@ -321,13 +429,52 @@ function CreateReservationPage() {
     });
   };
 
+  const handleDateChangeRequest = (newDate: Date | null) => {
+    if (!newDate) {
+      // Handle case where the date is cleared
+      setReservation(prev => ({ ...prev, reserveDate: '' }));
+      return;
+    }
+
+    const newDateString = format(newDate, 'yyyy-MM-dd');
+    const hasItems = reservation.itemReservations.length > 0 || reservation.packageReservations.length > 0;
+
+    // Check if the date is different AND there are items in the cart
+    if (newDateString !== reservation.reserveDate && hasItems) {
+      setPendingDateChange(newDate);
+      setShowDateChangeWarning(true);
+    } else {
+      // If no items in cart or date is the same, update directly
+      setReservation(prev => ({ ...prev, reserveDate: newDateString }));
+    }
+  };
+
+  const handleConfirmDateChange = () => {
+    if (!pendingDateChange) return;
+
+    const newDateString = format(pendingDateChange, 'yyyy-MM-dd');
+
+    setReservation(prev => ({
+      ...prev,
+      reserveDate: newDateString,
+      // --- THIS IS THE CRITICAL PART ---
+      // Resetting the items and packages
+      itemReservations: [],
+      packageReservations: [],
+    }));
+
+    // Clean up state
+    setShowDateChangeWarning(false);
+    setPendingDateChange(null);
+  };
+
   const renderStepContent = () => {
     switch (currentStep) {
       case 1: return <StepReminders onNext={() => setCurrentStep(2)} />;
-      case 2: return <CustomerAndDateInfo reservation={reservation as any} setReservation={setReservation as any} errors={errors} unavailableDates={unavailableDates} />;
-      case 3: return <ReservationManager reservation={reservation as any} setReservation={setReservation as any} addAlert={addAlert} onSavePackageConfig={handleSaveConfiguration} />;
+      case 2: return <CustomerAndDateInfo reservation={reservation as any} onDateChange={handleDateChangeRequest} setReservation={setReservation as any} errors={errors} unavailableDates={unavailableDates} />;
+      case 3: return <ReservationManager reservation={reservation as any} setReservation={setReservation as any} addAlert={addAlert} onSavePackageConfig={handleSaveConfiguration} reserveDate={reservation.reserveDate} />;
       case 4: return <StepPayment reservation={reservation as any} setReservation={setReservation as any} setReceiptFile={setReceiptFile} subtotal={subtotal} requiredDeposit={requiredDeposit} grandTotal={grandTotal} errors={errors} gcashName={shopSettings?.gcashName} gcashNumber={shopSettings?.gcashNumber}/>;
-      case 5: return <StepFinish reservation={submittedReservation} shopSettings={shopSettings} />;
+      case 5: return <StepFinish reservation={submittedReservation} onBookAnother={handleBookAnother} onViewInvoice={handleViewInvoice} />;
       default: return null;
     }
   };
@@ -364,10 +511,52 @@ function CreateReservationPage() {
           </Row>
         </Container>
       
-      <ReservationSuccessModal
-        show={showSuccessModal}
-        onHide={() => setShowSuccessModal(false)}
-        reservation={submittedReservation}
+      <Modal show={showSuccessModal} onHide={() => setShowSuccessModal(false)} size="lg" centered backdrop="static">
+        <Modal.Header closeButton>
+          <Modal.Title>Reservation Summary</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {/* The ReservationSummary is now directly inside the modal */}
+          {/* It has a wrapper to be scrollable and look clean */}
+          <div style={{ maxHeight: '70vh', overflowY: 'auto', border: '1px solid #dee2e6', borderRadius: '0.375rem' }}>
+            <ReservationSummary ref={summaryRef} reservation={submittedReservation} shopSettings={shopSettings} />
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowSuccessModal(false)}>
+            Close
+          </Button>
+          <Button variant="success" onClick={handleDownloadPdf} disabled={isDownloading}>
+            {isDownloading ? <Spinner as="span" size="sm" className="me-1" /> : <Download className="me-1" />}
+            Download
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      <Modal show={showDateChangeWarning} onHide={() => setShowDateChangeWarning(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>
+            <ExclamationTriangleFill className="me-2 text-warning" />
+            Change Reservation Date?
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p>Changing the reservation date will clear all items and packages from your current selection. This is to ensure item availability is re-verified for the new date.</p>
+          <p className="mb-0">Are you sure you want to proceed?</p>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowDateChangeWarning(false)}>
+            Cancel
+          </Button>
+          <Button variant="warning" onClick={handleConfirmDateChange}>
+            Yes
+          </Button>
+        </Modal.Footer>
+      </Modal>
+      <AvailabilityConflictModal
+        show={showConflictModal}
+        onHide={() => setShowConflictModal(false)}
+        conflictingItems={conflictingItems}
       />
     </>
   );

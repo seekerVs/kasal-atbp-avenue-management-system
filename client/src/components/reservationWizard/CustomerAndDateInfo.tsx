@@ -15,11 +15,12 @@ type ReservationStateWithStringDate = Omit<Reservation, '_id' | 'createdAt' | 'u
 interface CustomerAndDateInfoProps {
   reservation: ReservationStateWithStringDate;
   setReservation: React.Dispatch<React.SetStateAction<ReservationStateWithStringDate>>;
+  onDateChange: (date: Date | null) => void; 
   errors: FormErrors;
   unavailableDates: Date[];
 }
 
-export const CustomerAndDateInfo: React.FC<CustomerAndDateInfoProps> = ({ reservation, setReservation, errors, unavailableDates  }) => {
+export const CustomerAndDateInfo: React.FC<CustomerAndDateInfoProps> = ({ reservation, setReservation, onDateChange, errors, unavailableDates  }) => {
 
   const handleCustomerChange = (field: string, value: string) => {
     setReservation(prev => ({ ...prev, customerInfo: { ...prev.customerInfo, [field]: value } }));
@@ -31,10 +32,7 @@ export const CustomerAndDateInfo: React.FC<CustomerAndDateInfoProps> = ({ reserv
 
   // This handler now works directly with the date string from the input element.
   const handleDateChange = (date: Date | null) => {
-    if (date) {
-      const dateString = format(date, 'yyyy-MM-dd');
-      setReservation(prev => ({ ...prev, reserveDate: dateString }));
-    }
+    onDateChange(date);
   };
 
   // This function will be used by the DatePicker to decide which days to disable.
@@ -82,7 +80,8 @@ export const CustomerAndDateInfo: React.FC<CustomerAndDateInfoProps> = ({ reserv
             type="email"
             value={reservation.customerInfo.email || ''}
             onChange={(e) => handleCustomerChange('email', e.target.value)}
-            placeholder="For booking confirmations (Optional)"
+            placeholder="e.g., maria@example.com"
+            isRequired // <-- ADDED
             error={errors.customerInfo?.email}
           />
         </Col>
