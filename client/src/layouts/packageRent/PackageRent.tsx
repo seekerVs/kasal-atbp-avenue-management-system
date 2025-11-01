@@ -77,7 +77,6 @@ function PackageRent() {
   } | null>(null);
 
   const [customerDetails, setCustomerDetails] = useState<CustomerInfo>(initialCustomerDetails);
-  const [selectedRentalForDisplay, setSelectedRentalForDisplay] = useState<RentalOrder | null>(null);
   
   // UI & Modal State
   const [assignmentContext, setAssignmentContext] = useState<{ 
@@ -361,7 +360,6 @@ function PackageRent() {
 
   const handleSelectCustomer = (selectedRental: RentalOrder) => {
     setCustomerDetails(selectedRental.customerInfo[0]);
-    setSelectedRentalForDisplay(selectedRental);
   };
 
   const proceedWithAction = () => {
@@ -705,7 +703,6 @@ function PackageRent() {
               onSubmit={validateAndProceed}
               isSubmitting={isSubmitting}
               canSubmit={isCustomerInfoValid && !!targetDate && !!selectedPackage}
-              selectedRentalForDisplay={selectedRentalForDisplay}
               errors={errors} 
           />
         </Col>

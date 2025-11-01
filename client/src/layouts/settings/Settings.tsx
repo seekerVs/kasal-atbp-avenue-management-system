@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Container, Card, Row, Col, Form, Button, Spinner, Tab, Nav } from 'react-bootstrap';
 import { PersonBadge, CalendarWeek, GearFill } from 'react-bootstrap-icons';
 import { ShopSettings } from '../../types';

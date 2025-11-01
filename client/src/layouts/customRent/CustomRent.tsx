@@ -63,7 +63,6 @@ function CustomRent() {
   const [tailoringData, setTailoringData] = useState(initialTailoringData);
   const [priceInput, setPriceInput] = useState('0');
 
-  const [selectedRentalForDisplay, setSelectedRentalForDisplay] = useState<RentalOrder | null>(null);
   const [showZeroPriceModal, setShowZeroPriceModal] = useState(false);
   const [showWarningModal, setShowWarningModal] = useState(false);
   const [warnings, setWarnings] = useState<string[]>([]);
@@ -254,7 +253,6 @@ function CustomRent() {
 
   const handleSelectCustomer = (selectedRental: RentalOrder) => {
     setCustomerDetails(selectedRental.customerInfo[0]);
-    setSelectedRentalForDisplay(selectedRental);
   };
   
   const handleDynamicListChange = (listType: 'materials', index: number, value: string) => {
@@ -484,7 +482,6 @@ function CustomRent() {
             (tailoringData.tailoringType === 'Tailored for Purchase' || 
             (tailoringData.tailoringType === 'Tailored for Rent-Back' && !!targetDate))
           }
-          selectedRentalForDisplay={selectedRentalForDisplay}
           errors={errors}
         />
       </Col>

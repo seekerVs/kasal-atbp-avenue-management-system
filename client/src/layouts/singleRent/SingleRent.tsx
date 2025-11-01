@@ -35,7 +35,6 @@ function SingleRent() {
   const [selections, setSelections] = useState<SelectedItemData[]>([]);
   
   const [customerDetails, setCustomerDetails] = useState<CustomerInfo>(initialCustomerDetails);
-  const [selectedRentalForDisplay, setSelectedRentalForDisplay] = useState<RentalOrder | null>(null);
   
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -208,7 +207,6 @@ function SingleRent() {
 
   const handleSelectCustomer = (selectedRental: RentalOrder) => {
     setCustomerDetails(selectedRental.customerInfo[0]);
-    setSelectedRentalForDisplay(selectedRental);
   };
   
   const validateForm = () => {
@@ -381,7 +379,6 @@ function SingleRent() {
               onSubmit={handleFormSubmission}
               isSubmitting={isSubmitting}
               canSubmit={isCustomerInfoValid && !!targetDate && selections.length > 0}
-              selectedRentalForDisplay={selectedRentalForDisplay}
               errors={errors} 
             />
           </Col>

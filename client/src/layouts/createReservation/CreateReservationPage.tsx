@@ -21,7 +21,7 @@ import { calculateItemDeposit, calculatePackageDeposit } from '../../utils/finan
 import { useUnsavedChangesWarning } from '../../hooks/useUnsavedChangesWarning';
 import { NavigationBlocker } from '../../components/NavigationBlocker';
 import { PackageConfigurationData } from '../../components/modals/packageConfigurationModal/PackageConfigurationModal';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { Download, ExclamationTriangleFill } from 'react-bootstrap-icons';
 import { ReservationSummary } from '../../components/reservationSummary/ReservationSummary';
 import { AvailabilityConflictModal } from '../../components/modals/availabilityConflictModal/AvailabilityConflictModal';
@@ -44,7 +44,6 @@ const getInitialReservationState = (): Omit<Reservation, '_id' | 'createdAt' | '
 const WIZARD_STEPS = ['Reminders', 'Information', 'Reserve', 'Payment', 'Finish'];
 
 function CreateReservationPage() {
-  const navigate = useNavigate();
   const location = useLocation();
   const { addAlert } = useAlert();
 

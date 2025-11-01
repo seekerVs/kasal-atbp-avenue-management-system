@@ -13,7 +13,6 @@ import { DataPrivacyModal } from '../../components/modals/dataPrivacyModal/DataP
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { AppointmentSummary } from '../../components/appointmentSummary/AppointmentSummary';
-import { useNavigate } from 'react-router-dom';
 
 interface UnavailabilityRecord {
   date: string;
@@ -31,7 +30,6 @@ type BlockType = 'morning' | 'afternoon' | '';
 
 function CreateAppointmentPage() {
   const { addAlert } = useAlert();
-  const navigate = useNavigate();
 
   const [appointment, setAppointment] = useState(getInitialAppointmentState);
   const [shopSettings, setShopSettings] = useState<ShopSettings | null>(null);

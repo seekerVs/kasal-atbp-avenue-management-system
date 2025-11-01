@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { Card, Button, Form, ListGroup, Spinner, Alert, Row, Col } from 'react-bootstrap';
-import { PersonFill, PeopleFill, PlusCircle, CreditCard } from 'react-bootstrap-icons';
+import { Card, Button, Form, ListGroup, Spinner, Row, Col } from 'react-bootstrap';
+import { PersonFill, PeopleFill, CreditCard } from 'react-bootstrap-icons';
 
 import { CustomerInfo, RentalOrder, Address, FormErrors } from '../types';
 import { ValidatedInput } from './forms/ValidatedInput'; // Assuming this path is correct
@@ -15,7 +15,6 @@ interface CustomerDetailsCardProps {
   onSubmit: () => void;
   isSubmitting: boolean;
   canSubmit: boolean;
-  selectedRentalForDisplay: RentalOrder | null;
   errors: FormErrors;
 }
 
@@ -27,7 +26,6 @@ function CustomerDetailsCard({
   onSubmit,
   isSubmitting,
   canSubmit,
-  selectedRentalForDisplay,
   errors = {}
 }: CustomerDetailsCardProps) {
 
