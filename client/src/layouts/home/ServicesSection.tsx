@@ -9,9 +9,9 @@ const PLACEHOLDER_IMAGE = 'https://placehold.co/600x400/6c757d/FFFFFF?text=Servi
 // Create a static mapping from the service TITLE to its hardcoded path.
 // This relies on the title from the CMS being stable.
 const SERVICE_PATHS: { [key: string]: string } = {
-  'Single Item Rentals': '/products',
-  'Packages': '/package',
-  'Custom Tailoring': '/customTailoring',
+  'Outfit Rentals': '/products',
+  'Packages': '/packages',
+  'Custom Outfit': '/custom-tailoring',
 };
 
 interface ServiceCardProps {
