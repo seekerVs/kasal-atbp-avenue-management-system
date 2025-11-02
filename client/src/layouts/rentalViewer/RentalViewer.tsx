@@ -117,7 +117,6 @@ function RentalViewer() {
   const [isSendingReminder, setIsSendingReminder] = useState(false); 
   const [packageToAdd, setPackageToAdd] = useState<{pkg: Package, motifId: string} | null>(null);
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
-  const [pendingDate, setPendingDate] = useState<Date | null>(null);
 
   const hasReturnableItems = useMemo(() => {
     if (!rental) return false;
@@ -284,20 +283,19 @@ function RentalViewer() {
       setShowEditPackageModal(true); // Open configuration modal
   };
 
-  const handleReschedule = async () => {
-    if (!rental || !pendingDate) {
+  const handleReschedule = async (newDate: Date) => {
+    if (!rental) {
       addAlert("No new date was selected.", "warning");
       return;
     }
     setIsSaving(true);
     try {
       const response = await api.put(`/rentals/${rental._id}/reschedule`, {
-        newStartDate: format(pendingDate, 'yyyy-MM-dd')
+        newStartDate: format(newDate, 'yyyy-MM-dd')
       });
       setRental(response.data);
       addAlert('Rental has been successfully rescheduled!', 'success');
       setShowRescheduleModal(false);
-      setPendingDate(null);
     } catch (err: any) {
       // The backend provides a specific error message if there's a conflict
       addAlert(err.response?.data?.message || 'Failed to reschedule rental.', 'danger');
@@ -811,10 +809,8 @@ function RentalViewer() {
   };
 
   const handleInitiateReschedule = () => {
-    if (rental?.rentalStartDate) {
-      // Pre-fill the date picker with the current date
-      setPendingDate(new Date(rental.rentalStartDate));
-    }
+    // This function now only needs to open the modal.
+    // The modal itself will handle showing the initial date.
     setShowRescheduleModal(true);
   };
 
@@ -1239,6 +1235,7 @@ function RentalViewer() {
         show={showAddPackageModal}
         onHide={() => setShowAddPackageModal(false)}
         onSelect={handleSelectNewPackage}
+        targetDate={rental?.rentalStartDate ? new Date(rental.rentalStartDate) : null}
       />
 
       {packageToAdd && (

@@ -12,15 +12,13 @@ interface OutfitRecommendationModalProps {
   onRecommend: (size: string) => void;
 }
 
-const CORE_MEASUREMENTS = ["Chest", "Waist",];
+// --- THIS IS THE FIX (Step 1) ---
+const CORE_MEASUREMENTS = ["Chest", "Waist", "Hips"];
 
 const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({ show, onHide, onRecommend }) => {
   const { addAlert } = useAlert();
-  
-  // Call the hook to get live sensor data. It will only be active when `show` is true.
   const { sensorData } = useSensorData(show);
 
-  // --- Component-specific state ---
   const [measurementValues, setMeasurementValues] = useState<Record<string, string>>({});
   const [recommendedSize, setRecommendedSize] = useState<string>('');
   const [isSizeValid, setIsSizeValid] = useState<boolean>(false); 
@@ -29,7 +27,6 @@ const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({ s
   const [showSizeGuide, setShowSizeGuide] = useState(false); 
   const inputRefs = useRef<Map<string, HTMLInputElement | null>>(new Map());
 
-  // Reset form when modal opens
   useEffect(() => {
     if (show) {
       setMeasurementValues({});
@@ -39,26 +36,23 @@ const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({ s
     }
   }, [show]);
 
-  // Effect for live size conversion
+  // --- THIS IS THE FIX (Step 2) ---
   useEffect(() => {
-    if (measurementValues['Chest'] && measurementValues['Waist']) {
+    if (measurementValues['Chest'] || measurementValues['Waist'] || measurementValues['Hips']) {
       const size = convertMeasurementsToSize(measurementValues);
       setRecommendedSize(size);
 
-      // If the size is NOT "Custom", it's valid for recommendation.
-      if (size !== 'Custom') {
+      if (size && size !== 'Custom' && size !== "") {
         setIsSizeValid(true);
       } else {
         setIsSizeValid(false);
       }
     } else {
-      // If core measurements are missing, reset the state.
       setRecommendedSize('');
       setIsSizeValid(false);
     }
   }, [measurementValues]);
 
-  // --- NEW: Effect to handle commands ("focusNext") from the sensor device ---
   useEffect(() => {
     const handleSensorCommand = (event: CustomEvent) => {
       if (event.detail.action === 'focusNext') {
@@ -66,7 +60,6 @@ const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({ s
         const nextIndex = (currentActiveIndex + 1) % CORE_MEASUREMENTS.length;
         const nextField = CORE_MEASUREMENTS[nextIndex];
         
-        // Programmatically find and focus the next input field
         const nextInput = inputRefs.current.get(nextField);
         nextInput?.focus();
       }
@@ -77,7 +70,7 @@ const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({ s
     return () => {
       window.removeEventListener('sensorCommand', handleSensorCommand as EventListener);
     };
-  }, [activeField]); // Dependency ensures we always know the "current" field.
+  }, [activeField]);
 
   useEffect(() => {
     if (sensorData && 
@@ -88,15 +81,12 @@ const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({ s
       handleValueChange(activeField, sensorData.centimeters.toFixed(2));
       setLastInsertedTimestamp(sensorData.updatedAt);
     }
-    
-  // This effect should run whenever the sensor data changes or the user focuses on a new field.
   }, [sensorData, activeField, lastInsertedTimestamp]);
 
   const handleValueChange = (field: string, value: string) => {
     setMeasurementValues(prev => ({ ...prev, [field]: value }));
   };
   
-  // --- NEW: Function for the "Get from Device" button ---
   const handleInsertMeasurement = (field: string) => {
     if (sensorData && typeof sensorData.centimeters === 'number') {
       handleValueChange(field, sensorData.centimeters.toFixed(2));
@@ -137,7 +127,7 @@ const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({ s
                     <Button
                       variant="outline-secondary"
                       title="Get from Device"
-                      onClick={() => handleInsertMeasurement(label)} // <-- WIRED UP
+                      onClick={() => handleInsertMeasurement(label)}
                     >
                       <ArrowsCollapse />
                     </Button>
@@ -147,12 +137,12 @@ const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({ s
             </Form>
           </Col>
           <Col md={5}>
-            <h6 className="text-uppercase small fw-bold">Reminder</h6>
+            <h6 className="text-uppercase small fw-bold">Result</h6>
             {(() => {
               if (!recommendedSize) {
                 return (
                   <Alert variant="secondary">
-                    Please provide at least Chest and Waist measurements.
+                    Please provide at least one measurement to get a recommendation.
                   </Alert>
                 );
               }
@@ -164,7 +154,6 @@ const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({ s
                   </Alert>
                 );
               }
-              // This is the new "Invalid" state for "Custom" sizes
               return (
                 <Alert variant="warning" className="text-center">
                   <Alert.Heading as="h6" className="d-flex align-items-center justify-content-center">

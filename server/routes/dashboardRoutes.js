@@ -1,12 +1,32 @@
 const express = require('express');
 const router = express.Router();
 const RentalModel = require('../models/Rental');
+const { calculateFinancials } = require('../utils/financialsCalculator');
 const ReservationModel = require('../models/Reservation'); 
 const AppointmentModel = require('../models/Appointment'); 
 const asyncHandler = require('../utils/asyncHandler');
 const PDFDocument = require('pdfkit');
 const path = require('path');
 const fs = require('fs');
+
+const toCsv = (data) => {
+    if (data.length === 0) return '';
+    const headers = Object.keys(data[0]);
+    const csvRows = [
+        headers.join(','), // Header row
+        ...data.map(row => 
+            headers.map(header => {
+                let cell = row[header] === null || row[header] === undefined ? '' : String(row[header]);
+                // Escape commas and quotes in the cell data
+                if (cell.includes(',') || cell.includes('"') || cell.includes('\n')) {
+                    cell = `"${cell.replace(/"/g, '""')}"`;
+                }
+                return cell;
+            }).join(',')
+        )
+    ];
+    return csvRows.join('\n');
+};
 
 // GET /api/dashboard/stats
 router.get('/stats', asyncHandler(async (req, res) => {
@@ -30,7 +50,7 @@ router.get('/stats', asyncHandler(async (req, res) => {
         pendingAppointmentsCount
     ] = await Promise.all([
         RentalModel.find({
-            status: { $in: ['To Process', 'To Pickup', 'To Return', 'Returned', 'Completed'] }
+            status: { $in: ['Pending', 'To Pickup', 'To Return', 'Returned', 'Completed'] }
         }).lean(),
         // Aggregation for Rentals (your existing code)
         // NEW: Aggregation for Rentals (Corrected)
@@ -95,42 +115,54 @@ router.get('/stats', asyncHandler(async (req, res) => {
     ]);
 
     // --- 3. Process the Fetched Rental Data in JavaScript (your existing code) ---
-    const stats = {};
+    const stats = {
+        Pending: 0,
+        ToReturn: 0
+    };
     let monthlySales = 0;
     const firstDayOfCurrentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
-    const toReturnAndOverdue = [];
+    const toReturnOrders = [];
+    const overdueOrders = [];
 
     allActiveRentals.forEach(rental => {
-        const statusKey = rental.status.replace(/\s+/g, '');
-        if (statusKey === 'Pending' || statusKey === 'ToReturn') {
-           stats[statusKey] = (stats[statusKey] || 0) + 1;
+        // --- Calculate Stats ---
+        if (rental.status === 'Pending') {
+           stats.Pending = (stats.Pending || 0) + 1;
         }
+        
+        // Calculate monthly sales from the modern payments array
+        (rental.financials?.payments || []).forEach(payment => {
+            if (payment.date && new Date(payment.date) >= firstDayOfCurrentMonth) {
+                monthlySales += payment.amount || 0;
+            }
+        });
 
-        const downPayment = rental.financials?.downPayment;
-        if (downPayment && downPayment.date && new Date(downPayment.date) >= firstDayOfCurrentMonth) {
-            monthlySales += downPayment.amount || 0;
-        }
-        const finalPayment = rental.financials?.finalPayment;
-        if (finalPayment && finalPayment.date && new Date(finalPayment.date) >= firstDayOfCurrentMonth) {
-            monthlySales += finalPayment.amount || 0;
-        }
-
+        // --- Populate Return Lists ---
         if (rental.status === 'To Return') {
-            // Check if there are any actual rental items
             const hasRentalItems = 
                 (rental.singleRents?.length ?? 0) > 0 || 
                 (rental.packageRents?.length ?? 0) > 0 || 
                 rental.customTailoring?.some(item => item.tailoringType === 'Tailored for Rent-Back');
 
-            // Only add the rental to the "To Return" list if it actually contains items to be returned.
             if (hasRentalItems) {
+                // Increment the ToReturn stat here, inside the check
+                stats.ToReturn = (stats.ToReturn || 0) + 1;
+
                 const itemCount =
                     (rental.singleRents?.reduce((sum, item) => sum + item.quantity, 0) || 0) +
                     (rental.packageRents?.length || 0) +
                     (rental.customTailoring?.length || 0);
+
+                // Use UTC date parts for a timezone-safe comparison
+                const rentalEndDate = new Date(rental.rentalEndDate);
+                const isOverdue = new Date(rentalEndDate.getUTCFullYear(), rentalEndDate.getUTCMonth(), rentalEndDate.getUTCDate() + 1) < today;
                 
-                toReturnAndOverdue.push({ ...rental, itemCount });
+                if (isOverdue) {
+                    overdueOrders.push({ ...rental, itemCount });
+                } else {
+                    toReturnOrders.push({ ...rental, itemCount });
+                }
             }
         }
     });
@@ -138,9 +170,9 @@ router.get('/stats', asyncHandler(async (req, res) => {
     stats.pendingReservations = pendingReservationsCount;
     stats.pendingAppointments = pendingAppointmentsCount;
 
-    const toReturnOrders = toReturnAndOverdue.filter(r => new Date(r.rentalEndDate) >= today);
-    const overdueOrders = toReturnAndOverdue.filter(r => new Date(r.rentalEndDate) < today);
+    // Sort the lists after they are fully populated
     overdueOrders.sort((a, b) => new Date(a.rentalEndDate) - new Date(b.rentalEndDate));
+    toReturnOrders.sort((a, b) => new Date(a.rentalEndDate) - new Date(b.rentalEndDate));
 
     // --- 4. MERGE the sales data from both rentals and reservations ---
     const combinedSalesMap = new Map();
@@ -160,14 +192,14 @@ router.get('/stats', asyncHandler(async (req, res) => {
     res.json({
         stats,
         monthlySales,
-        toReturnOrders: toReturnOrders.slice(0, 10),
-        overdueOrders: overdueOrders.slice(0, 10),
+        toReturnOrders: toReturnOrders,
+        overdueOrders: overdueOrders,
         weeklySalesData // This now contains the merged sales data
     });
 }));
 
 // GET /api/dashboard/export-report
-router.get('/export-report', asyncHandler(async (req, res) => {
+router.get('/export-sales', asyncHandler(async (req, res) => {
     // 1. Get and validate the date range from query parameters
     const { startDate, endDate } = req.query;
     if (!startDate || !endDate) {
@@ -358,6 +390,120 @@ router.get('/export-report', asyncHandler(async (req, res) => {
     }
 
     doc.end();
+}));
+
+// --- NEW: Export Customer List as CSV ---
+router.get('/export-customers', asyncHandler(async (req, res) => {
+    const { startDate, endDate } = req.query;
+    const queryStartDate = new Date(startDate);
+    const queryEndDate = new Date(endDate);
+    queryEndDate.setUTCHours(23, 59, 59, 999);
+
+    const [rentals, reservations] = await Promise.all([
+        RentalModel.find({ createdAt: { $gte: queryStartDate, $lte: queryEndDate } }).select('customerInfo createdAt').lean(),
+        ReservationModel.find({ createdAt: { $gte: queryStartDate, $lte: queryEndDate } }).select('customerInfo createdAt').lean()
+    ]);
+
+    const customerMap = new Map();
+    const processCustomer = (customer, date) => {
+        if (!customer || !customer.phoneNumber) return;
+        if (!customerMap.has(customer.phoneNumber) || new Date(date) > new Date(customerMap.get(customer.phoneNumber).lastActivity)) {
+            customerMap.set(customer.phoneNumber, {
+                Name: customer.name,
+                Email: customer.email || 'N/A',
+                PhoneNumber: customer.phoneNumber,
+                lastActivity: new Date(date).toLocaleDateString('en-US')
+            });
+        }
+    };
+
+    rentals.forEach(r => processCustomer(r.customerInfo[0], r.createdAt));
+    reservations.forEach(r => processCustomer(r.customerInfo, r.createdAt));
+    
+    const customerList = Array.from(customerMap.values());
+    const csvData = toCsv(customerList);
+
+    res.header('Content-Type', 'text/csv');
+    res.attachment(`Customers_${startDate}_to_${endDate}.csv`);
+    res.send(csvData);
+}));
+
+// --- NEW: Export Pending Orders as CSV ---
+router.get('/export-pending-orders', asyncHandler(async (req, res) => {
+    const { startDate, endDate } = req.query;
+    const queryStartDate = new Date(startDate);
+    const queryEndDate = new Date(endDate);
+    queryEndDate.setUTCHours(23, 59, 59, 999);
+
+    const [pendingRentals, pendingReservations] = await Promise.all([
+        RentalModel.find({ status: 'Pending', createdAt: { $gte: queryStartDate, $lte: queryEndDate } }).lean(),
+        ReservationModel.find({ status: { $in: ['Pending', 'Confirmed'] }, createdAt: { $gte: queryStartDate, $lte: queryEndDate } }).lean()
+    ]);
+
+    const orders = [];
+    pendingRentals.forEach(r => {
+        orders.push({
+            OrderID: r._id,
+            Type: 'Rental',
+            Customer: r.customerInfo[0]?.name,
+            DateCreated: new Date(r.createdAt).toLocaleDateString('en-US'),
+            Total: calculateFinancials(r)?.grandTotal || 0,
+            Status: r.status
+        });
+    });
+    pendingReservations.forEach(r => {
+        orders.push({
+            OrderID: r._id,
+            Type: 'Reservation',
+            Customer: r.customerInfo.name,
+            DateCreated: new Date(r.createdAt).toLocaleDateString('en-US'),
+            Total: calculateFinancials({ singleRents: r.itemReservations, packageRents: r.packageReservations, financials: r.financials })?.grandTotal || 0,
+            Status: r.status
+        });
+    });
+    
+    const csvData = toCsv(orders.sort((a,b) => new Date(b.DateCreated) - new Date(a.DateCreated)));
+    res.header('Content-Type', 'text/csv');
+    res.attachment(`Pending-Orders_${startDate}_to_${endDate}.csv`);
+    res.send(csvData);
+}));
+
+// --- NEW: Export Payment History as CSV ---
+router.get('/export-payment-history', asyncHandler(async (req, res) => {
+    const { startDate, endDate } = req.query;
+    const queryStartDate = new Date(startDate);
+    const queryEndDate = new Date(endDate);
+    queryEndDate.setUTCHours(23, 59, 59, 999);
+
+    const [rentals, reservations] = await Promise.all([
+        RentalModel.find({ "financials.payments.date": { $gte: queryStartDate, $lte: queryEndDate } }).lean(),
+        ReservationModel.find({ "financials.payments.date": { $gte: queryStartDate, $lte: queryEndDate } }).lean()
+    ]);
+    
+    const payments = [];
+    const processPayments = (order, type) => {
+        (order.financials.payments || []).forEach(p => {
+            if (new Date(p.date) >= queryStartDate && new Date(p.date) <= queryEndDate) {
+                payments.push({
+                    Date: new Date(p.date).toLocaleString('en-US'),
+                    OrderID: order._id,
+                    Type: type,
+                    Customer: (order.customerInfo[0] || order.customerInfo)?.name,
+                    Amount: p.amount,
+                    Method: p.referenceNumber ? 'GCash' : 'Cash',
+                    Reference: p.referenceNumber || 'N/A'
+                });
+            }
+        });
+    };
+
+    rentals.forEach(r => processPayments(r, 'Rental'));
+    reservations.forEach(r => processPayments(r, 'Reservation'));
+
+    const csvData = toCsv(payments.sort((a,b) => new Date(b.Date) - new Date(a.Date)));
+    res.header('Content-Type', 'text/csv');
+    res.attachment(`Payment-History_${startDate}_to_${endDate}.csv`);
+    res.send(csvData);
 }));
 
 

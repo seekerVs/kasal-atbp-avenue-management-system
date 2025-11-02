@@ -87,7 +87,9 @@ router.get('/', asyncHandler(async (req, res) => {
     if (search) filter.name = { $regex: search, $options: 'i' };
     if (excludeCategory) filter.category = { $ne: excludeCategory };
     const variationMatch = { quantity: { $gt: 0 } };
-    if (size) filter['variations.size'] = size;
+    if (size) {
+      variationMatch.size = size;
+    }
     filter.variations = { $elemMatch: variationMatch };
 
     const sortOptions = {};

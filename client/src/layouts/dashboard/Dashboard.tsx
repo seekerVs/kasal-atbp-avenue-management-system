@@ -7,10 +7,12 @@ import {
   Spinner,
   Alert,
   Table,
-  Button,
+  ButtonGroup,
   OverlayTrigger,
   Badge,
   Tooltip,
+  DropdownButton,
+  Dropdown,
 } from "react-bootstrap";
 import {
   CalendarFill,
@@ -160,18 +162,16 @@ function Dashboard() {
     fetchDashboardData();
   }, [dateRange]);
 
-  const handleExport = () => {
-    // Get the base URL from the environment variables, just like your api.ts service
-    const API_BASE_URL = import.meta.env.VITE_API_URL;
+  const handleExportSelect = (eventKey: string | null) => {
+    if (!eventKey) return;
 
-    // Format the dates into YYYY-MM-DD strings
+    const API_BASE_URL = import.meta.env.VITE_API_URL;
     const startDate = formatDate(dateRange.startDate, 'yyyy-MM-dd');
     const endDate = formatDate(dateRange.endDate, 'yyyy-MM-dd');
 
-    // Construct the full URL for the backend endpoint
-    const exportUrl = `${API_BASE_URL}/dashboard/export-report?startDate=${startDate}&endDate=${endDate}`;
-
-    // Open the URL in a new tab. The browser will handle the PDF download.
+    // Use the eventKey to determine which report to generate
+    const exportUrl = `${API_BASE_URL}/dashboard/${eventKey}?startDate=${startDate}&endDate=${endDate}`;
+    
     window.open(exportUrl, '_blank');
   };
 
@@ -420,14 +420,19 @@ function Dashboard() {
                 <div className="d-flex justify-content-between align-items-center">
                     <h5 className="mb-0 fw-bold">Sales Visualization</h5>
                     <div className="d-flex align-items-center gap-2">
-                        <Button 
-                          variant="outline-secondary" 
-                          size="sm" 
-                          onClick={handleExport}
-                          className="text-nowrap"
+                        <DropdownButton
+                          as={ButtonGroup}
+                          size="sm"
+                          variant="outline-secondary"
+                          title={<><BoxArrowUpRight className="me-1" /> Export Report</>}
+                          onSelect={handleExportSelect}
                         >
-                            <BoxArrowUpRight className="me-1" /> Export
-                        </Button>
+                          <Dropdown.Item eventKey="export-sales">Sales Summary (PDF)</Dropdown.Item>
+                          <Dropdown.Divider />
+                          <Dropdown.Item eventKey="export-payment-history">Payment History (CSV)</Dropdown.Item>
+                          <Dropdown.Item eventKey="export-customers">Customer List (CSV)</Dropdown.Item>
+                          <Dropdown.Item eventKey="export-pending-orders">Pending Orders (CSV)</Dropdown.Item>
+                        </DropdownButton>
                         <AdvancedDateRangePicker 
                           initialRange={dateRange}
                           onRangeChange={setDateRange} 
