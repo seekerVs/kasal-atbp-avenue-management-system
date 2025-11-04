@@ -115,7 +115,7 @@ function RequestTracker() {
                         placeholder="e.g., RES-ABC123"
                         value={searchId}
                         onChange={(e) => setSearchId(e.target.value)}
-                        className="text-center form-control-lg"
+                        className="text-center"
                         isInvalid={!!error}
                       />
                       <Form.Control.Feedback type="invalid">
@@ -123,7 +123,7 @@ function RequestTracker() {
                       </Form.Control.Feedback>
                     </Form.Group>
                     <div className="d-grid mt-3">
-                      <Button type="submit" disabled={isLoading} size="lg">
+                      <Button type="submit" disabled={isLoading}>
                         {isLoading ? <Spinner as="span" size="sm" /> : <Search className="me-2"/>}
                         Track
                       </Button>

@@ -1,9 +1,9 @@
 // client/src/components/modals/sizeGuideModal/SizeGuideModal.tsx
 
 import React from 'react';
-import { Modal, Button, Row, Col, Image, Table, Badge } from 'react-bootstrap';
+import { Modal, Button, Row, Col, Image, Table, Tabs, Tab, Badge } from 'react-bootstrap';
 import { HowToMeasure } from '../../../assets/images';
-import { sizeChart, sizeOrder } from '../../../data/sizeChartData';
+import { adultSizeChart, adultSizeOrder, kidsSizeChart, kidsSizeOrder } from '../../../data/sizeChartData';
 import './sizeGuideModal.css';
 
 interface SizeGuideModalProps {
@@ -53,36 +53,68 @@ export const SizeGuideModal: React.FC<SizeGuideModalProps> = ({ show, onHide }) 
 
           {/* --- RIGHT COLUMN: SIZE CHART TABLE --- */}
           <Col md={8}>
-            <Table bordered hover responsive className="size-guide-table">
-              <thead className="table-light">
-                <tr>
-                  <th>Size</th>
-                  <th>Height (cm)</th>
-                  <th>Chest (cm)</th>
-                  <th>Waist (cm)</th>
-                  <th>Hips (cm)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sizeOrder.map(sizeKey => {
-                  // If the sizeKey is 'CUSTOM', we don't have data for it, so don't render a row.
-                  if (sizeKey === 'CUSTOM') {
-                    return null;
-                  }
-                  // For all other valid size keys, render the row as before.
-                  const sizeData = sizeChart[sizeKey as keyof typeof sizeChart];
-                  return (
-                    <tr key={sizeKey}>
-                      <td>{sizeKey}</td>
-                      <td>{sizeData.Height}</td>
-                      <td>{`${sizeData.Chest.min}-${sizeData.Chest.max}`}</td>
-                      <td>{`${sizeData.Waist.min}-${sizeData.Waist.max}`}</td>
-                      <td>{`${sizeData.Hips.min}-${sizeData.Hips.max}`}</td>
+            <Tabs defaultActiveKey="adult" id="size-guide-tabs" className="mb-3" fill>
+              <Tab eventKey="adult" title="Adult Sizes">
+                <Table bordered hover responsive className="size-guide-table">
+                  <thead className="table-light">
+                    <tr>
+                      <th>Size</th>
+                      <th>Height (cm)</th>
+                      <th>Chest (cm)</th>
+                      <th>Waist (cm)</th>
+                      <th>Hips (cm)</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </Table>
+                  </thead>
+                  <tbody>
+                    {adultSizeOrder.map(sizeKey => {
+                      if (sizeKey === 'CUSTOM') return null;
+                      const sizeData = adultSizeChart[sizeKey as keyof typeof adultSizeChart];
+                      return (
+                        <tr key={sizeKey}>
+                          <td>{sizeKey}</td>
+                          <td>{sizeData.Height}</td>
+                          <td>{`${sizeData.Chest.min}-${sizeData.Chest.max}`}</td>
+                          <td>{`${sizeData.Waist.min}-${sizeData.Waist.max}`}</td>
+                          <td>{`${sizeData.Hips.min}-${sizeData.Hips.max}`}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </Table>
+              </Tab>
+              <Tab eventKey="kids" title="Kids' Sizes">
+                <Table bordered hover responsive className="size-guide-table">
+                  <thead className="table-light">
+                    <tr>
+                      <th>Size (Age)</th>
+                      <th>Height (cm)</th>
+                      <th>Chest/Bust (cm)</th>
+                      <th>Waist (cm)</th>
+                      <th>Hip (cm)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {/* Map over the new kids' size data */}
+                    {kidsSizeOrder.map(sizeKey => {
+                      if (sizeKey === 'CUSTOM') return null;
+                      const sizeData = kidsSizeChart[sizeKey as keyof typeof kidsSizeChart];
+                      const ageRange = {
+                        XS: '3-5Y', S: '5-7Y', M: '8-9Y', L: '10-11Y', XL: '12-13Y', XXL: '14Y'
+                      }[sizeKey] || sizeKey;
+                      return (
+                        <tr key={sizeKey}>
+                          <td>{sizeKey} ({ageRange})</td>
+                          <td>{sizeData.Height}</td>
+                          <td>{`${sizeData.Chest.min}-${sizeData.Chest.max}`}</td>
+                          <td>{`${sizeData.Waist.min}-${sizeData.Waist.max}`}</td>
+                          <td>{`${sizeData.Hips.min}-${sizeData.Hips.max}`}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </Table>
+              </Tab>
+            </Tabs>
             <p className="small text-muted fst-italic mt-2">*Depending on your body type and dressing habits, the above sizes are for reference only.</p>
           </Col>
         </Row>

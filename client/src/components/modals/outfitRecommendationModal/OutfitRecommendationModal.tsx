@@ -19,6 +19,7 @@ const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({ s
   const { addAlert } = useAlert();
   const { sensorData } = useSensorData(show);
 
+  const [ageGroup, setAgeGroup] = useState<'Adult' | 'Kids'>('Adult');
   const [measurementValues, setMeasurementValues] = useState<Record<string, string>>({});
   const [recommendedSize, setRecommendedSize] = useState<string>('');
   const [isSizeValid, setIsSizeValid] = useState<boolean>(false); 
@@ -39,7 +40,7 @@ const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({ s
   // --- THIS IS THE FIX (Step 2) ---
   useEffect(() => {
     if (measurementValues['Chest'] || measurementValues['Waist'] || measurementValues['Hips']) {
-      const size = convertMeasurementsToSize(measurementValues);
+      const size = convertMeasurementsToSize(measurementValues, ageGroup);
       setRecommendedSize(size);
 
       if (size && size !== 'Custom' && size !== "") {
@@ -51,7 +52,7 @@ const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({ s
       setRecommendedSize('');
       setIsSizeValid(false);
     }
-  }, [measurementValues]);
+  }, [measurementValues, ageGroup]);
 
   useEffect(() => {
     const handleSensorCommand = (event: CustomEvent) => {
@@ -108,6 +109,31 @@ const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({ s
         <p className="mb-4 text-muted">Enter the client's measurements to find their recommended standard size and view available outfits.</p>
         <Row className="g-4">
           <Col md={7}>
+            <Form.Group className="mb-4">
+              <Form.Label className="text-uppercase small fw-bold">Age Group</Form.Label>
+              <div>
+                <Form.Check
+                  inline
+                  type="radio"
+                  label="Adult"
+                  name="ageGroup"
+                  id="age-adult"
+                  value="Adult"
+                  checked={ageGroup === 'Adult'}
+                  onChange={(e) => setAgeGroup(e.target.value as 'Adult' | 'Kids')}
+                />
+                <Form.Check
+                  inline
+                  type="radio"
+                  label="Kids"
+                  name="ageGroup"
+                  id="age-kids"
+                  value="Kids"
+                  checked={ageGroup === 'Kids'}
+                  onChange={(e) => setAgeGroup(e.target.value as 'Adult' | 'Kids')}
+                />
+              </div>
+            </Form.Group>
             <h6 className="text-uppercase small fw-bold">Measurements (cm)</h6>
             <Form>
               {CORE_MEASUREMENTS.map((label) => (

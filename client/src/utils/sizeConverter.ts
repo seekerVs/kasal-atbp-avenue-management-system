@@ -1,35 +1,39 @@
 // client/src/utils/sizeConverter.ts
 
-import { sizeChart, sizeOrder } from '../data/sizeChartData';
+import { adultSizeChart, adultSizeOrder, kidsSizeChart, kidsSizeOrder } from '../data/sizeChartData';
 
 /**
- * Converts a set of body measurements to a standard size using a hierarchical approach.
- * It prioritizes a full 3-point match (Chest, Waist, Hips), but falls back
- * to a Chest-only match if a perfect fit isn't found.
+ * Converts a set of body measurements to a standard size based on the specified age group.
  *
  * @param measurements - An object where keys are measurement names and values are in cm.
+ * @param ageGroup - The age group ('Adult' or 'Kids') to use for size chart selection.
  * @returns The corresponding size string (e.g., "M") or "Custom" if no match is found.
  */
 export const convertMeasurementsToSize = (
-  measurements: { [key: string]: number | string }
+  measurements: { [key: string]: number | string },
+  ageGroup: 'Adult' | 'Kids' = 'Adult' // Default to 'Adult' if not provided
 ): string => {
 
+  // --- Step 1: Select the correct size chart data based on ageGroup ---
+  const isKids = ageGroup === 'Kids';
+  const sizeChart = isKids ? kidsSizeChart : adultSizeChart;
+  const sizeOrder = isKids ? kidsSizeOrder : adultSizeOrder;
+
+  // --- Step 2: Measurement processing (remains the same) ---
   const chest = Number(measurements.Chest || measurements.chest);
   const waist = Number(measurements.Waist || measurements.waist);
   const hips = Number(measurements.Hips || measurements.hips);
 
-  // If no valid measurements are provided at all, return an empty string.
   if ((isNaN(chest) || chest === 0) && (isNaN(waist) || waist === 0) && (isNaN(hips) || hips === 0)) {
     return "";
   }
 
-  // --- FIRST PASS: Attempt a perfect match with all available data ---
+  // --- Step 3: First Pass - Attempt a perfect match (remains the same) ---
   for (const size of sizeOrder) {
     if (size === 'CUSTOM') continue;
     
     const chartEntry = sizeChart[size as keyof typeof sizeChart];
     
-    // Build match conditions based on which measurements were actually provided.
     let isMatch = true;
     if (!isNaN(chest) && chest > 0) {
       isMatch = isMatch && (chest >= chartEntry.Chest.min && chest <= chartEntry.Chest.max);
@@ -42,22 +46,21 @@ export const convertMeasurementsToSize = (
     }
 
     if (isMatch) {
-      return size; // Found an ideal match
+      return size;
     }
   }
 
-  // --- SECOND PASS: Fallback to a Chest-only match if no perfect match was found ---
+  // --- Step 4: Second Pass - Fallback to Chest-only match (remains the same) ---
   if (!isNaN(chest) && chest > 0) {
     for (const size of sizeOrder) {
       if (size === 'CUSTOM') continue;
       const chartEntry = sizeChart[size as keyof typeof sizeChart];
       const isChestMatch = chest >= chartEntry.Chest.min && chest <= chartEntry.Chest.max;
       if (isChestMatch) {
-        return size; // Return the first size that fits the chest measurement
+        return size;
       }
     }
   }
 
-  // If no match was found in either pass, it's a custom size.
   return "Custom";
 };
