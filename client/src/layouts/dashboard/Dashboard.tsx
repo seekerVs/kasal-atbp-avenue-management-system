@@ -210,12 +210,11 @@ function Dashboard() {
     });
   }, [dashboardData, sortColumn, sortDirection]);
 
-   const handleRecommend = (size: string) => {
-    if (!size) return;
-    const path = `/products?size=${encodeURIComponent(size)}`;
-    navigate(path);
-    setShowRecommendationModal(false);
-  };
+   const handleRecommend = (path: string) => {
+      if (!path) return;
+      navigate(path);
+      setShowRecommendationModal(false);
+    };
 
   const handleSort = (column: SortableColumn) => {
     if (sortColumn === column) {

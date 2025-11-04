@@ -12,14 +12,12 @@ interface OutfitRecommendationModalProps {
   onRecommend: (size: string) => void;
 }
 
-// --- THIS IS THE FIX (Step 1) ---
-const CORE_MEASUREMENTS = ["Chest", "Waist", "Hips"];
-
 const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({ show, onHide, onRecommend }) => {
   const { addAlert } = useAlert();
   const { sensorData } = useSensorData(show);
 
   const [ageGroup, setAgeGroup] = useState<'Adult' | 'Kids'>('Adult');
+  const [outfitType, setOutfitType] = useState<'Topwear' | 'Bottomwear'>('Topwear');
   const [measurementValues, setMeasurementValues] = useState<Record<string, string>>({});
   const [recommendedSize, setRecommendedSize] = useState<string>('');
   const [isSizeValid, setIsSizeValid] = useState<boolean>(false); 
@@ -33,14 +31,12 @@ const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({ s
       setMeasurementValues({});
       setRecommendedSize('');
       setIsSizeValid(false);
-      setActiveField(CORE_MEASUREMENTS[0]);
     }
   }, [show]);
 
-  // --- THIS IS THE FIX (Step 2) ---
   useEffect(() => {
-    if (measurementValues['Chest'] || measurementValues['Waist'] || measurementValues['Hips']) {
-      const size = convertMeasurementsToSize(measurementValues, ageGroup);
+    if (Object.keys(measurementValues).length > 0) {
+      const size = convertMeasurementsToSize(measurementValues, ageGroup, outfitType); // New call
       setRecommendedSize(size);
 
       if (size && size !== 'Custom' && size !== "") {
@@ -52,14 +48,17 @@ const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({ s
       setRecommendedSize('');
       setIsSizeValid(false);
     }
-  }, [measurementValues, ageGroup]);
+  }, [measurementValues, ageGroup, outfitType]); // New dependency array
 
   useEffect(() => {
     const handleSensorCommand = (event: CustomEvent) => {
       if (event.detail.action === 'focusNext') {
-        const currentActiveIndex = activeField ? CORE_MEASUREMENTS.indexOf(activeField) : -1;
-        const nextIndex = (currentActiveIndex + 1) % CORE_MEASUREMENTS.length;
-        const nextField = CORE_MEASUREMENTS[nextIndex];
+        // Determine the list of currently visible fields
+        const visibleFields = outfitType === 'Topwear' ? ['Chest'] : ['Waist', 'Hips'];
+        
+        const currentActiveIndex = activeField ? visibleFields.indexOf(activeField) : -1;
+        const nextIndex = (currentActiveIndex + 1) % visibleFields.length;
+        const nextField = visibleFields[nextIndex];
         
         const nextInput = inputRefs.current.get(nextField);
         nextInput?.focus();
@@ -71,7 +70,7 @@ const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({ s
     return () => {
       window.removeEventListener('sensorCommand', handleSensorCommand as EventListener);
     };
-  }, [activeField]);
+  }, [activeField, outfitType]); // Add outfitType as a dependency
 
   useEffect(() => {
     if (sensorData && 
@@ -97,7 +96,11 @@ const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({ s
   };
 
   const handleRecommendClick = () => {
-    onRecommend(recommendedSize);
+    if (!recommendedSize) return;
+    // Construct the path with both query parameters
+    const path = `/products?size=${encodeURIComponent(recommendedSize)}&ageGroup=${encodeURIComponent(ageGroup)}`;
+    // The onRecommend prop now receives the full path
+    onRecommend(path);
   };
 
   return (
@@ -109,57 +112,53 @@ const OutfitRecommendationModal: React.FC<OutfitRecommendationModalProps> = ({ s
         <p className="mb-4 text-muted">Enter the client's measurements to find their recommended standard size and view available outfits.</p>
         <Row className="g-4">
           <Col md={7}>
+            <Form.Group className="mb-3">
+              <Form.Label className="text-uppercase small fw-bold">Outfit Type</Form.Label>
+              <div>
+                <Form.Check inline type="radio" label="Topwear" name="outfitType" id="type-top" value="Topwear" checked={outfitType === 'Topwear'} onChange={() => setOutfitType('Topwear')} />
+                <Form.Check inline type="radio" label="Bottomwear" name="outfitType" id="type-bottom" value="Bottomwear" checked={outfitType === 'Bottomwear'} onChange={() => setOutfitType('Bottomwear')} />
+              </div>
+            </Form.Group>
+
+            {/* --- NEW: AGE GROUP SELECTOR --- */}
             <Form.Group className="mb-4">
               <Form.Label className="text-uppercase small fw-bold">Age Group</Form.Label>
               <div>
-                <Form.Check
-                  inline
-                  type="radio"
-                  label="Adult"
-                  name="ageGroup"
-                  id="age-adult"
-                  value="Adult"
-                  checked={ageGroup === 'Adult'}
-                  onChange={(e) => setAgeGroup(e.target.value as 'Adult' | 'Kids')}
-                />
-                <Form.Check
-                  inline
-                  type="radio"
-                  label="Kids"
-                  name="ageGroup"
-                  id="age-kids"
-                  value="Kids"
-                  checked={ageGroup === 'Kids'}
-                  onChange={(e) => setAgeGroup(e.target.value as 'Adult' | 'Kids')}
-                />
+                <Form.Check inline type="radio" label="Adult" name="ageGroup" id="age-adult" value="Adult" checked={ageGroup === 'Adult'} onChange={() => setAgeGroup('Adult')} />
+                <Form.Check inline type="radio" label="Kids" name="ageGroup" id="age-kids" value="Kids" checked={ageGroup === 'Kids'} onChange={() => setAgeGroup('Kids')} />
               </div>
             </Form.Group>
+
             <h6 className="text-uppercase small fw-bold">Measurements (cm)</h6>
             <Form>
-              {CORE_MEASUREMENTS.map((label) => (
-                <Form.Group className="mb-3" key={label}>
-                  <Form.Label>{label}</Form.Label>
+              {/* --- NEW: CONDITIONAL INPUT FIELDS --- */}
+              {outfitType === 'Topwear' && (
+                <Form.Group className="mb-3" key="Chest">
+                  <Form.Label>Chest</Form.Label>
                   <InputGroup>
-                    <Form.Control
-                      type="number"
-                      step="0.01"
-                      value={measurementValues[label] || ""}
-                      onChange={(e) => handleValueChange(label, e.target.value)}
-                      onFocus={() => setActiveField(label)}
-                      onBlur={() => setActiveField(null)}
-                      ref={el => { inputRefs.current.set(label, el); }}
-                      autoFocus={label === CORE_MEASUREMENTS[0]}
-                    />
-                    <Button
-                      variant="outline-secondary"
-                      title="Get from Device"
-                      onClick={() => handleInsertMeasurement(label)}
-                    >
-                      <ArrowsCollapse />
-                    </Button>
+                    <Form.Control type="number" step="0.01" value={measurementValues["Chest"] || ""} onChange={(e) => handleValueChange("Chest", e.target.value)} onFocus={() => setActiveField("Chest")} onBlur={() => setActiveField(null)} ref={el => { inputRefs.current.set("Chest", el); }} autoFocus />
+                    <Button variant="outline-secondary" title="Get from Device" onClick={() => handleInsertMeasurement("Chest")}><ArrowsCollapse /></Button>
                   </InputGroup>
                 </Form.Group>
-              ))}
+              )}
+              {outfitType === 'Bottomwear' && (
+                <>
+                  <Form.Group className="mb-3" key="Waist">
+                    <Form.Label>Waist</Form.Label>
+                    <InputGroup>
+                      <Form.Control type="number" step="0.01" value={measurementValues["Waist"] || ""} onChange={(e) => handleValueChange("Waist", e.target.value)} onFocus={() => setActiveField("Waist")} onBlur={() => setActiveField(null)} ref={el => { inputRefs.current.set("Waist", el); }} autoFocus />
+                      <Button variant="outline-secondary" title="Get from Device" onClick={() => handleInsertMeasurement("Waist")}><ArrowsCollapse /></Button>
+                    </InputGroup>
+                  </Form.Group>
+                  <Form.Group className="mb-3" key="Hips">
+                    <Form.Label>Hips</Form.Label>
+                    <InputGroup>
+                      <Form.Control type="number" step="0.01" value={measurementValues["Hips"] || ""} onChange={(e) => handleValueChange("Hips", e.target.value)} onFocus={() => setActiveField("Hips")} onBlur={() => setActiveField(null)} ref={el => { inputRefs.current.set("Hips", el); }} />
+                      <Button variant="outline-secondary" title="Get from Device" onClick={() => handleInsertMeasurement("Hips")}><ArrowsCollapse /></Button>
+                    </InputGroup>
+                  </Form.Group>
+                </>
+              )}
             </Form>
           </Col>
           <Col md={5}>

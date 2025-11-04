@@ -39,7 +39,7 @@ function Products() {
   const [selectedSize, setSelectedSize] = useState(() => searchParams.get('size') || "");
   const [selectedSort, setSelectedSort] = useState("Relevance");
   const [attireType, setAttireType] = useState("");
-  const [selectedAge, setSelectedAge] = useState("");
+  const [selectedAge, setSelectedAge] = useState(() => searchParams.get('ageGroup') || "");
   const [selectedGender, setSelectedGender] = useState("");
   const [searchTerm, setSearchTerm] = useState(() => searchParams.get('search') || "");
   
