@@ -100,6 +100,7 @@ function RentalViewer() {
   const [customItemToModify, setCustomItemToModify] = useState<CustomTailoringItem | null>(null);
   const [showEditCustomerModal, setShowEditCustomerModal] = useState(false);
   const [showAddItemModal, setShowAddItemModal] = useState(false);
+  const [showConversionModal, setShowConversionModal] = useState(false);
   const [showAddPackageModal, setShowAddPackageModal] = useState(false);
   const [showAddCustomModal, setShowAddCustomModal] = useState(false);
   const [unavailableDates, setUnavailableDates] = useState<Date[]>([]);
@@ -167,13 +168,12 @@ function RentalViewer() {
   }, [rental]);
 
   useEffect(() => {
-    // This effect acts as the controller for the conversion modal flow.
+    // This effect simply controls the visibility of the modal wrapper.
+    // If there are items to process, show the modal. Otherwise, hide it.
     if (itemsToConvertToInventory.length > 0) {
-      // If there are items in our "To-Do" list, show the modal.
-      setShowAddItemModal(true);
+      setShowConversionModal(true);
     } else {
-      // If the list is empty, ensure the modal is hidden.
-      setShowAddItemModal(false);
+      setShowConversionModal(false);
     }
   }, [itemsToConvertToInventory]);
 
@@ -189,7 +189,6 @@ function RentalViewer() {
   };
 
   const handleConversionFinished = async (wasSuccessful: boolean) => {
-    // This function is called when the AddItemFromCustomModal is closed or saved.
     if (!rental || itemsToConvertToInventory.length === 0) {
       setItemsToConvertToInventory([]); // Safety clear
       return;
@@ -198,23 +197,25 @@ function RentalViewer() {
     const processedItemId = itemsToConvertToInventory[0]._id;
 
     if (wasSuccessful) {
-      // If the admin saved the item, we need to call the cleanup route
       try {
+        // Tell the backend to remove this specific item from the pending list.
         const response = await api.delete(`/rentals/${rental._id}/pending-conversion/${processedItemId}`);
-        // Update the main rental state to reflect the item's removal from the pending list
+        
+        // IMPORTANT: Update the main rental state with the response from the server.
+        // This ensures the `pendingInventoryConversion` array in the `rental` object is up-to-date.
         setRental(response.data); 
-        // Remove the processed item from our local "To-Do" list
+        
+        // Remove the item we just processed from the front of our local queue.
         setItemsToConvertToInventory(prev => prev.slice(1));
-        // The useEffect will then either show the next item or close the modal
+
       } catch (err: any) {
         addAlert(err.response?.data?.message || 'Failed to update rental after conversion.', 'danger');
-        // On error, we stop the process to prevent data inconsistency
+        // On a critical error, stop the entire process.
         setItemsToConvertToInventory([]);
       }
     } else {
-      // If the admin clicked "Cancel" or closed the modal, we clear the list to stop the flow.
-      // The items remain in the `pendingInventoryConversion` array on the backend to be processed later.
-      addAlert('Inventory conversion cancelled. You can resume this process later.', 'info');
+      // If the admin clicked "Cancel", stop the entire processing loop.
+      addAlert('Inventory conversion process cancelled.', 'info');
       setItemsToConvertToInventory([]);
     }
   };
@@ -1194,11 +1195,11 @@ function RentalViewer() {
           onSave={handleCustomerSave}
         />
       </Container>
-      {showAddItemModal && itemsToConvertToInventory.length > 0 && (
+      {showConversionModal && itemsToConvertToInventory.length > 0 && (
         <AddItemFromCustomModal
-          show={showAddItemModal}
+          show={true} // The modal is always "shown" if this block renders
           onFinished={handleConversionFinished}
-          itemToProcess={itemsToConvertToInventory[0]}
+          itemToProcess={itemsToConvertToInventory[0]} // Always process the first item in the queue
         />
       )}
 
