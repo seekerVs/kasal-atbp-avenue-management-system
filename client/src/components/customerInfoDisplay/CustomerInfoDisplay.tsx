@@ -1,7 +1,7 @@
 // client/src/components/customerInfoDisplay/CustomerInfoDisplay.tsx
 
 import React from 'react';
-import { PersonFill, TelephoneFill, EnvelopeFill, GeoAltFill, PersonVcard } from 'react-bootstrap-icons';
+import { PersonFill, TelephoneFill, EnvelopeFill, GeoAltFill } from 'react-bootstrap-icons';
 import { CustomerInfo } from '../../types';
 
 interface CustomerInfoDisplayProps {

@@ -3,7 +3,7 @@
 import React from 'react';
 import { Form, InputGroup, Button, Row, Col } from 'react-bootstrap';
 import { Funnel, Search } from 'react-bootstrap-icons';
-import { sizeOrder } from '../../data/sizeChartData';
+import { adultSizeOrder } from '../../data/sizeChartData';
 import DatePicker from 'react-datepicker';
 import { CalendarEvent } from 'react-bootstrap-icons';
 
@@ -114,7 +114,7 @@ export const FilterForm: React.FC<FilterFormProps> = ({
         
         {/* --- 2. WRAP the size options in a Row component --- */}
         <Row>
-            {sizeOrder.map(size => (
+            {adultSizeOrder.map(size => (
                 // Each size option is now in a Col, taking up half the width
                 <Col xs={6} key={size}>
                     <Form.Check

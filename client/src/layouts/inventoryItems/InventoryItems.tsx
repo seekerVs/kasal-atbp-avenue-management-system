@@ -35,7 +35,7 @@ import { ColorPickerInput } from '../../components/colorPickerInput/ColorPickerI
 import { useAlert } from '../../contexts/AlertContext';
 import { MultiImageDropzone, MultiImageDropzoneRef } from '../../components/multiImageDropzone/MultiImageDropzone';
 import { v4 as uuidv4 } from 'uuid';
-import { sizeOrder } from '../../data/sizeChartData';
+import { adultSizeOrder } from '../../data/sizeChartData';
 import { SizeGuideModal } from '../../components/modals/sizeGuideModal/SizeGuideModal';
 
 
@@ -733,7 +733,7 @@ function ItemFormModal({ show, onHide, onSave, item, categories }: ItemFormModal
                         isInvalid={!!errors.variations?.[index]?.size}
                       >
                         <option value="">-- Select Size --</option>
-                        {sizeOrder.map(size => (
+                        {adultSizeOrder.map(size => (
                           <option key={size} value={size}>{size}</option>
                         ))}
                       </Form.Select>

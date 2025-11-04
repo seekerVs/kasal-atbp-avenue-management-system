@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Row, Col, Form } from 'react-bootstrap';
-import { format, getDay } from 'date-fns';
+import { getDay } from 'date-fns';
 import { Reservation, FormErrors } from '../../types';
 import { ValidatedInput } from '../forms/ValidatedInput';
 import { AddressSelector } from '../addressSelector/AddressSelector';
