@@ -88,7 +88,7 @@ export const SizeGuideModal: React.FC<SizeGuideModalProps> = ({ show, onHide }) 
                     <tr>
                       <th>Size (Age)</th>
                       <th>Height (cm)</th>
-                      <th>Chest/Bust (cm)</th>
+                      <th>Chest (cm)</th>
                       <th>Waist (cm)</th>
                       <th>Hip (cm)</th>
                     </tr>
