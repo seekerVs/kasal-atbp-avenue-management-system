@@ -14,7 +14,7 @@ import {
   Dropdown,
   ButtonGroup,
 } from 'react-bootstrap';
-import { Download, ExclamationTriangleFill, PencilSquare, PersonFill, BoxArrowInRight, EyeFill, PlusLg } from 'react-bootstrap-icons';
+import { Download, ExclamationTriangleFill, PencilSquare, PersonFill, BoxArrowInRight, EyeFill, PlusLg, Printer } from 'react-bootstrap-icons';
 
 // Import Child Components
 import RentalItemsList from '../../components/rentalItemsList/RentalItemsList';
@@ -50,6 +50,8 @@ import { PackageSelectionData, PackageSelectionModal } from '../../components/mo
 import { RescheduleModal } from '../../components/modals/rescheduleModal/RescheduleModal';
 import { format, isPast, startOfDay } from 'date-fns';
 import { InvoiceDisplay } from '../../components/invoiceDisplay/InvoiceDisplay';
+import { useReactToPrint } from 'react-to-print';
+import "./rentalViewer.css";
 
 // ===================================================================================
 // --- MAIN COMPONENT ---
@@ -67,6 +69,7 @@ function RentalViewer() {
     return isPast(startOfDay(new Date(rental.rentalStartDate)));
   };
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
   const summaryRef = useRef<HTMLDivElement>(null);
   
   // --- STATE MANAGEMENT ---
@@ -371,6 +374,25 @@ function RentalViewer() {
         setIsDownloading(false);
       });
   };
+
+  const handlePrint = useReactToPrint({
+    contentRef: summaryRef,
+    documentTitle: `Sales_Invoice_${rental?._id || 'Order'}`,
+    // Runs immediately when button is clicked
+    onBeforePrint: async () => {
+      setIsPrinting(true);
+      return Promise.resolve();
+    },
+    // Runs after the print dialog is closed (either Printed or Cancelled)
+    onAfterPrint: () => {
+      setIsPrinting(false);
+      console.log('Print finished');
+    },
+    // Safety net in case of error
+    onPrintError: () => {
+      setIsPrinting(false);
+    }
+  });
   
   const handleInitiatePickup = () => {
     if (isRentalDatePast() && hasReturnableItems) {
@@ -478,6 +500,15 @@ function RentalViewer() {
     }
   };
 
+  const handleProcessPaymentOnly = async () => {
+    if (!rental) return;
+    await handleUpdateAndPay({
+        shopDiscount: parseFloat(editableDiscount) || 0,
+        depositAmount: parseFloat(editableDeposit) || 0,
+        // No status change here
+    });
+  };
+
   const handleConfirmPickup = async () => {
     setShowPickupConfirmModal(false);
     if (!rental) return;
@@ -486,25 +517,40 @@ function RentalViewer() {
       const validationResponse = await api.get(`/rentals/${rental._id}/pre-pickup-validation`);
       const warnings: string[] = validationResponse.data.warnings || [];
       
-      let isAnyRoleComplete = false;
+      // --- REFINED LOGIC ---
+      
+      // 1. Check Single Rents (Always valid if they exist)
+      const hasSingle = rental.singleRents && rental.singleRents.length > 0;
+
+      // 2. Check Custom Items (Always valid if they exist)
+      const hasCustom = rental.customTailoring && rental.customTailoring.length > 0;
+
+      // 3. Check Packages (STRICT: Must have at least one actual assignment)
+      let hasValidPackage = false;
       if (rental.packageRents && rental.packageRents.length > 0) {
-        isAnyRoleComplete = rental.packageRents.some(pkg => 
+        hasValidPackage = rental.packageRents.some(pkg => 
           pkg.packageFulfillment.some(fulfill => {
             const assigned = fulfill.assignedItem;
-            const isInventoryComplete = !fulfill.isCustom && assigned && 'itemId' in assigned && assigned.itemId && assigned.variation;
-            const isCustomComplete = fulfill.isCustom && assigned && 'outfitCategory' in assigned;
-            return isInventoryComplete || isCustomComplete;
+            // Check if a standard item ID is present
+            const isInventoryAssigned = !fulfill.isCustom && assigned && 'itemId' in assigned && !!assigned.itemId;
+            // OR if it's a custom slot (even if details are missing, the slot exists)
+            const isCustomSlot = fulfill.isCustom; 
+            return isInventoryAssigned || isCustomSlot;
           })
         );
       }
       
+      // Allow proceed if ANY of the three categories has valid content
+      setCanProceedWithWarnings(hasSingle || hasCustom || hasValidPackage);
+      
+      // --- END REFINED LOGIC ---
+
       setValidationWarnings(warnings);
-      setCanProceedWithWarnings(isAnyRoleComplete);
       
       if (warnings.length > 0) {
         setShowValidationModal(true);
       } else {
-        await proceedToUpdateStatus(); // Await this call now
+        await proceedToUpdateStatus(); 
       }
 
     } catch (err: any) {
@@ -1016,6 +1062,7 @@ function RentalViewer() {
               onInitiateSendReminder={handleSendReminder}
               isSendingReminder={isSendingReminder}
               returnReminderSent={rental.returnReminderSent || false}
+              onProcessPaymentOnly={handleProcessPaymentOnly}
             />
           </Col>
         </Row>
@@ -1208,7 +1255,6 @@ function RentalViewer() {
           <Modal.Title>Sales Invoice</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          {/* The wrapper is now for the invoice component */}
           <div className="summary-modal-content-wrapper" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
             <InvoiceDisplay ref={summaryRef} rental={rental} shopSettings={shopSettings} />
           </div>
@@ -1216,6 +1262,14 @@ function RentalViewer() {
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowSummaryModal(false)}>
             Close
+          </Button>
+          <Button variant="info" onClick={handlePrint} className="me-2 text-white" disabled={isPrinting}>
+            {isPrinting ? (
+              <Spinner as="span" animation="border" size="sm" role="status" aria-hidden="true" className="me-2" />
+            ) : (
+              <Printer className="me-2" />
+            )}
+            {isPrinting ? 'Printing...' : 'Print'}
           </Button>
           <Button variant="primary" onClick={handleDownloadPdf} disabled={isDownloading}>
             {isDownloading ? <Spinner as="span" size="sm" /> : <Download />}

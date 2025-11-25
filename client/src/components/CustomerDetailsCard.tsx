@@ -145,7 +145,7 @@ function CustomerDetailsCard({
         <div className="d-grid gap-2 mt-auto">
           <Button size="lg" onClick={onSubmit} disabled={!canSubmit || isSubmitting}>
             {isSubmitting ? <Spinner as="span" size="sm" /> : <CreditCard className="me-2" />}
-            Finalize as New Rental
+            Create an Order
           </Button>
         </div>
       </Card.Body>

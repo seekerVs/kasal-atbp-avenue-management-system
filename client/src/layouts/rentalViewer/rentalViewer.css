@@ -1,0 +1,34 @@
+/* --- PRINT STYLES --- */
+@media print {
+  /* 1. Hide everything else in the app (Sidebar, Navbar, etc) */
+  body * {
+    visibility: hidden;
+  }
+
+  /* 2. Make ONLY the Invoice visible */
+  .invoice-wrapper, .invoice-wrapper * {
+    visibility: visible;
+  }
+
+  /* 3. Position the invoice at the absolute top-left of the paper */
+  .invoice-wrapper {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 20px; /* Optional margin for the paper edge */
+    border: none; /* Remove the screen border */
+  }
+
+  /* 4. Force Background Colors (Browsers remove them by default to save ink) */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* 5. Hide Scrollbars and extraneous UI */
+  .modal-footer, .modal-header, .btn {
+    display: none !important;
+  }
+}

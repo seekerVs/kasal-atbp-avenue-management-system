@@ -13,7 +13,8 @@ import {
   Image as ImageIcon,
   ArrowRightCircleFill,
   Envelope,
-  PencilSquare
+  PencilSquare,
+  CreditCard
 } from 'react-bootstrap-icons';
 import { RentalStatus, Financials, RentalOrder, CustomTailoringItem, PaymentDetail } from '../../types'; // Import from centralized types
 import { formatCurrency } from '../../utils/formatters';
@@ -65,6 +66,7 @@ interface OrderActionsProps {
   isSendingReminder: boolean;
   returnReminderSent: boolean;
   onInitiateReschedule: () => void;
+  onProcessPaymentOnly: () => void;
 }
 
 // ===================================================================================
@@ -100,6 +102,7 @@ const OrderActions: React.FC<OrderActionsProps> = ({
   isSendingReminder,
   returnReminderSent,
   onInitiateReschedule,
+  onProcessPaymentOnly,
 }) => {
   const { addAlert } = useAlert();
   const { hasReturnableItems, isPurchaseOnly } = useMemo(() => {
@@ -134,9 +137,12 @@ const OrderActions: React.FC<OrderActionsProps> = ({
   const totalPaid = (financials.payments || []).reduce((acc, p) => acc + p.amount, 0);
   const remainingBalance = grandTotal - totalPaid;
   
-  const isPaid = totalPaid > 0;
-  const isFullyPaid = isPaid && totalPaid >= grandTotal;
+  const hasDownPayment = totalPaid > 0;
+  const isPaid = hasDownPayment;
+  const isFullyPaid = isPaid && totalPaid >= (grandTotal - 0.01);
   const canBeCancelled = status === 'Pending' || status === 'To Pickup';
+  const isPending = status === 'Pending';
+  const isToPickup = status === 'To Pickup';
 
   const handleOcrUpdate = (refNumber: string, file: File | null) => {
     onGcashRefChange(refNumber);
@@ -149,21 +155,12 @@ const OrderActions: React.FC<OrderActionsProps> = ({
   };
 
   const showPaymentForm = 
-  (status === 'Pending' || status === 'To Pickup') && !isFullyPaid;
+    (isPending && !hasDownPayment) || 
+    (isToPickup && !isFullyPaid);
 
-  const shouldDisableButton = useMemo(() => {
-    if (isPaid) {
-      return false;
-    }
-
-    const isPaymentInputInvalid = 
+  const isPaymentInputInvalid = 
       (parseFloat(paymentAmount) <= 0) ||
       (paymentUiMode === 'Gcash' && gcashRef.trim() === '');
-      
-    // The button is disabled only if the rental is unpaid AND the new payment input is invalid.
-    return !isPaid && isPaymentInputInvalid;
-    
-  }, [isPaid, paymentAmount, paymentUiMode, gcashRef]);
 
   const handlePaymentAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -444,36 +441,57 @@ const OrderActions: React.FC<OrderActionsProps> = ({
         )}
         
         <div className="d-grid gap-2 mt-4">
-          {status === 'Pending' && (
-            <Button 
-              variant="primary" 
-              onClick={onInitiatePickup} 
-              disabled={shouldDisableButton}
-            >
-              <ArrowRightCircleFill className="me-2"/>
-              Move to Pickup
-            </Button>
+
+          {isPending && (
+            <>
+              {!hasDownPayment ? (
+                // Case A1: Pending, No Payment -> Process Payment ONLY
+                <Button 
+                  variant="primary" 
+                  onClick={onProcessPaymentOnly} 
+                  disabled={isPaymentInputInvalid} // Disable if input invalid
+                >
+                  <CreditCard className="me-2"/>
+                  Process Payment
+                </Button>
+              ) : (
+                // Case A2: Pending, Has Payment -> Move to Pickup (No payment inputs visible)
+                <Button 
+                  variant="primary" 
+                  onClick={onInitiatePickup} 
+                  // Always enabled since inputs are hidden
+                >
+                  <ArrowRightCircleFill className="me-2"/>
+                  Move to Pickup
+                </Button>
+              )}
+            </>
           )}
 
-          {status === 'To Pickup' && (
+          {isToPickup && (
             <Button
               variant="primary"
               onClick={() => {
+                // Validation: Ensure full payment if marking as picked up
                 const finalPaymentInput = parseFloat(paymentAmount) || 0;
-                const remainingBalance = financials.remainingBalance ?? 0;
-                if (remainingBalance > finalPaymentInput) {
+                // Calculate what the balance WILL be after this payment
+                const balanceAfterPayment = remainingBalance - finalPaymentInput;
+                
+                // Use a small epsilon for float comparison logic
+                if (balanceAfterPayment > 1) { // Allow tiny float diff, effectively > 0
                   addAlert(
-                    `Payment is insufficient. Remaining balance of ₱${formatCurrency(remainingBalance)} must be paid.`,
+                    `Payment is insufficient. Remaining balance of ₱${formatCurrency(remainingBalance)} must be fully paid to release items.`,
                     'danger'
                   );
                   return;
                 }         
                 onInitiateMarkAsPickedUp();
               }}
-              disabled={shouldDisableButton}
+              // Disable if inputs are visible but invalid
+              disabled={showPaymentForm && isPaymentInputInvalid}
             >
               <ArrowRightCircleFill className="me-2"/>
-              Mark as Picked Up
+              {isFullyPaid ? 'Mark as Picked Up' : 'Pay Balance & Mark Picked Up'}
             </Button>
           )}
 

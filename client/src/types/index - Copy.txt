@@ -170,9 +170,6 @@ export interface Financials {
   depositAmount: number;
   depositReimbursed?: number; 
   payments?: PaymentDetail[];
-  applyScPwdDiscount?: boolean;
-  scPwdDiscount?: number;
-  withholdingTax?: number;
   subtotal?: number;
   itemsTotal?: number;
   requiredDeposit?: number;
@@ -287,8 +284,6 @@ export interface CustomerInfo {
   email?: string;
   phoneNumber: string;
   address: Address;
-  tinScTin?: string;
-  oscaPwdIdNo?: string;
 }
 
 export interface Payment {
@@ -403,8 +398,6 @@ export interface ShopSettings {
   ownerTIN?: string;
   accreditationNumber?: string;
   accreditationDate?: Date | null;
-  scPwdDiscountRate?: number;
-  withholdingTaxRate?: number;
   paymentTerms?: string;
   businessStyle?: string;
 }
