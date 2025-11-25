@@ -491,7 +491,7 @@ const OrderActions: React.FC<OrderActionsProps> = ({
               disabled={showPaymentForm && isPaymentInputInvalid}
             >
               <ArrowRightCircleFill className="me-2"/>
-              {isFullyPaid ? 'Mark as Picked Up' : 'Pay Balance & Mark Picked Up'}
+              {isFullyPaid ? 'Mark as Picked Up' : 'Mark Picked Up'}
             </Button>
           )}
 
