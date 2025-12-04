@@ -48,7 +48,7 @@ import AddItemFromCustomModal from '../../components/modals/addItemFromCustomMod
 import { PackageConfigurationData, PackageConfigurationModal } from '../../components/modals/packageConfigurationModal/PackageConfigurationModal';
 import { PackageSelectionData, PackageSelectionModal } from '../../components/modals/packageSelectionModal/PackageSelectionModal';
 import { RescheduleModal } from '../../components/modals/rescheduleModal/RescheduleModal';
-import { format, isPast, startOfDay } from 'date-fns';
+import { format, isPast, endOfDay } from 'date-fns';
 import { InvoiceDisplay } from '../../components/invoiceDisplay/InvoiceDisplay';
 import { useReactToPrint } from 'react-to-print';
 import "./rentalViewer.css";
@@ -62,11 +62,11 @@ function RentalViewer() {
   const { addAlert } = useAlert();
   const isRentalDatePast = (): boolean => {
     if (!rental?.rentalStartDate) {
-      return true; // Treat a missing date as invalid/past for safety
+      return true; 
     }
-    // isPast returns true if the given date is in the past.
-    // We use startOfDay to ignore the time component, comparing only the date itself.
-    return isPast(startOfDay(new Date(rental.rentalStartDate)));
+    // Using endOfDay ensures that if the date is TODAY, it compares against 23:59:59.
+    // Since Now < Today 23:59:59, isPast returns false, allowing you to proceed.
+    return isPast(endOfDay(new Date(rental.rentalStartDate)));
   };
   const [isDownloading, setIsDownloading] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
