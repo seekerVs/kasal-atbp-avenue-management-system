@@ -460,7 +460,10 @@ function RentalViewer() {
     }
   };
 
-  const handleUpdateAndPay = async (updateFields: { status?: RentalStatus; rentalStartDate?: string; rentalEndDate?: string; shopDiscount?: number; depositAmount?: number; depositReimbursed?: number; }) => {
+  const handleUpdateAndPay = async (updateFields: { status?: RentalStatus; rentalStartDate?: string; rentalEndDate?: string; shopDiscount?: number; depositAmount?: number; depositReimbursed?: number; },
+    loadingMsg: string = 'Processing...',
+    successMsg: string = 'Update successful!' 
+  ) => {
     if (!rental) return;
 
     const payload: any = { ...updateFields };
@@ -474,6 +477,8 @@ function RentalViewer() {
             // receiptImageUrl will be added below after upload
         };
     }
+
+    addAlert(loadingMsg, 'info');
     
     try {
       // 3. Centrally handle the file upload.
@@ -488,6 +493,7 @@ function RentalViewer() {
     
       const response = await api.put(`/rentals/${rental._id}/process`, payload);
       setRental(response.data);
+      addAlert(successMsg, 'success');
       setShowSummaryModal(true);
 
       setPaymentUiMode('Cash');
@@ -506,7 +512,7 @@ function RentalViewer() {
         shopDiscount: parseFloat(editableDiscount) || 0,
         depositAmount: parseFloat(editableDeposit) || 0,
         // No status change here
-    });
+    }, 'Processing payment...', 'Payment recorded successfully.');
   };
 
   const handleConfirmPickup = async () => {
@@ -566,7 +572,7 @@ function RentalViewer() {
     await handleUpdateAndPay({
         status: 'To Pickup',
         shopDiscount: parseFloat(editableDiscount) || 0,
-    });
+    }, 'Moving order to Pickup...', 'Order status updated to "To Pickup".');
   };
 
 
@@ -579,7 +585,7 @@ function RentalViewer() {
     await handleUpdateAndPay({
         status: 'To Return',
         shopDiscount: parseFloat(editableDiscount) || 0,
-    });
+    }, 'Finalizing pickup...', 'Order marked as Picked Up.');
   };
 
   const handleOpenDeleteItemModal = (item: SingleRentItem) => { setItemToModify(item); setShowDeleteItemModal(true); };
