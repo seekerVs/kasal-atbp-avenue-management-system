@@ -198,7 +198,7 @@ router.get('/stats', asyncHandler(async (req, res) => {
     });
 }));
 
-// GET /api/dashboard/export-report
+// GET /api/dashboard/export-sales
 router.get('/export-sales', asyncHandler(async (req, res) => {
     // 1. Get and validate the date range from query parameters
     const { startDate, endDate } = req.query;
@@ -215,85 +215,94 @@ router.get('/export-sales', asyncHandler(async (req, res) => {
 
     // --- DATA AGGREGATION ---
 
+    // Find Rentals and Reservations that have at least one PAYMENT in the selected range.
     const [rentalsInRange, reservationsInRange] = await Promise.all([
         RentalModel.find({
-            $or: [
-                { "financials.payments.date": { $gte: queryStartDate, $lte: queryEndDate } },
-                { 
-                    "status": "Completed",
-                    "financials.depositReimbursed": { $gt: 0 },
-                    "updatedAt": { $gte: queryStartDate, $lte: queryEndDate }
-                }
-            ]
+            "financials.payments.date": { $gte: queryStartDate, $lte: queryEndDate },
+            status: { $ne: 'Cancelled' }
         }).lean(),
         ReservationModel.find({
-            "financials.payments.date": { $gte: queryStartDate, $lte: queryEndDate }
+            "financials.payments.date": { $gte: queryStartDate, $lte: queryEndDate },
+            status: { $in: ['Pending', 'Confirmed'] }
         }).lean()
     ]);
 
     const detailedTransactions = [];
-    rentalsInRange.forEach(rental => {
-        (rental.financials.payments || []).forEach(payment => {
-            if (payment.date >= queryStartDate && payment.date <= queryEndDate) {
-                const itemCount = (rental.singleRents?.length || 0) + (rental.packageRents?.length || 0) + (rental.customTailoring?.length || 0);
-                detailedTransactions.push({
-                    date: payment.date,
-                    transactionId: rental._id,
-                    customerName: rental.customerInfo[0]?.name || 'N/A',
-                    type: 'Rental Payment',
-                    items: `${itemCount} item(s)`,
-                    amount: payment.amount
-                });
-            }
-        });
 
-        if (
-            rental.status === 'Completed' &&
-            rental.financials.depositReimbursed > 0 &&
-            rental.updatedAt >= queryStartDate &&
-            rental.updatedAt <= queryEndDate
-        ) {
+    // --- Process Rentals ---
+    rentalsInRange.forEach(rawRental => {
+        // FIX: Calculate financials explicitly because grandTotal is not in the DB
+        const computed = calculateFinancials(rawRental);
+
+        // Calculate Net Sales: Grand Total - Calculated Deposit Amount
+        const grandTotal = computed.grandTotal;
+        const deposit = computed.depositAmount;
+        const netSales = grandTotal - deposit;
+
+        if (netSales > 0) {
+            const itemCount = (rawRental.singleRents?.length || 0) + (rawRental.packageRents?.length || 0) + (rawRental.customTailoring?.length || 0);
+            
+            // Find the payment date that triggered inclusion in this report
+            const paymentInWindow = rawRental.financials.payments.find(p => 
+                new Date(p.date) >= queryStartDate && new Date(p.date) <= queryEndDate
+            );
+            const sortDate = paymentInWindow ? paymentInWindow.date : rawRental.createdAt;
+
             detailedTransactions.push({
-                date: rental.updatedAt, // Use the completion date as the transaction date
-                transactionId: rental._id,
-                customerName: rental.customerInfo[0]?.name || 'N/A',
-                type: 'Deposit Reimbursement',
-                items: 'N/A', // No items associated with a reimbursement
-                amount: -Math.abs(rental.financials.depositReimbursed) // Ensure it's a negative number
+                date: sortDate,
+                transactionId: rawRental._id,
+                customerName: rawRental.customerInfo[0]?.name || 'N/A',
+                type: 'Rental Order',
+                items: `${itemCount} item(s)`,
+                amount: netSales
             });
         }
     });
 
-    reservationsInRange.forEach(res => {
-        (res.financials.payments || []).forEach(payment => {
-            if (payment.date >= queryStartDate && payment.date <= queryEndDate) {
-                const itemCount = (res.itemReservations?.length || 0) + (res.packageReservations?.length || 0);
-                detailedTransactions.push({
-                    date: payment.date,
-                    transactionId: res._id,
-                    customerName: res.customerInfo.name || 'N/A',
-                    type: 'Reservation Payment',
-                    items: `${itemCount} item(s)`,
-                    amount: payment.amount
-                });
-            }
-        });
+    // --- Process Reservations ---
+    reservationsInRange.forEach(rawRes => {
+        // FIX: Calculate financials explicitly here too
+        // Map reservation fields to the structure expected by the calculator
+        const dataForCalc = {
+            singleRents: rawRes.itemReservations || [],
+            packageRents: rawRes.packageReservations || [],
+            financials: rawRes.financials
+        };
+        const computed = calculateFinancials(dataForCalc);
+
+        const grandTotal = computed.grandTotal;
+        const deposit = computed.depositAmount;
+        const netSales = grandTotal - deposit;
+
+        if (netSales > 0) {
+            const itemCount = (rawRes.itemReservations?.length || 0) + (rawRes.packageReservations?.length || 0);
+            
+            const paymentInWindow = rawRes.financials.payments.find(p => 
+                new Date(p.date) >= queryStartDate && new Date(p.date) <= queryEndDate
+            );
+            const sortDate = paymentInWindow ? paymentInWindow.date : rawRes.createdAt;
+
+            detailedTransactions.push({
+                date: sortDate,
+                transactionId: rawRes._id,
+                customerName: rawRes.customerInfo.name || 'N/A',
+                type: 'Reservation',
+                items: `${itemCount} item(s)`,
+                amount: netSales
+            });
+        }
     });
+
+    // Sort chronologically
     detailedTransactions.sort((a, b) => new Date(a.date) - new Date(b.date));
 
     // --- KPI CALCULATION ---
     const totalNetSales = detailedTransactions.reduce((sum, transaction) => sum + transaction.amount, 0);
-    
-    const [newRentalsCount, newReservationsCount] = await Promise.all([
-        RentalModel.countDocuments({ createdAt: { $gte: queryStartDate, $lte: queryEndDate } }),
-        ReservationModel.countDocuments({ createdAt: { $gte: queryStartDate, $lte: queryEndDate } })
-    ]);
-    const totalTransactions = newRentalsCount + newReservationsCount;
-    const averageSaleValue = totalTransactions > 0 ? totalNetSales / totalTransactions : 0;
+    const totalOrders = detailedTransactions.length;
 
     // --- PDF GENERATION ---
 
-    const filename = `Sales-Report_${startDate}_to_${endDate}.pdf`;
+    const filename = `Net-Sales-Report_${startDate}_to_${endDate}.pdf`;
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
@@ -307,8 +316,9 @@ router.get('/export-sales', asyncHandler(async (req, res) => {
             doc.image(logoPath, 40, 30, { width: 150 });
         }
         
-        doc.fontSize(18).text('Sales & Rental Report', { align: 'right' })
-           .fontSize(10).text(`For Period: ${startDate} to ${endDate}`, { align: 'right' })
+        doc.fontSize(18).text('Net Revenue Report', { align: 'right' })
+           .fontSize(10)
+           .text(`For Period: ${startDate} to ${endDate}`, { align: 'right' })
            .text(`Generated On: ${new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' })}`, { align: 'right' })
            .moveDown(2);
     };
@@ -316,11 +326,11 @@ router.get('/export-sales', asyncHandler(async (req, res) => {
      const generateTableRow = (doc, y, rowNum, date, transactionId, customer, type, summary, amount) => {
         doc.fontSize(9)
             .text(rowNum, 40, y, { width: 25 })
-            .text(date, 70, y)
-            .text(transactionId, 130, y)
-            .text(customer, 210, y, { width: 110 })
-            .text(type, 320, y, { width: 80 })
-            .text(summary, 400, y, { width: 80 })
+            .text(new Date(date).toLocaleDateString('en-US'), 70, y)
+            .text(transactionId, 140, y)
+            .text(customer, 220, y, { width: 110 })
+            .text(type, 330, y, { width: 80 })
+            .text(summary, 410, y, { width: 80 })
             .text(amount, 0, y, { align: 'right' });
     };
 
@@ -329,16 +339,12 @@ router.get('/export-sales', asyncHandler(async (req, res) => {
     
     doc.fontSize(14).text('Executive Summary', { underline: true }).moveDown();
     doc.fontSize(11)
-       .text(`Total Net Sales:`, { continued: true }).font('Helvetica-Bold').text(` Php ${totalNetSales.toLocaleString('en-US', {minimumFractionDigits: 2})}`)
+       .text(`Total Net Revenue:`, { continued: true }).font('Helvetica-Bold').text(` Php ${totalNetSales.toLocaleString('en-US', {minimumFractionDigits: 2})}`)
        .font('Helvetica').moveDown(0.5)
-       .text(`Rentals Created:`, { continued: true }).font('Helvetica-Bold').text(` ${newRentalsCount}`)
-       .font('Helvetica').moveDown(0.5)
-       .text(`Reservations Made:`, { continued: true }).font('Helvetica-Bold').text(` ${newReservationsCount}`)
-       .font('Helvetica').moveDown(0.5)
-       .text(`Average Transaction Value:`, { continued: true }).font('Helvetica-Bold').text(` Php ${averageSaleValue.toLocaleString('en-US', {minimumFractionDigits: 2})}`)
+       .text(`Orders:`, { continued: true }).font('Helvetica-Bold').text(` ${totalOrders}`)
        .font('Helvetica').moveDown(2);
 
-    doc.fontSize(14).text('Detailed Transaction Log', { underline: true }).moveDown();
+    doc.fontSize(14).text('Detailed Order Log', { underline: true }).moveDown();
     
     let tableTopY = doc.y;
     const rowHeight = 20;
@@ -346,7 +352,15 @@ router.get('/export-sales', asyncHandler(async (req, res) => {
     
     // Table Headers
     doc.font('Helvetica-Bold');
-    generateTableRow(doc, tableTopY, '#', 'Date', 'Transaction ID', 'Customer Name', 'Type', 'Item Summary', 'Amount (PHP)');
+    doc.fontSize(9)
+       .text('#', 40, tableTopY, { width: 25 })
+       .text('Activity Date', 70, tableTopY)
+       .text('Order ID', 140, tableTopY)
+       .text('Customer Name', 220, tableTopY, { width: 110 })
+       .text('Type', 330, tableTopY, { width: 80 })
+       .text('Summary', 410, tableTopY, { width: 80 })
+       .text('Net Sales', 0, tableTopY, { align: 'right' });
+       
     doc.font('Helvetica');
     doc.moveTo(40, tableTopY + 15).lineTo(doc.page.width - 40, tableTopY + 15).stroke();
     tableTopY += 25;
@@ -358,7 +372,14 @@ router.get('/export-sales', asyncHandler(async (req, res) => {
             generateHeader(doc);
             tableTopY = 150;
             doc.font('Helvetica-Bold');
-            generateTableRow(doc, tableTopY, '#', 'Date', 'Transaction ID', 'Customer Name', 'Type', 'Item Summary', 'Amount (PHP)');
+            doc.fontSize(9)
+               .text('#', 40, tableTopY, { width: 25 })
+               .text('Activity Date', 70, tableTopY)
+               .text('Order ID', 140, tableTopY)
+               .text('Customer Name', 220, tableTopY, { width: 110 })
+               .text('Type', 330, tableTopY, { width: 80 })
+               .text('Summary', 410, tableTopY, { width: 80 })
+               .text('Net Sales', 0, tableTopY, { align: 'right' });
             doc.font('Helvetica');
             doc.moveTo(40, tableTopY + 15).lineTo(doc.page.width - 40, tableTopY + 15).stroke();
             tableTopY += 25;
@@ -368,7 +389,7 @@ router.get('/export-sales', asyncHandler(async (req, res) => {
             doc,
             tableTopY,
             index + 1,
-            new Date(transaction.date).toLocaleDateString('en-US'),
+            transaction.date,
             transaction.transactionId,
             transaction.customerName,
             transaction.type,
@@ -391,6 +412,7 @@ router.get('/export-sales', asyncHandler(async (req, res) => {
 
     doc.end();
 }));
+
 
 // --- NEW: Export Customer List as CSV ---
 router.get('/export-customers', asyncHandler(async (req, res) => {
